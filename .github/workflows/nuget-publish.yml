@@ -1,0 +1,30 @@
+name: Publicar Paquetes en NuGet
+
+on:
+  release:
+    types: [published]
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+    - name: Clonar el repositorio
+      uses: actions/checkout@v4
+
+    - name: Configurar .NET SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+
+    - name: Restaurar dependencias
+      run: dotnet restore
+
+    - name: Empaquetar Librerías
+      run: dotnet pack -c Release --no-restore -o ./artifacts
+
+    - name: Subir paquetes a NuGet
+      run: dotnet nuget push "./artifacts/*.nupkg" --source https://api.nuget.org/v3/index.json --skip-duplicate
