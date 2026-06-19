@@ -27,4 +27,6 @@ jobs:
       run: dotnet pack ./JCarrillo.AOT.Core/JCarrillo.AOT.Core.csproj -c Release --no-restore -o ./artifacts
 
     - name: Subir paquetes a NuGet
+      env:
+          DOTNET_NUGET_SIGN_OUT_OF_PROCESS: 1
       run: dotnet nuget push "./artifacts/*.nupkg" --source https://api.nuget.org/v3/index.json --skip-duplicate
