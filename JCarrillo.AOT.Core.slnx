@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="JCarrillo.AOT.Core/JCarrillo.AOT.Core.csproj" />
+  <Project Path="JCarrillo.AOT.Core.Tests/JCarrillo.AOT.Core.Tests.csproj" />
+  <Project Path="JCarrillo.AOT.Core.Benchmarks/JCarrillo.AOT.Core.Benchmarks.csproj" />
+</Solution>
