@@ -24,7 +24,7 @@ jobs:
       run: dotnet restore
 
     - name: Empaquetar Librerías
-      run: dotnet pack -c Release --no-restore -o ./artifacts
+      run: dotnet pack ./JCarrillo.AOT.Core/JCarrillo.AOT.Core.csproj -c Release --no-restore -o ./artifacts
 
     - name: Subir paquetes a NuGet
       run: dotnet nuget push "./artifacts/*.nupkg" --source https://api.nuget.org/v3/index.json --skip-duplicate
