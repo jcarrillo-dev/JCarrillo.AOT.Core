@@ -24,7 +24,9 @@ jobs:
       run: dotnet restore
 
     - name: Empaquetar Librerías
-      run: dotnet pack ./JCarrillo.AOT.Core/JCarrillo.AOT.Core.csproj -c Release --no-restore -o ./artifacts
+      run: 
+        VERSION=${GITHUB_REF_NAME#v}
+        dotnet pack ./JCarrillo.AOT.Core/JCarrillo.AOT.Core.csproj -c Release --no-restore -o ./artifacts /p:Version=$VERSION
 
     - name: NuGet login (OIDC → temp API key)
       uses: NuGet/login@v1
