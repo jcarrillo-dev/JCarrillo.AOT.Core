@@ -5,12 +5,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 
-    <Version>1.0.0</Version>
     <Authors>José Carrillo Serrano</Authors>
     <Company>jcarrillo-dev</Company>
     <Description>Librería Core de alto rendimiento, zero-allocation y optimizada para Native AOT.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/jcarrillo-dev/JCarrillo.AOT.Core</RepositoryUrl>
 
     <IsTrimmable>true</IsTrimmable>
     <TrimMode>full</TrimMode>
