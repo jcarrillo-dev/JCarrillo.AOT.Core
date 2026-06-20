@@ -6,16 +6,15 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
-using JCarrillo.AOT.Core.Extensiones.Boxing;
 
-namespace JCarrillo.AOT.Core.Colecciones.Pooled
+namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
 {
-    public record struct PooledArray<TItem> : IPooledStruct<TItem>
+    public ref struct PooledArrayRef<TItem>
     {
         #region Constructor
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public PooledArray(int capacidadInicial)
+        public PooledArrayRef(int capacidadInicial)
         {
             if (capacidadInicial <= 0) ThrowArgumentOutOfRange(capacidadInicial);
             _items = ArrayPool<TItem>.Shared.Rent(capacidadInicial);
@@ -23,7 +22,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal PooledArray(TItem[] items, int tamaño)
+        internal PooledArrayRef(TItem[] items, int tamaño)
         {
             if (tamaño < 0 || tamaño > items.Length) ThrowArgumentOutOfRange(tamaño);
             _items = items;
@@ -62,21 +61,14 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         #region Datos
 
         private TItem[]? _items;
-        private Memory<TItem>? _memory;
 
-        public Span<TItem> Span
-        {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => Memory.Span;
-        }
-
-        public Memory<TItem> Memory
+        public readonly Span<TItem> Span
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
                 if (_disposed || _items is null) ThrowObjectDisposed();
-                return _memory ??= new Memory<TItem>(_items, 0, _tamaño);
+                return _items.AsSpan(0, _tamaño);
             }
         }
 
@@ -117,16 +109,8 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
 
         public void Dispose()
         {
-            this.ValidarNoBoxeado();
             if (_disposed) return;
             DisposePrivate();
-        }
-
-        public ValueTask DisposeAsync()
-        {
-            if (_disposed) return ValueTask.CompletedTask;
-            DisposePrivate();
-            return ValueTask.CompletedTask;
         }
 
         private void DisposePrivate()
@@ -145,14 +129,14 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         #region IntentarAmpliar
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly bool IntentarAmpliar(int nuevoTamaño)
+        public static bool IntentarAmpliar(int _)
             => false;
 
         #endregion
 
         #region Helpers de Excepciones (Evitan contaminación del JIT)
 
-        private const string NombreClase = "PooledArray<" + nameof(TItem) + ">";
+        private const string NombreClase = "PooledArrayRef<" + nameof(TItem) + ">";
 
         [DoesNotReturn]
         private static void ThrowObjectDisposed()

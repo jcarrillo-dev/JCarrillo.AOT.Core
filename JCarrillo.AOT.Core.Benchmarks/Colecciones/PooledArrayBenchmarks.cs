@@ -1,5 +1,6 @@
 using BenchmarkDotNet.Attributes;
 using JCarrillo.AOT.Core.Colecciones.Pooled;
+using JCarrillo.AOT.Core.Colecciones.Pooled.Ref;
 
 namespace JCarrillo.AOT.Core.Benchmarks.Colecciones
 {
@@ -25,6 +26,17 @@ namespace JCarrillo.AOT.Core.Benchmarks.Colecciones
         public int PooledArray()
         {
             using var arr = new PooledArray<int>(Size);
+            for (int i = 0; i < Size; i++)
+            {
+                arr[i] = i;
+            }
+            return arr.Tamaño;
+        }
+
+        [Benchmark]
+        public int PooledArrayRef()
+        {
+            using var arr = new PooledArrayRef<int>(Size);
             for (int i = 0; i < Size; i++)
             {
                 arr[i] = i;

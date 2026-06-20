@@ -6,43 +6,53 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
-using JCarrillo.AOT.Core.Extensiones.Boxing;
 
-namespace JCarrillo.AOT.Core.Colecciones.Pooled
+namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
 {
-    public record struct PooledArray<TItem> : IPooledStruct<TItem>
+    public ref struct PooledListRef<TItem>
     {
         #region Constructor
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public PooledArray(int capacidadInicial)
-        {
-            if (capacidadInicial <= 0) ThrowArgumentOutOfRange(capacidadInicial);
-            _items = ArrayPool<TItem>.Shared.Rent(capacidadInicial);
-            _tamaño = capacidadInicial;
-        }
+        public PooledListRef() : this(64) { }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal PooledArray(TItem[] items, int tamaño)
+        public PooledListRef(int capacidadInicial)
+        {
+            if (capacidadInicial <= 0) ThrowArgumentOutOfRange(capacidadInicial);
+
+            _items = ArrayPool<TItem>.Shared.Rent(capacidadInicial);
+            _indiceInserccion = 0;
+        }
+
+        /// <summary>
+        /// Constructor interno para crear un PooledList a partir de un array existente y un tamaño específico.
+        /// Solo usar en extensiones de ArrayPool para evitar copias innecesarias.
+        /// </summary>
+        /// <param name="items">Array devuelto por ArrayPool</param>
+        /// <param name="tamaño">Tamaño del array solicitado por el desarrollador</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal PooledListRef(TItem[] items, int tamaño)
         {
             if (tamaño < 0 || tamaño > items.Length) ThrowArgumentOutOfRange(tamaño);
+
             _items = items;
-            _tamaño = tamaño;
+            _indiceInserccion = tamaño;
+            _disposed = false;
         }
 
         #endregion
 
         #region Tamaño
 
-        private int _tamaño;
-
+        private int _indiceInserccion;
         public readonly int Tamaño
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
                 if (_disposed) ThrowObjectDisposed();
-                return _tamaño;
+                return _indiceInserccion;
             }
         }
 
@@ -50,7 +60,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
 
         #region EsAmpliable
 
-        private readonly bool _esAmpliable = false;
+        private readonly bool _esAmpliable = true;
         public readonly bool EsAmpliable
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -62,21 +72,14 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         #region Datos
 
         private TItem[]? _items;
-        private Memory<TItem>? _memory;
 
-        public Span<TItem> Span
-        {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => Memory.Span;
-        }
-
-        public Memory<TItem> Memory
+        public readonly Span<TItem> Span
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                if (_disposed || _items is null) ThrowObjectDisposed();
-                return _memory ??= new Memory<TItem>(_items, 0, _tamaño);
+                if (_disposed) ThrowObjectDisposed();
+                return _items!.AsSpan(0, _indiceInserccion);
             }
         }
 
@@ -91,7 +94,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
             {
                 if (_disposed) ThrowObjectDisposed();
                 TItem[]? items = _items;
-                if (items is null || (uint)indice >= (uint)_tamaño) ThrowIndexOutOfRange(indice);
+                if (items is null || (uint)indice >= (uint)_indiceInserccion) ThrowIndexOutOfRange(indice);
                 return ref items[indice];
             }
         }
@@ -101,32 +104,20 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         #region Enumerable
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Span<TItem>.Enumerator GetEnumerator()
+        public readonly Span<TItem>.Enumerator GetEnumerator()
             => Span.GetEnumerator();
 
         #endregion
 
-        #region Disposed
+        #region Dispose
 
-        private bool _disposed = false;
-        public readonly bool EstaDisposed
-        {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => _disposed;
-        }
+        private bool _disposed;
+        public readonly bool EstaDisposed => _disposed;
 
         public void Dispose()
         {
-            this.ValidarNoBoxeado();
             if (_disposed) return;
             DisposePrivate();
-        }
-
-        public ValueTask DisposeAsync()
-        {
-            if (_disposed) return ValueTask.CompletedTask;
-            DisposePrivate();
-            return ValueTask.CompletedTask;
         }
 
         private void DisposePrivate()
@@ -134,7 +125,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
             _disposed = true;
             if (_items != null)
             {
-                _tamaño = 0;
+                _indiceInserccion = 0;
                 ArrayPool<TItem>.Shared.Return(_items, RuntimeHelpers.IsReferenceOrContainsReferences<TItem>());
                 _items = null;
             }
@@ -145,14 +136,28 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         #region IntentarAmpliar
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly bool IntentarAmpliar(int nuevoTamaño)
-            => false;
+        public bool IntentarAmpliar(int nuevoTamaño)
+        {
+            if (_disposed) return false;
+            if (_items!.Length >= nuevoTamaño) return true;
+
+            int nuevaCapacidad = Math.Max(nuevoTamaño, _items.Length * 2);
+
+            TItem[] nuevoArray = ArrayPool<TItem>.Shared.Rent(nuevaCapacidad);
+            _items.AsSpan(0, _indiceInserccion).CopyTo(nuevoArray.AsSpan());
+
+            ArrayPool<TItem>.Shared.Return(_items, RuntimeHelpers.IsReferenceOrContainsReferences<TItem>());
+
+            _items = nuevoArray;
+
+            return true;
+        }
 
         #endregion
 
         #region Helpers de Excepciones (Evitan contaminación del JIT)
 
-        private const string NombreClase = "PooledArray<" + nameof(TItem) + ">";
+        private const string NombreClase = "PooledListRef<" + nameof(TItem) + ">";
 
         [DoesNotReturn]
         private static void ThrowObjectDisposed()
@@ -168,12 +173,27 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
 
         #endregion
 
+        #region Add
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Add(TItem item)
+        {
+            if (_disposed) ThrowObjectDisposed();
+            IntentarAmpliar(_indiceInserccion + 1);
+            // IntentarAmpliar asegura que hay espacio suficiente, así que podemos añadir el elemento, tambien aumenta la variable _tamaño internamente.
+            _items![_indiceInserccion++] = item;
+        }
+
+        #endregion
+
         #region Clear
 
         public void Clear()
         {
-            if (_disposed || _items is null) ThrowObjectDisposed();
-            Span.Clear();
+            if (_disposed) ThrowObjectDisposed();
+            if (RuntimeHelpers.IsReferenceOrContainsReferences<TItem>())
+                Span.Clear();
+            _indiceInserccion = 0;
         }
 
         #endregion

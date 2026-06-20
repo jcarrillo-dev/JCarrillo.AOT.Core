@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using BenchmarkDotNet.Attributes;
 using JCarrillo.AOT.Core.Colecciones.Pooled;
+using JCarrillo.AOT.Core.Colecciones.Pooled.Ref;
 
 namespace JCarrillo.AOT.Core.Benchmarks.Colecciones
 {
@@ -69,6 +70,28 @@ namespace JCarrillo.AOT.Core.Benchmarks.Colecciones
             return list.Tamaño;
         }
 
+        [Benchmark]
+        public int PooledListRef_Int_Dynamic()
+        {
+            using var list = new PooledListRef<int>();
+            for (int i = 0; i < Size; i++)
+            {
+                list.Add(i);
+            }
+            return list.Tamaño;
+        }
+
+        [Benchmark]
+        public int PooledListRef_Int_Fixed()
+        {
+            using var list = new PooledListRef<int>(Size);
+            for (int i = 0; i < Size; i++)
+            {
+                list.Add(i);
+            }
+            return list.Tamaño;
+        }
+
         #endregion
 
         #region Pruebas de rendimiento para String (Tipo de referencia)
@@ -110,6 +133,28 @@ namespace JCarrillo.AOT.Core.Benchmarks.Colecciones
         public int PooledList_String_Fixed()
         {
             using var list = new PooledList<string>(Size);
+            for (int i = 0; i < Size; i++)
+            {
+                list.Add(_strings![i]);
+            }
+            return list.Tamaño;
+        }
+
+        [Benchmark]
+        public int PooledListRef_String_Dynamic()
+        {
+            using var list = new PooledListRef<string>();
+            for (int i = 0; i < Size; i++)
+            {
+                list.Add(_strings![i]);
+            }
+            return list.Tamaño;
+        }
+
+        [Benchmark]
+        public int PooledListRef_String_Fixed()
+        {
+            using var list = new PooledListRef<string>(Size);
             for (int i = 0; i < Size; i++)
             {
                 list.Add(_strings![i]);

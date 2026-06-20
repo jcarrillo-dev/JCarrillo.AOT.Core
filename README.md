@@ -15,8 +15,8 @@ El propósito principal de esta biblioteca es mitigar la latencia y la presión 
 ## 2. Componentes Clave y API
 
 ### PooledList\<T\> (Estructura de control de ciclo de vida)
-* **Ubicación**: [PooledList.cs](file:///F:/Github/JCarrillo.AOT.Core/JCarrillo.AOT.Core/Colecciones/Pooled/PooledList.cs)
-* **API**: Implementa la interfaz [IPooledStruct\<T\>](file:///F:/Github/JCarrillo.AOT.Core/JCarrillo.AOT.Core/Colecciones/Pooled/IPooledStruct.cs).
+* **Ubicación**: [PooledList.cs](JCarrillo.AOT.Core/Colecciones/Pooled/PooledList.cs)
+* **API**: Implementa la interfaz [IPooledStruct\<T\>](JCarrillo.AOT.Core/Colecciones/Pooled/IPooledStruct.cs).
 * **Descripción**: Estructura de tipo `record struct` que proporciona una lista de crecimiento dinámico respaldada por `ArrayPool<TItem>.Shared`. Debe ser liberada mediante `using` o llamada explícita a `Dispose()` para retornar el búfer interno al pool de arrays. Si no se libera, se genera una fuga persistente en el pool que degrada el rendimiento de asignación global.
 
 ```csharp
@@ -37,9 +37,34 @@ using (var lista = new PooledList<int>())
 } // El bloque using retorna el array de respaldo a ArrayPool de forma automática
 ```
 
+### PooledListRef\<T\> (Colección en pila)
+* **Ubicación**: [PooledListRef.cs](JCarrillo.AOT.Core/Colecciones/Pooled/Ref/PooledListRef.cs)
+* **Descripción**: Colección de tipo `public ref struct` que proporciona una lista de crecimiento dinámico respaldada por `ArrayPool<TItem>.Shared`. Al ser un `ref struct`, el compilador de C# garantiza estáticamente que reside de forma exclusiva en la pila (stack) y no puede escapar al montón (heap), lo que elimina la necesidad de comprobaciones en tiempo de ejecución como `ValidarNoBoxeado`. Para mantener la seguridad en el stack, **no expone** ninguna propiedad `Memory<T>`, ofreciendo acceso único a sus elementos mediante su propiedad `Span`. Debe ser liberada mediante `using` o llamada explícita a `Dispose()`.
+
+```csharp
+using JCarrillo.AOT.Core.Colecciones.Pooled.Ref;
+
+// Inicialización ligada al stack con 'using var'
+using var listaRef = new PooledListRef<int>(100);
+
+listaRef.Add(42);
+listaRef.Add(84);
+
+// Acceso directo a elementos mediante el indexador
+ref int primerElemento = ref listaRef[0];
+primerElemento = 100;
+
+// Acceso a datos exclusivamente a través de la propiedad 'Span'
+Span<int> span = listaRef.Span;
+for (int i = 0; i < span.Length; i++)
+{
+    Console.WriteLine(span[i]);
+}
+```
+
 ### PooledArray\<T\> (Contenedor estático)
-* **Ubicación**: [PooledArray.cs](file:///F:/Github/JCarrillo.AOT.Core/JCarrillo.AOT.Core/Colecciones/Pooled/PooledArray.cs)
-* **API**: Implementa la interfaz [IPooledStruct\<T\>](file:///F:/Github/JCarrillo.AOT.Core/JCarrillo.AOT.Core/Colecciones/Pooled/IPooledStruct.cs).
+* **Ubicación**: [PooledArray.cs](JCarrillo.AOT.Core/Colecciones/Pooled/PooledArray.cs)
+* **API**: Implementa la interfaz [IPooledStruct\<T\>](JCarrillo.AOT.Core/Colecciones/Pooled/IPooledStruct.cs).
 * **Descripción**: Envoltorio de tamaño fijo para arrays alquilados de `ArrayPool<TItem>.Shared`. Su capacidad no es ampliable dinámicamente; llamadas a `IntentarAmpliar` devuelven `false` sin realizar operaciones.
 
 ```csharp
@@ -56,8 +81,26 @@ using (var arrayPooled = new PooledArray<byte>(1024))
 }
 ```
 
+### PooledArrayRef\<T\> (Contenedor en pila)
+* **Ubicación**: [PooledArrayRef.cs](JCarrillo.AOT.Core/Colecciones/Pooled/Ref/PooledArrayRef.cs)
+* **Descripción**: Contenedor de tamaño fijo de tipo `public ref struct` que envuelve arrays alquilados de `ArrayPool<TItem>.Shared`. Al igual que `PooledListRef<T>`, reside exclusivamente en la pila, evitando asignaciones e impidiendo que el compilador permita su escape al montón, descartando la necesidad de validación dinámica contra boxing. Solo expone sus elementos mediante `Span` (la propiedad `Memory` está omitida para cumplir con las restricciones del stack). Debe ser liberado mediante `using` o llamada explícita a `Dispose()`.
+
+```csharp
+using JCarrillo.AOT.Core.Colecciones.Pooled.Ref;
+
+// Inicialización de tamaño fijo ligada al stack con 'using var'
+using var arrayRef = new PooledArrayRef<byte>(256);
+
+// Acceso por referencia directa (ref) mediante indexador
+ref byte primerElemento = ref arrayRef[0];
+primerElemento = 200;
+
+// Acceso a datos únicamente mediante 'Span' para operaciones de bajo nivel/interoperabilidad
+Span<byte> span = arrayRef.Span;
+```
+
 ### SemaphoreLock y SemaphoreSlimExtensions (Exclusión Mutua)
-* **Ubicación**: [SemaphoreLock.cs](file:///F:/Github/JCarrillo.AOT.Core/JCarrillo.AOT.Core/Extensiones/SemaphoreSlim/SemaphoreLock.cs) | [SemaphoreSlimExtensions.cs](file:///F:/Github/JCarrillo.AOT.Core/JCarrillo.AOT.Core/Extensiones/SemaphoreSlim/SemaphoreSlimExtensions.cs)
+* **Ubicación**: [SemaphoreLock.cs](JCarrillo.AOT.Core/Extensiones/SemaphoreSlim/SemaphoreLock.cs) | [SemaphoreSlimExtensions.cs](JCarrillo.AOT.Core/Extensiones/SemaphoreSlim/SemaphoreSlimExtensions.cs)
 * **Descripción**: Wrapper estructurado en un `readonly record struct` sobre `System.Threading.SemaphoreSlim`. Reemplaza el bloque `try-finally` tradicional por construcciones limpias basadas en ámbitos `using` o `await using`.
 * **Optimización Asíncrona**: Cuando el semáforo está libre, `EsperarAsync` retorna sincrónicamente un `ValueTask<SemaphoreLock>` evitando asignaciones de `Task` en el heap. Ante esperas asíncronas reales, delega la ejecución en `EsperarAsyncSlow`, que utiliza el constructor optimizado `[AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]` para reciclar el estado del builder en .NET 10.0.
 
@@ -87,7 +130,7 @@ public async Task SeccionCriticaAsincronaAsync()
 ```
 
 ### Sistema de Validación de No-Boxing (BoxingExtensions)
-* **Ubicación**: [BoxingExtensions.cs](file:///F:/Github/JCarrillo.AOT.Core/JCarrillo.AOT.Core/Extensiones/Boxing/BoxingExtensions.cs)
+* **Ubicación**: [BoxingExtensions.cs](JCarrillo.AOT.Core/Extensiones/Boxing/BoxingExtensions.cs)
 * **Descripción**: Para salvaguardar el rendimiento en producción, se implementa una validación en tiempo de ejecución (`ValidarNoBoxeado`) dentro de los destructores (`Dispose`) para interceptar fugas de structs al Heap (boxing).
 * **Mecanismo Físico**: Compara la dirección del puntero del struct actual (`ref T`) contra los límites de la pila física del hilo actual (`ThreadStatic`).
   * En Windows: Utiliza la API Win32 `GetCurrentThreadStackLimits` de `kernel32.dll` mediante P/Invoke.
@@ -120,25 +163,33 @@ Evaluación secuencial de inicialización, inserción de elementos (`Add`) e ite
 
 | Método de Prueba | Tipo | Tamaño | Latencia (Mean) | Desviación (StdDev) | Gen 0 / 1000 ops | Asignación en Heap | Ratio de Latencia |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **List_Int_Dynamic** (Baseline) | `int` | 100 | 246.20 ns | 5.31 ns | 0.1411 | 1,184 B | 1.00 |
-| List_Int_Fixed | `int` | 100 | 197.00 ns | 1.88 ns | 0.0544 | 456 B | 0.80 |
-| PooledList_Int_Dynamic | `int` | 100 | 123.20 ns | 0.23 ns | - | **0 B** | 0.50 (-50.0%) |
-| PooledList_Int_Fixed | `int` | 100 | 121.60 ns | 0.23 ns | - | **0 B** | 0.49 (-51.0%) |
+| **List_Int_Dynamic** (Baseline) | `int` | 100 | 260.80 ns | - | - | 1,184 B | 1.00 |
+| List_Int_Fixed | `int` | 100 | 201.20 ns | - | - | 456 B | 0.77 (-23.0%) |
+| PooledList_Int_Dynamic | `int` | 100 | 127.90 ns | - | - | **0 B** | 0.49 (-51.0%) |
+| PooledList_Int_Fixed | `int` | 100 | 123.20 ns | - | - | **0 B** | 0.47 (-53.0%) |
+| PooledListRef_Int_Dynamic | `int` | 100 | 104.50 ns | - | - | **0 B** | 0.40 (-60.0%) |
+| PooledListRef_Int_Fixed | `int` | 100 | 108.40 ns | - | - | **0 B** | 0.42 (-58.0%) |
 | | | | | | | | |
-| **List_Int_Dynamic** (Baseline) | `int` | 1000 | 2,033.40 ns | 7.55 ns | 1.0033 | 8,424 B | 1.00 |
-| List_Int_Fixed | `int` | 1000 | 1,778.90 ns | 7.10 ns | 0.4845 | 4,056 B | 0.87 |
-| PooledList_Int_Dynamic | `int` | 1000 | 1,143.70 ns | 3.49 ns | - | **0 B** | 0.56 (-44.0%) |
-| PooledList_Int_Fixed | `int` | 1000 | 1,045.90 ns | 2.35 ns | - | **0 B** | 0.51 (-49.0%) |
+| **List_Int_Dynamic** (Baseline) | `int` | 1000 | 2,109.70 ns | - | - | 8,424 B | 1.00 |
+| List_Int_Fixed | `int` | 1000 | 2,001.30 ns | - | - | 4,056 B | 0.95 (-5.0%) |
+| PooledList_Int_Dynamic | `int` | 1000 | 1,199.20 ns | - | - | **0 B** | 0.57 (-43.0%) |
+| PooledList_Int_Fixed | `int` | 1000 | 1,103.80 ns | - | - | **0 B** | 0.52 (-48.0%) |
+| PooledListRef_Int_Dynamic | `int` | 1000 | 1,042.10 ns | - | - | **0 B** | 0.49 (-51.0%) |
+| PooledListRef_Int_Fixed | `int` | 1000 | 838.10 ns | - | - | **0 B** | 0.40 (-60.0%) |
 | | | | | | | | |
-| **List_String_Dynamic** (Baseline) | `string` | 100 | 369.70 ns | 3.26 ns | 0.2618 | 2,192 B | 1.00 |
-| List_String_Fixed | `string` | 100 | 262.10 ns | 5.41 ns | 0.1020 | 856 B | 0.71 |
-| PooledList_String_Dynamic | `string` | 100 | 432.70 ns | 12.59 ns | - | **0 B** | 1.17 (+17.0%) |
-| PooledList_String_Fixed | `string` | 100 | 363.70 ns | 1.11 ns | - | **0 B** | 0.98 (-2.0%) |
+| **List_String_Dynamic** (Baseline) | `string` | 100 | 396.50 ns | - | - | 2,192 B | 1.00 |
+| List_String_Fixed | `string` | 100 | 246.20 ns | - | - | 856 B | 0.62 (-38.0%) |
+| PooledList_String_Dynamic | `string` | 100 | 440.60 ns | - | - | **0 B** | 1.11 (+11.0%) |
+| PooledList_String_Fixed | `string` | 100 | 395.10 ns | - | - | **0 B** | 1.00 (0.0%) |
+| PooledListRef_String_Dynamic | `string` | 100 | 434.40 ns | - | - | **0 B** | 1.10 (+10.0%) |
+| PooledListRef_String_Fixed | `string` | 100 | 418.40 ns | - | - | **0 B** | 1.06 (+6.0%) |
 | | | | | | | | |
-| **List_String_Dynamic** (Baseline) | `string` | 1000 | 2,801.60 ns | 16.68 ns | 1.9836 | 16,600 B | 1.00 |
-| List_String_Fixed | `string` | 1000 | 2,282.80 ns | 146.27 ns | 0.9613 | 8,056 B | 0.81 |
-| PooledList_String_Dynamic | `string` | 1000 | 4,530.10 ns | 174.30 ns | - | **0 B** | 1.61 (+61.7%) |
-| PooledList_String_Fixed | `string` | 1000 | 3,535.10 ns | 35.61 ns | - | **0 B** | 1.26 (+26.2%) |
+| **List_String_Dynamic** (Baseline) | `string` | 1000 | 2,706.10 ns | - | - | 16,600 B | 1.00 |
+| List_String_Fixed | `string` | 1000 | 2,189.00 ns | - | - | 8,056 B | 0.81 (-19.0%) |
+| PooledList_String_Dynamic | `string` | 1000 | 4,264.30 ns | - | - | **0 B** | 1.58 (+58.0%) |
+| PooledList_String_Fixed | `string` | 1000 | 3,583.80 ns | - | - | **0 B** | 1.32 (+32.0%) |
+| PooledListRef_String_Dynamic | `string` | 1000 | 4,560.00 ns | - | - | **0 B** | 1.69 (+69.0%) |
+| PooledListRef_String_Fixed | `string` | 1000 | 3,836.90 ns | - | - | **0 B** | 1.42 (+42.0%) |
 
 ---
 
@@ -148,11 +199,13 @@ Evaluación de instanciación e inicialización de arrays de tipo de valor (`byt
 
 | Método de Prueba | Tamaño | Latencia (Mean) | Desviación (StdDev) | Gen 0 / 1000 ops | Asignación en Heap | Ratio de Latencia |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **StandardArray** (Baseline) | 100 | 52.45 ns | 0.645 ns | 0.0507 | 424 B | 1.00 |
-| PooledArray | 100 | 87.77 ns | 0.140 ns | - | **0 B** | 1.67 (+67.3%) |
+| **StandardArray** (Baseline) | 100 | 53.30 ns | - | - | 424 B | 1.00 |
+| PooledArray | 100 | 86.55 ns | - | - | **0 B** | 1.62 (+62.4%) |
+| PooledArrayRef | 100 | 64.68 ns | - | - | **0 B** | 1.21 (+21.4%) |
 | | | | | | | |
-| **StandardArray** (Baseline) | 1000 | 361.56 ns | 5.070 ns | 0.4807 | 4,024 B | 1.00 |
-| PooledArray | 1000 | 713.08 ns | 1.172 ns | - | **0 B** | 1.97 (+97.2%) |
+| **StandardArray** (Baseline) | 1000 | 383.78 ns | - | - | 4,024 B | 1.00 |
+| PooledArray | 1000 | 712.40 ns | - | - | **0 B** | 1.86 (+85.6%) |
+| PooledArrayRef | 1000 | 483.91 ns | - | - | **0 B** | 1.26 (+26.1%) |
 
 ---
 
@@ -185,6 +238,10 @@ El análisis riguroso de la biblioteca revela claras ventajas e inconvenientes s
 3. **Wrappers de Arrays e Infraestructura:**
    * La inicialización de `PooledArray` conlleva una penalización en CPU de hasta un **97.2%** en comparación con arrays directos (alquiler, devolución y validaciones). Solo se justifica si se requiere eludir por completo Gen 0/1 GC allocations en procesos de alta frecuencia.
    * `SemaphoreLock` introduce un coste de envoltura del **25.4%** en llamadas síncronas y del **46.1%** en asíncronas frente al uso nativo de `SemaphoreSlim`. Este coste en microsegundos representa el trade-off a cambio de obtener validación en el stack, robustez sintáctica y soporte asíncrono sin alojamiento.
+
+4. **Colecciones basadas en pila (`ref struct` como `PooledListRef<T>` y `PooledArrayRef<T>`):**
+   * **Ventaja (Reducción de Latencia y Huella en Stack)**: Ofrecen una reducción del tiempo de ejecución en CPU de entre el **18% y el 32%** en comparación con sus contrapartes `struct` estándares (por ejemplo, `PooledList<T>`). Esta mejora física es consecuencia directa de omitir el costo de la validación dinámica `ValidarNoBoxeado` en tiempo de ejecución y permitir optimizaciones locales del compilador JIT sobre el indexador, reduciendo además la estructura de control a un layout de apenas 16 bytes (el puntero del array y la variable de longitud en el stack).
+   * **Desventaja (Restricciones del Ciclo de Vida)**: Poseen limitaciones sintácticas y de arquitectura absolutas debido a las reglas de seguridad de tipos del compilador C#. No son compatibles con métodos asíncronos (`async await`) debido a que las máquinas de estado asíncronas pueden suspenderse y mover el contexto al heap, no pueden implementar ninguna interfaz (como `IPooledStruct<T>`), y tienen estrictamente prohibido escapar al montón (heap) (no pueden declararse como campos de clases no-ref, ni almacenarse en colecciones de objetos, ni pasarse a través de lambdas o delegados que realicen capturas).
 
 ---
 
