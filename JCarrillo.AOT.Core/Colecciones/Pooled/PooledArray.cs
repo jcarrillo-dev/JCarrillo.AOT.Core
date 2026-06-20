@@ -89,9 +89,10 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                if (_disposed || _items is null) ThrowObjectDisposed();
-                if (indice < 0 || indice >= _tamaño) ThrowIndexOutOfRange(indice);
-                return ref _items[indice];
+                if (_disposed) ThrowObjectDisposed();
+                TItem[]? items = _items;
+                if (items is null || (uint)indice >= (uint)_tamaño) ThrowIndexOutOfRange(indice);
+                return ref items[indice];
             }
         }
 

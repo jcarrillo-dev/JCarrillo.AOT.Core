@@ -102,9 +102,9 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
             get
             {
                 if (_disposed) ThrowObjectDisposed();
-                if ((uint)indice >= (uint)_indiceInserccion) ThrowIndexOutOfRange(indice);
-
-                return ref _items![indice];
+                TItem[]? items = _items;
+                if (items is null || (uint)indice >= (uint)_indiceInserccion) ThrowIndexOutOfRange(indice);
+                return ref items[indice];
             }
         }
 
