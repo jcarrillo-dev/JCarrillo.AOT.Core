@@ -3,6 +3,8 @@ name: Publicar Paquetes en NuGet
 on:
   release:
     types: [published]
+  workflow_dispatch: # Permite forzar y probar el pipeline manualmente desde la web de GitHub
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -20,19 +22,20 @@ jobs:
       with:
         dotnet-version: '10.0.x'
 
+    - name: Determinar versión
+      run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
+
     - name: Restaurar dependencias
-      run: dotnet restore
+      run: dotnet restore ./JCarrillo.AOT.Core/JCarrillo.AOT.Core.csproj -p:Version=${{ env.VERSION }}
 
     - name: Empaquetar Librerías
-      run: 
-        VERSION=${GITHUB_REF_NAME#v}
-        dotnet pack ./JCarrillo.AOT.Core/JCarrillo.AOT.Core.csproj -c Release --no-restore -o ./artifacts /p:Version=$VERSION
+      run: dotnet pack ./JCarrillo.AOT.Core/JCarrillo.AOT.Core.csproj -c Release --no-restore -o ./artifacts -p:Version=${{ env.VERSION }}
 
-    - name: NuGet login (OIDC → temp API key)
+    - name: NuGet login (OIDC -> temp API key)
       uses: NuGet/login@v1
       id: login
       with:
         user: JCarrillo
 
     - name: Subir paquetes a NuGet
-      run: dotnet nuget push "./artifacts/*.nupkg" --api-key ${{steps.login.outputs.NUGET_API_KEY}} --source https://api.nuget.org/v3/index.json --skip-duplicate
+      run: dotnet nuget push "./artifacts/*.nupkg" --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
