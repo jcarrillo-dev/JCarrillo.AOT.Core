@@ -1,9 +1,7 @@
-using System;
-using System.Runtime.CompilerServices;
-using System.Threading.Tasks;
-using Xunit;
 using FluentAssertions;
 using JCarrillo.AOT.Core.Colecciones.Pooled;
+using System.Runtime.CompilerServices;
+using Xunit;
 
 namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
 {

@@ -5,11 +5,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 
+    <PackageId>JCarrillo.AOT.Core</PackageId>
     <Authors>José Carrillo Serrano</Authors>
     <Company>jcarrillo-dev</Company>
-    <Description>Librería Core de alto rendimiento, zero-allocation y optimizada para Native AOT.</Description>
+    <Description>High-performance, zero-allocation core library optimized for Native AOT and Trimming in .NET.</Description>
+    <PackageTags>aot;native-aot;zero-allocation;high-performance;pooling;list;array;lock;net8;net9;net10</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/jcarrillo-dev/JCarrillo.AOT.Core</PackageProjectUrl>
     <RepositoryUrl>https://github.com/jcarrillo-dev/JCarrillo.AOT.Core</RepositoryUrl>
 
     <IsTrimmable>true</IsTrimmable>
@@ -31,6 +34,7 @@
     <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>

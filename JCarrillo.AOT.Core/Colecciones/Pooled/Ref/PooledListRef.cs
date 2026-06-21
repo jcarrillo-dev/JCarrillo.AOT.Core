@@ -1,21 +1,34 @@
-using System;
 using System.Buffers;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
 {
+    /// <summary>
+    /// Representa una lista mutable de crecimiento dinámico de tipo <see langword="ref struct"/> confinada estrictamente al stack.
+    /// Encapsula un búfer en memoria alquilado a partir de un <see cref="System.Buffers.ArrayPool{T}"/>.
+    /// Al ser un <see langword="ref struct"/>, se garantiza que nunca se ubicará en el heap, evitando por completo
+    /// el boxing y reduciendo a cero la asignación de memoria en el recolector de basura (GC).
+    /// </summary>
+    /// <typeparam name="TItem">El tipo de los elementos contenidos en la lista.</typeparam>
     public ref struct PooledListRef<TItem>
     {
         #region Constructor
 
+        /// <summary>
+        /// Inicializa una nueva instancia de la estructura <see cref="PooledListRef{TItem}"/> con una capacidad predeterminada de 64 elementos.
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public PooledListRef() : this(64) { }
 
+        /// <summary>
+        /// Inicializa una nueva instancia de la estructura <see cref="PooledListRef{TItem}"/> con la capacidad inicial especificada.
+        /// </summary>
+        /// <param name="capacidadInicial">La capacidad inicial (número de elementos) requerida para la lista.</param>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// Se lanza cuando <paramref name="capacidadInicial"/> es menor o igual a cero.
+        /// La validación se delega a un método estático auxiliar para evitar la contaminación de inlining en el compilador JIT.
+        /// </exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public PooledListRef(int capacidadInicial)
         {
@@ -46,6 +59,14 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
         #region Tamaño
 
         private int _indiceInserccion;
+
+        /// <summary>
+        /// Obtiene el número actual de elementos válidos en la lista.
+        /// </summary>
+        /// <value>La cantidad de elementos insertados activamente.</value>
+        /// <exception cref="ObjectDisposedException">
+        /// Se lanza si se accede a la propiedad después de que los recursos subyacentes hayan sido devueltos al pool.
+        /// </exception>
         public readonly int Tamaño
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -61,6 +82,11 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
         #region EsAmpliable
 
         private readonly bool _esAmpliable = true;
+
+        /// <summary>
+        /// Obtiene un valor que indica si la estructura puede crecer dinámicamente.
+        /// En <see cref="PooledListRef{TItem}"/>, esta propiedad siempre es <see langword="true"/>.
+        /// </summary>
         public readonly bool EsAmpliable
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -73,6 +99,14 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
 
         private TItem[]? _items;
 
+        /// <summary>
+        /// Obtiene una vista de acceso directo en memoria en forma de <see cref="Span{TItem}"/> sobre los elementos activos de la lista.
+        /// Proporciona acceso seguro y veloz en el stack sin provocar asignaciones en el heap.
+        /// </summary>
+        /// <value>Una ventana de tipo <see cref="Span{TItem}"/> sobre el búfer activo.</value>
+        /// <exception cref="ObjectDisposedException">
+        /// Se lanza si el búfer interno ya ha sido retornado al pool.
+        /// </exception>
         public readonly Span<TItem> Span
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -87,6 +121,18 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
 
         #region Indice
 
+        /// <summary>
+        /// Obtiene una referencia directa al elemento ubicado en el índice de base cero especificado.
+        /// </summary>
+        /// <param name="indice">El índice de base cero del elemento a recuperar.</param>
+        /// <value>La referencia directa (<see langword="ref"/>) al elemento en la posición dada.</value>
+        /// <exception cref="ObjectDisposedException">
+        /// Se lanza si la lista ha sido dispuesta previamente.
+        /// </exception>
+        /// <exception cref="IndexOutOfRangeException">
+        /// Se lanza si el <paramref name="indice"/> está fuera de los límites de la lista.
+        /// Se opta por la excepción nativa para permitir al compilador JIT omitir las comprobaciones redundantes de límites de array.
+        /// </exception>
         public readonly ref TItem this[int indice]
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -103,6 +149,11 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
 
         #region Enumerable
 
+        /// <summary>
+        /// Retorna un enumerador de tipo struct sobre el búfer interno para permitir la iteración de la colección.
+        /// Diseñado para ser detectado mediante duck-typing por el compilador en bucles foreach sin provocar boxing en el heap.
+        /// </summary>
+        /// <returns>Un enumerador de tipo struct de alto rendimiento (<see cref="Span{TItem}.Enumerator"/>) sobre los elementos activos.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly Span<TItem>.Enumerator GetEnumerator()
             => Span.GetEnumerator();
@@ -112,8 +163,20 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
         #region Dispose
 
         private bool _disposed;
+
+        /// <summary>
+        /// Obtiene un valor que indica si la lista ha sido devuelta al pool.
+        /// </summary>
         public readonly bool EstaDisposed => _disposed;
 
+        /// <summary>
+        /// Libera los recursos de la estructura de forma síncrona y devuelve el búfer de memoria alquilado
+        /// al <see cref="System.Buffers.ArrayPool{TItem}.Shared"/>.
+        /// </summary>
+        /// <remarks>
+        /// Al ser un <see langword="ref struct"/>, está confinada al stack, por lo que no es posible que sea boxing
+        /// ni se guarde en el heap, omitiendo cualquier necesidad de validación de no-boxing (<see cref="JCarrillo.AOT.Core.Extensiones.Boxing.BoxingExtensions.ValidarNoBoxeado{T}"/>).
+        /// </remarks>
         public void Dispose()
         {
             if (_disposed) return;
@@ -135,6 +198,14 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
 
         #region IntentarAmpliar
 
+        /// <summary>
+        /// Intenta ampliar la capacidad del búfer interno de la lista para albergar al menos el tamaño especificado.
+        /// </summary>
+        /// <param name="nuevoTamaño">El tamaño mínimo de elementos requerido en la lista.</param>
+        /// <returns>
+        /// <see langword="true"/> si el tamaño fue ampliado correctamente o si la capacidad actual ya cubre el requisito;
+        /// de lo contrario, <see langword="false"/> si la estructura ya ha sido liberada.
+        /// </returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IntentarAmpliar(int nuevoTamaño)
         {
@@ -175,6 +246,13 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
 
         #region Add
 
+        /// <summary>
+        /// Añade un elemento al final de la lista, ampliando automáticamente la capacidad del búfer interno si es necesario.
+        /// </summary>
+        /// <param name="item">El elemento que se va a añadir a la lista.</param>
+        /// <exception cref="ObjectDisposedException">
+        /// Se lanza si se intenta añadir un elemento después de que los recursos subyacentes hayan sido liberados.
+        /// </exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Add(TItem item)
         {
@@ -188,6 +266,14 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
 
         #region Clear
 
+        /// <summary>
+        /// Restablece la lista vaciando todos los elementos de forma lógica.
+        /// Si los elementos contienen referencias (o son tipos de referencia), limpia el contenido del búfer físico
+        /// para no retener referencias en memoria y prevenir fugas (leak) del recolector de basura.
+        /// </summary>
+        /// <exception cref="ObjectDisposedException">
+        /// Se lanza si la lista ya ha sido liberada.
+        /// </exception>
         public void Clear()
         {
             if (_disposed) ThrowObjectDisposed();

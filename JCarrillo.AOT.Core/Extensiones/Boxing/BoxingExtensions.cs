@@ -1,10 +1,13 @@
-using System;
+using JCarrillo.AOT.Core.Extensiones.SemaphoreSlim;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using JCarrillo.AOT.Core.Extensiones.SemaphoreSlim;
 
 namespace JCarrillo.AOT.Core.Extensiones.Boxing
 {
+    /// <summary>
+    /// Proporciona métodos de extensión para verificar y validar en tiempo de ejecución
+    /// que los structs de alto rendimiento no sufran boxing ni sean ubicados en el heap.
+    /// </summary>
     public static partial class BoxingExtensions
     {
         [ThreadStatic]
@@ -13,6 +16,18 @@ namespace JCarrillo.AOT.Core.Extensiones.Boxing
         [ThreadStatic]
         private static nuint _stackHigh;
 
+        /// <summary>
+        /// Valida que el struct especificado por referencia esté ubicado dentro de los límites de la pila (stack) del hilo actual.
+        /// Si la dirección de memoria de la estructura está fuera de dichos límites, se determina que el struct ha sido boxeado
+        /// en el heap, violando los principios de zero-allocation.
+        /// </summary>
+        /// <typeparam name="T">El tipo de la estructura que se va a validar. Debe ser un <see langword="struct"/>.</typeparam>
+        /// <param name="value">La referencia al struct que se desea validar.</param>
+        /// <exception cref="InvalidOperationException">
+        /// Se lanza de forma inmediata si se detecta que el struct no reside en el stack (es decir, se ha realizado boxing o
+        /// se encuentra alojado en el heap). La excepción es lanzada a través de un método auxiliar no-inlineable
+        /// para mantener pequeña y optimizada la ruta de ejecución caliente.
+        /// </exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static unsafe void ValidarNoBoxeado<T>(this ref T value) where T : struct
         {
@@ -29,6 +44,14 @@ namespace JCarrillo.AOT.Core.Extensiones.Boxing
             }
         }
 
+        /// <summary>
+        /// Valida específicamente que una instancia de <see cref="SemaphoreLock"/> por referencia de sólo lectura (<see langword="in"/>)
+        /// esté ubicada dentro de los límites de la pila (stack) del hilo actual.
+        /// </summary>
+        /// <param name="value">La referencia de solo lectura a la estructura <see cref="SemaphoreLock"/>.</param>
+        /// <exception cref="InvalidOperationException">
+        /// Se lanza si se detecta que el struct <see cref="SemaphoreLock"/> ha sido boxeado o ubicado en el heap.
+        /// </exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static unsafe void ValidarNoBoxeado(this in SemaphoreLock value)
         {
