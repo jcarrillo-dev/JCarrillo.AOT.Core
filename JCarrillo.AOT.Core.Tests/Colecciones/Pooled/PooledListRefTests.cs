@@ -1,7 +1,6 @@
-using System;
-using Xunit;
 using FluentAssertions;
 using JCarrillo.AOT.Core.Colecciones.Pooled.Ref;
+using Xunit;
 
 namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
 {

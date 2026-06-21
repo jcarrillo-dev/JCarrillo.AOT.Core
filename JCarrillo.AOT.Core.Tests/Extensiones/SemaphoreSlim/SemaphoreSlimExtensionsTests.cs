@@ -1,9 +1,6 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using Xunit;
 using FluentAssertions;
 using JCarrillo.AOT.Core.Extensiones.SemaphoreSlim;
+using Xunit;
 
 namespace JCarrillo.AOT.Core.Tests.Extensiones.SemaphoreSlim
 {
@@ -96,7 +93,7 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones.SemaphoreSlim
         {
             // Arrange
             using var semaphore = new System.Threading.SemaphoreSlim(1, 1);
-            
+
             // Warm up
             {
                 using var l = semaphore.Esperar();

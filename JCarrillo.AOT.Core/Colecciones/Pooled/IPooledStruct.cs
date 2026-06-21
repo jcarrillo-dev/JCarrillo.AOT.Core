@@ -1,5 +1,3 @@
-using System;
-
 namespace JCarrillo.AOT.Core.Colecciones.Pooled
 {
     public interface IPooledStruct<TItem> : IDisposable
