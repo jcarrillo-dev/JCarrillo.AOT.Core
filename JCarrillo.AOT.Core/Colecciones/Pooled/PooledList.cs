@@ -300,6 +300,15 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
             _items![_indiceInserccion++] = item;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void AddRange(ReadOnlySpan<TItem> items)
+        {
+            if (_disposed) ThrowObjectDisposed();
+            IntentarAmpliar(_indiceInserccion + items.Length);
+            items.CopyTo(_items!.AsSpan(_indiceInserccion));
+            _indiceInserccion += items.Length;
+        }
+
         #endregion
 
         #region Clear
