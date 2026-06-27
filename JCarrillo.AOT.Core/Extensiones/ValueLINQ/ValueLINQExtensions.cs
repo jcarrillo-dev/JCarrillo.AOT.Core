@@ -19,7 +19,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         public static ValueLINQStruct<T> ToValueQuery<T>(this T[] origen)
         {
             if (origen == null)
-                throw new ArgumentNullException(nameof(origen));
+                ThrowArgumentNullException(nameof(origen));
 
             var query = new ValueLINQStruct<T>(origen.Length);
             try
@@ -35,12 +35,12 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 throw;
             }
         }
-
+        
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this T[] origen)
         {
             if (origen == null)
-                throw new ArgumentNullException(nameof(origen));
+                ThrowArgumentNullException(nameof(origen));
 
             var query = new ValueLINQRefStruct<T>(origen.Length);
             try
@@ -356,8 +356,14 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         #region Chunk
 
         [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowArgumentOutOfRangeException(string paramName, string message)
             => throw new ArgumentOutOfRangeException(paramName, message);
+
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void ThrowArgumentNullException(string paramName)
+            => throw new ArgumentNullException(paramName);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueLINQRefStruct<ValueLINQStruct<T>> Chunk<T>(this ValueLINQRefStruct<T> origen, int tamaño)
