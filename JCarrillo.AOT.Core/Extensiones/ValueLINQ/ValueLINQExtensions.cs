@@ -7,6 +7,7 @@ using System.Buffers;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
 {
@@ -1132,6 +1133,69 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             }
         }
 
+        [Obsolete("Este método genera asignaciones en el Heap al retornar un array estándar. Se permite su uso para evitar la liberación manual de recursos, pero afecta el rendimiento.", false)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static T[] ToArrayStandard<T>(this ValueLINQRefStruct<T> origen)
+        {
+            long token = origen.Token;
+            bool isTokenValido = token != 0L;
+
+            if (!isTokenValido)
+            {
+                origen.Dispose();
+                return Array.Empty<T>();
+            }
+
+            try
+            {
+                ref var metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
+                int tamaño = metadatos.TamañoActual;
+
+                if (tamaño == 0)
+                    return Array.Empty<T>();
+
+                T[] items = new T[tamaño];
+                metadatos.Array.AsSpan(0, tamaño).CopyTo(items);
+                return items;
+            }
+            finally
+            {
+                origen.Dispose();
+            }
+        }
+
+        [Obsolete("Este método genera asignaciones en el Heap al retornar una lista estándar. Se permite su uso para evitar la liberación manual de recursos, pero afecta el rendimiento.", false)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static List<T> ToListStandard<T>(this ValueLINQRefStruct<T> origen)
+        {
+            long token = origen.Token;
+            bool isTokenValido = token != 0L;
+
+            if (!isTokenValido)
+            {
+                origen.Dispose();
+                return new List<T>();
+            }
+
+            try
+            {
+                ref var metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
+                int tamaño = metadatos.TamañoActual;
+
+                if (tamaño == 0)
+                    return new List<T>();
+
+                var lista = new List<T>(tamaño);
+                CollectionsMarshal.SetCount(lista, tamaño);
+                metadatos.Array.AsSpan(0, tamaño).CopyTo(CollectionsMarshal.AsSpan(lista));
+                return lista;
+            }
+            finally
+            {
+                origen.Dispose();
+            }
+        }
+
         #endregion
 
         #region Materializadores para ValueLINQStruct
@@ -1251,6 +1315,69 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                     metadatos.Array.AsSpan(0, tamaño).CopyTo(array.Span);
 
                 return array;
+            }
+            finally
+            {
+                origen.Dispose();
+            }
+        }
+
+        [Obsolete("Este método genera asignaciones en el Heap al retornar un array estándar. Se permite su uso para evitar la liberación manual de recursos, pero afecta el rendimiento.", false)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static T[] ToArrayStandard<T>(this ValueLINQStruct<T> origen)
+        {
+            long token = origen.Token;
+            bool isTokenValido = token != 0L;
+
+            if (!isTokenValido)
+            {
+                origen.Dispose();
+                return Array.Empty<T>();
+            }
+
+            try
+            {
+                ref var metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
+                int tamaño = metadatos.TamañoActual;
+
+                if (tamaño == 0)
+                    return Array.Empty<T>();
+
+                T[] items = new T[tamaño];
+                metadatos.Array.AsSpan(0, tamaño).CopyTo(items);
+                return items;
+            }
+            finally
+            {
+                origen.Dispose();
+            }
+        }
+
+        [Obsolete("Este método genera asignaciones en el Heap al retornar una lista estándar. Se permite su uso para evitar la liberación manual de recursos, pero afecta el rendimiento.", false)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static List<T> ToListStandard<T>(this ValueLINQStruct<T> origen)
+        {
+            long token = origen.Token;
+            bool isTokenValido = token != 0L;
+
+            if (!isTokenValido)
+            {
+                origen.Dispose();
+                return new List<T>();
+            }
+
+            try
+            {
+                ref var metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
+                int tamaño = metadatos.TamañoActual;
+
+                if (tamaño == 0)
+                    return new List<T>();
+
+                var lista = new List<T>(tamaño);
+                CollectionsMarshal.SetCount(lista, tamaño);
+                metadatos.Array.AsSpan(0, tamaño).CopyTo(CollectionsMarshal.AsSpan(lista));
+                return lista;
             }
             finally
             {
