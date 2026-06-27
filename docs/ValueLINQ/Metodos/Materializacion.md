@@ -111,5 +111,45 @@ public class CacheDeEventos
 ```
 
 ---
+
+## 5. Materializadores Estándar (ToArrayStandard y ToListStandard)
+
+Para simplificar la interoperabilidad con APIs convencionales de .NET que no soportan tipos pooled o que requieren una transferencia de propiedad sin exigencia de liberación manual (`Dispose()`), se añaden los materializadores estándar. Estos métodos están decorados con el atributo `[Obsolete]` para advertir al desarrollador sobre su impacto en la asignación de memoria.
+
+### Propósito y Trade-offs
+- **Evitar la Liberación Manual**: Al retornar arreglos nativos (`T[]`) o listas estándar (`List<T>`), el ciclo de vida del buffer queda bajo el control del recolector de basura (GC). Esto elude la necesidad de invocar `Dispose()`.
+- **Asignación en el Heap (Heap Allocations)**: A diferencia de las colecciones pooled que registran alocaciones nulas (0 B), estos métodos generan asignaciones en memoria heap proporcionales al tamaño de la colección, lo que eleva el trabajo y las pausas del GC.
+- **Optimización de Copia Directa**: En `ToListStandard`, se utiliza la API `CollectionsMarshal` para precalibrar el tamaño interno de la lista administrada:
+  1. Se instancia la lista con la capacidad final exacta.
+  2. Se modifica su longitud interna mediante `CollectionsMarshal.SetCount(lista, tamaño)`.
+  3. Se copia el Span del gestor de estados directamente sobre el Span subyacente de la lista usando `CollectionsMarshal.AsSpan(lista)`.
+  Esto elude la asignación de arrays temporales por redimensionado incremental y reduce el consumo de CPU.
+
+### Firmas de los Operadores
+
+#### Para `ValueLINQRefStruct<T>`
+```csharp
+[Obsolete("Este método genera asignaciones en el Heap al retornar un array estándar. Se permite su uso para evitar la liberación manual de recursos, pero afecta el rendimiento.", false)]
+[MethodImpl(MethodImplOptions.AggressiveInlining)]
+public static T[] ToArrayStandard<T>(this ValueLINQRefStruct<T> origen)
+
+[Obsolete("Este método genera asignaciones en el Heap al retornar una lista estándar. Se permite su uso para evitar la liberación manual de recursos, pero afecta el rendimiento.", false)]
+[MethodImpl(MethodImplOptions.AggressiveInlining)]
+public static List<T> ToListStandard<T>(this ValueLINQRefStruct<T> origen)
+```
+
+#### Para `ValueLINQStruct<T>`
+```csharp
+[Obsolete("Este método genera asignaciones en el Heap al retornar un array estándar. Se permite su uso para evitar la liberación manual de recursos, pero afecta el rendimiento.", false)]
+[MethodImpl(MethodImplOptions.AggressiveInlining)]
+public static T[] ToArrayStandard<T>(this ValueLINQStruct<T> origen)
+
+[Obsolete("Este método genera asignaciones en el Heap al retornar una lista estándar. Se permite su uso para evitar la liberación manual de recursos, pero afecta el rendimiento.", false)]
+[MethodImpl(MethodImplOptions.AggressiveInlining)]
+public static List<T> ToListStandard<T>(this ValueLINQStruct<T> origen)
+```
+
+---
 [Volver a Métodos y Extensiones](README.md)
+
 
