@@ -37,17 +37,17 @@ El benchmark evalúa la adquisición y liberación bajo exclusión mutua de form
 ### Tabla 3: SemaphoreSlim vs SemaphoreLock (Medidos)
 | Método de Prueba | Tipo de Ejecución | Latencia (Mean) | Heap Allocated | Ratio de Latencia |
 | :--- | :--- | :---: | :---: | :---: |
-| **SemaphoreSlim_Sincrono** (Baseline) | Síncrono | 515.0 ns | **0 B** | 1.00 |
-| **SemaphoreLock_Sincrono** | Síncrono | 646.2 ns | **0 B** | 1.25 |
+| **SemaphoreSlim_Sincrono** (Baseline) | Síncrono | 535.9 ns | **0 B** | 1.00 |
+| **SemaphoreLock_Sincrono** | Síncrono | 698.9 ns | **0 B** | 1.30 |
 | | | | | |
-| **SemaphoreSlim_Asincrono** (Baseline) | Asíncrono | 1,113.1 ns | **0 B** | 1.00 |
-| **SemaphoreLock_Asincrono** | Asíncrono | 1,625.8 ns | **0 B** | 1.46 |
+| **SemaphoreSlim_Asincrono** (Baseline) | Asíncrono | 1,151.1 ns | **0 B** | 1.00 |
+| **SemaphoreLock_Asincrono** | Asíncrono | 1,440.4 ns | **0 B** | 1.25 |
 
 ---
 
 ## 3. Limitaciones y Trade-offs Técnicos (Ingeniería Honesta)
 
-*   **Coste de Envoltura**: `SemaphoreLock` introduce un coste adicional de CPU del **25.4% (medido)** en llamadas síncronas y del **46.1% (medido)** en llamadas asíncronas en comparación con el uso crudo de `SemaphoreSlim`.
+*   **Coste de Envoltura**: `SemaphoreLock` introduce un coste adicional de CPU del **30.4% (medido)** en llamadas síncronas y del **25.1% (medido)** en llamadas asíncronas en comparación con el uso crudo de `SemaphoreSlim`.
 *   **Justificación de Diseño**: Esta penalización en microsegundos representa el trade-off necesario a cambio de obtener validación en tiempo de ejecución en el stack, robustez sintáctica con el bloque `using` y soporte asíncrono sin generar allocations adicionales en el heap del GC (0 B de asignación).
 
 ---

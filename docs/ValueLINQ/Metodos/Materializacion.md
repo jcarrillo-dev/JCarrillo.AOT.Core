@@ -150,6 +150,63 @@ public static List<T> ToListStandard<T>(this ValueLINQStruct<T> origen)
 ```
 
 ---
+
+## 6. Rendimiento y Mediciones Empíricas (Medido)
+
+Las mediciones empíricas de rendimiento se registraron con BenchmarkDotNet en un procesador AMD Ryzen 9 3950X, SDK de .NET 10.0.301, en configuración Release. El harness completo está disponible en [ValueLINQBenchmarks.cs](../../../JCarrillo.AOT.Core.Benchmarks/Extensiones/ValueLINQBenchmarks.cs).
+
+### Resultados a Escala N = 100 (Medido)
+| Runtime / Engine | Método | Latencia Media (Mean) | Heap Allocated | Notas |
+| :--- | :--- | :---: | :---: | :--- |
+| **.NET 10.0 JIT** | `ValueLINQStruct_ToArray_Pooled` | 120.22 ns | 0 B | Buffer reciclado desde el pool (medido) |
+| **.NET 10.0 JIT** | `ValueLINQStruct_ToArrayStandard_Heap` | 102.56 ns | 424 B | Asignación en Heap administrado (medido) |
+| **.NET 10.0 JIT** | `ValueLINQStruct_ToList_Pooled` | 127.42 ns | 0 B | Buffer reciclado desde el pool (medido) |
+| **.NET 10.0 JIT** | `ValueLINQStruct_ToListStandard_Heap` | 107.07 ns | 456 B | Asignación en Heap administrado (medido) |
+| **.NET 9.0 JIT** | `ValueLINQStruct_ToArray_Pooled` | 125.26 ns | 0 B | Buffer reciclado desde el pool (medido) |
+| **.NET 9.0 JIT** | `ValueLINQStruct_ToArrayStandard_Heap` | 98.08 ns | 424 B | Asignación en Heap administrado (medido) |
+| **.NET 9.0 JIT** | `ValueLINQStruct_ToList_Pooled` | 127.32 ns | 0 B | Buffer reciclado desde el pool (medido) |
+| **.NET 9.0 JIT** | `ValueLINQStruct_ToListStandard_Heap` | 168.14 ns | 456 B | Asignación en Heap administrado (medido) |
+| **.NET 8.0 JIT** | `ValueLINQStruct_ToArray_Pooled` | 151.86 ns | 0 B | Buffer reciclado desde el pool (medido) |
+| **.NET 8.0 JIT** | `ValueLINQStruct_ToArrayStandard_Heap` | 112.83 ns | 424 B | Asignación en Heap administrado (medido) |
+| **.NET 8.0 JIT** | `ValueLINQStruct_ToList_Pooled` | 134.19 ns | 0 B | Buffer reciclado desde el pool (medido) |
+| **.NET 8.0 JIT** | `ValueLINQStruct_ToListStandard_Heap` | 113.64 ns | 456 B | Asignación en Heap administrado (medido) |
+| **NativeAOT 10.0** | `ValueLINQStruct_ToArray_Pooled` | 211.68 ns | 0 B | Buffer reciclado en Native AOT (medido) |
+| **NativeAOT 10.0** | `ValueLINQStruct_ToArrayStandard_Heap` | 163.40 ns | 424 B | Asignación en Heap (Native AOT) (medido) |
+| **NativeAOT 10.0** | `ValueLINQStruct_ToList_Pooled` | 209.89 ns | 0 B | Buffer reciclado en Native AOT (medido) |
+| **NativeAOT 10.0** | `ValueLINQStruct_ToListStandard_Heap` | 176.74 ns | 456 B | Asignación en Heap (Native AOT) (medido) |
+
+### Resultados a Escala N = 1000 (Medido)
+| Runtime / Engine | Método | Latencia Media (Mean) | Heap Allocated | Notas |
+| :--- | :--- | :---: | :---: | :--- |
+| **.NET 10.0 JIT** | `ValueLINQStruct_ToArray_Pooled` | 328.42 ns | 0 B | Buffer reciclado desde el pool (medido) |
+| **.NET 10.0 JIT** | `ValueLINQStruct_ToArrayStandard_Heap` | 467.07 ns | 4,024 B | Asignación en Heap administrado (medido) |
+| **.NET 10.0 JIT** | `ValueLINQStruct_ToList_Pooled` | 353.51 ns | 0 B | Buffer reciclado desde el pool (medido) |
+| **.NET 10.0 JIT** | `ValueLINQStruct_ToListStandard_Heap` | 461.80 ns | 4,056 B | Asignación en Heap administrado (medido) |
+| **.NET 9.0 JIT** | `ValueLINQStruct_ToArray_Pooled` | 203.42 ns | 0 B | Buffer reciclado desde el pool (medido) |
+| **.NET 9.0 JIT** | `ValueLINQStruct_ToArrayStandard_Heap` | 291.96 ns | 4,024 B | Asignación en Heap administrado (medido) |
+| **.NET 9.0 JIT** | `ValueLINQStruct_ToList_Pooled` | 206.01 ns | 0 B | Buffer reciclado desde el pool (medido) |
+| **.NET 9.0 JIT** | `ValueLINQStruct_ToListStandard_Heap` | 299.07 ns | 4,056 B | Asignación en Heap administrado (medido) |
+| **.NET 8.0 JIT** | `ValueLINQStruct_ToArray_Pooled` | 409.09 ns | 0 B | Buffer reciclado desde el pool (medido) |
+| **.NET 8.0 JIT** | `ValueLINQStruct_ToArrayStandard_Heap` | 513.52 ns | 4,024 B | Asignación en Heap administrado (medido) |
+| **.NET 8.0 JIT** | `ValueLINQStruct_ToList_Pooled` | 402.30 ns | 0 B | Buffer reciclado desde el pool (medido) |
+| **.NET 8.0 JIT** | `ValueLINQStruct_ToListStandard_Heap` | 310.55 ns | 4,056 B | Regresión de CPU frente a Heap administrado (medido) |
+| **NativeAOT 10.0** | `ValueLINQStruct_ToArray_Pooled` | 207.54 ns | 0 B | Buffer reciclado en Native AOT (medido) |
+| **NativeAOT 10.0** | `ValueLINQStruct_ToArrayStandard_Heap` | 279.72 ns | 4,024 B | Asignación en Heap (Native AOT) (medido) |
+| **NativeAOT 10.0** | `ValueLINQStruct_ToList_Pooled` | 230.63 ns | 0 B | Buffer reciclado en Native AOT (medido) |
+| **NativeAOT 10.0** | `ValueLINQStruct_ToListStandard_Heap` | 284.67 ns | 4,056 B | Asignación en Heap (Native AOT) (medido) |
+
+### Análisis de Trade-offs y Limitaciones de los Materializadores
+
+1. **Sobrecarga de Alquiler en Pequeña Escala**:
+   - En consultas cortas ($N = 100$), los materializadores estándar (`ToArrayStandard` y `ToListStandard`) resultan entre un 14.7% y un 31.5% más rápidos (medido) en tiempo de CPU que las variantes pooled. Esto se debe a la ausencia de operaciones de alquiler (`Rent`) y retorno (`Return`) de buffers contra `ArrayPool<T>.Shared`. La única excepción medida es `ToListStandard` bajo .NET 9.0 JIT, donde la versión Pooled fue un 24.3% más rápida (medido).
+2. **Eficiencia en Media y Gran Escala**:
+   - Para colecciones de mayor tamaño ($N = 1000$), la sobrecarga del alquiler de buffers se amortiza completamente. Las variantes pooled reducen el tiempo de CPU en un rango del 18.7% al 31.1% en la mayoría de los entornos (medido) debido a la eliminación de asignaciones redundantes de memoria heap. La única excepción a esta tendencia es `.NET 8.0 JIT`, donde `ToListStandard_Heap` (310.55 ns, medido) es un 29.5% más rápido que `ToList_Pooled` (402.30 ns, medido).
+3. **Riesgo de Fugas de Recursos (Trade-off de Complejidad)**:
+   - El uso de los materializadores pooled requiere que el programador gestione de manera determinista el ciclo de vida del objeto retornado (invocando `Dispose()` o mediante bloques `using`). Omitir esta llamada resulta en la fuga permanente del buffer alquilado, inhabilitando su reutilización en el pool de memoria global.
+4. **Lo que estas mediciones NO evalúan**:
+   - Estas pruebas se limitan a ejecuciones secuenciales en un solo hilo y no miden el coste de contención del pool de memoria bajo alta concurrencia concurrente, ni la fragmentación acumulativa del heap administrado a largo plazo. El análisis detallado de limitaciones está documentado en [Reporte de Benchmarks Consolidado](../BENCHMARK.md).
+
+---
 [Volver a Métodos y Extensiones](README.md)
 
 
