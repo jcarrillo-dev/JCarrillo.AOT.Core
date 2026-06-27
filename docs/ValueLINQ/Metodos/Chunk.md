@@ -1,3 +1,5 @@
+[Volver a Métodos y Extensiones](README.md) | [Volver a ValueLINQ](../README.md)
+
 # Operador Chunk y ProcessChunks
 
 El operador `Chunk` divide una colección lógica de datos en fragmentos homogéneos de un tamaño máximo especificado. A diferencia de las implementaciones tradicionales que asignan arrays jerárquicos o sublistas en el Heap de GC, ValueLINQ realiza esta división con **cero allocations**, estructurando los fragmentos directamente como subconsultas tipo `ValueLINQStruct<T>` contenidas dentro de una consulta externa.
@@ -111,3 +113,7 @@ public static void ProcesarEnFragmentos(int[] datos)
          .ProcessChunks(new ImpresorDeBloques()); // 3. Ejecuta el procesador sobre cada bloque e invoca la liberación automática en cascada
 }
 ```
+
+---
+[Volver a Métodos y Extensiones](README.md)
+

@@ -1,3 +1,5 @@
+[Volver al Core de ValueLINQ](README.md) | [Volver a ValueLINQ](../README.md)
+
 # Gestor de Estados: ValueLINQStateManager y Sincronización Core
 
 `ValueLINQStateManager<T>` (ver [ValueLINQStateManager.cs](../../../JCarrillo.AOT.Core/ValueLINQ/ValueLINQStateManager.cs)) es el motor interno centralizado de ValueLINQ. Actúa como un gestor de estados estático y síncrono que administra un pool fijo de **4096 ranuras (slots)** de sesión activa por cada tipo de dato `T`, evitando la asignación dinámica de memoria y controlando el ciclo de vida de los buffers rentados del `ArrayPool<T>.Shared`.
@@ -90,7 +92,7 @@ En la población unitaria (`ValueLINQStruct_Int_Fixed`), el cliente ejecuta un b
 *   Incluso en ausencia de contención entre hilos, cada par lock/unlock consume tiempo en la CPU debido a las comprobaciones de exclusión mutua y barreras de memoria del runtime de .NET.
 *   Esto genera una penalización sistemática de **~32,000 ns (medido)** dedicada exclusivamente a la sincronización de hilos, relegando la latencia útil de copia a un segundo plano y provocando que la operación sea 14.7 veces más lenta que una lista ordinaria.
 
-### La Optimización de la Población en Bloque ($O(1)$ Lock)
+### El Corregido del Bloque ($O(1)$ Lock)
 La nueva población en bloque (`Añadir(ReadOnlySpan<T>)`) resuelve esta ineficiencia consolidando todo el trabajo en una sola operación atómica:
 1.  **Sincronización Única ($O(1)$)**: Se calcula el tamaño final necesario ($Tama\tilde{n}oActual + Span.Length$) y se realiza **una única llamada** a `AsegurarEspacio`. Esto reduce el costo de locking de $O(N)$ a una única adquisición y liberación de lock ($O(1)$).
 2.  **Copia Vectorial Directa**: El framework obtiene una vista directa del buffer de la sesión y realiza una copia en bloque utilizando `ReadOnlySpan<T>.CopyTo`. Esto se traduce en una transferencia directa de memoria física (`memcpy` altamente optimizado por hardware mediante instrucciones vectoriales de CPU).
@@ -101,3 +103,7 @@ La nueva población en bloque (`Añadir(ReadOnlySpan<T>)`) resuelve esta inefici
 4.  **Rendimiento en NativeAOT 10.0**:
     -   Para `ValueLINQStruct<int>`, la latencia bajo compilación nativa completa baja a **142.33 ns (medido)** frente a los 30,570.09 ns (medido) del método unitario, logrando **214.78x de aceleración (medido)** (−99.53% de tiempo de CPU).
     -   **Comparativa vs Listas**: `ValueLINQStruct_Int_Block` es un **6.23% más rápido (medido)** que `List_Int_Block` (142.33 ns vs 151.20 ns) con **0 B (medido)** de asignación en el Heap de Native AOT frente a los **4,056 B (medido)** de la lista estándar.
+
+---
+[Volver al Core de ValueLINQ](README.md)
+

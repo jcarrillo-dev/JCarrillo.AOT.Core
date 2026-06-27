@@ -1,3 +1,5 @@
+[Volver a Métodos y Extensiones](README.md) | [Volver a ValueLINQ](../README.md)
+
 # Operador Select
 
 El operador `Select` proyecta cada elemento de una colección en una nueva forma. Al igual que con `Where`, para evitar la asignación de delegados `Func<TSource, TResult>` en el Heap de GC y permitir el inlining total por parte del compilador, ValueLINQ utiliza un parámetro genérico struct que implementa la interfaz `ISelectDelegado<TOrigen, TResultado>`.
@@ -112,3 +114,7 @@ El operador `Select` de LINQ estándar (`IEnumerable<TResult>.Select`) introduce
 2.  **Presión en el GC**: La reserva continua de memoria del enumerador intermedio genera recolecciones frecuentes de Generación 0.
 
 En cambio, `Select` en ValueLINQ utiliza restricciones genéricas sobre estructuras (`where TPredicate : struct`). Esto permite que el compilador Genérico genere una especialización física del método `Select` en tiempo de compilación. El método `Ejectuar` de la estructura se resuelve de forma estática, permitiendo que el compilador inserte el cuerpo del selector directamente dentro del bucle de procesamiento. Esto elimina la llamada indirecta por completo y resulta en una ejecución a velocidad de hardware nativo.
+
+---
+[Volver a Métodos y Extensiones](README.md)
+

@@ -1,4 +1,7 @@
+[Volver a ValueLINQ](../README.md)
+
 # Operadores y Extensiones de Consulta de ValueLINQ
+
 
 Esta sección de la documentación sirve como índice y guía de referencia técnica para todos los operadores de consulta fluent, segmentadores y materializadores disponibles en **ValueLINQ (versión 1.1.0)**. 
 

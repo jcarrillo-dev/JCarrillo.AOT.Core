@@ -1,3 +1,5 @@
+[Volver al Core de ValueLINQ](README.md) | [Volver a ValueLINQ](../README.md)
+
 # Componentes Core: ValueLINQStruct y ValueLINQRefStruct
 
 El pipeline de ValueLINQ expone dos contenedores estructurados fundamentales para representar consultas activas: `ValueLINQStruct<T>` y `ValueLINQRefStruct<T>`. Aunque comparten firmas semánticas y lógica de procesamiento casi idénticas, difieren radicalmente en sus restricciones de compilación y garantías de asignación de memoria.
@@ -40,7 +42,7 @@ Esta es una decisión de diseño crítica por las siguientes razones de segurida
 
 1.  **Protección de la Inmutabilidad del Pipeline**: Las consultas ValueLINQ representan pipelines fluidos que se crean a partir de un origen de datos contiguo y se consumen de inmediato. Permitir que código externo añada elementos de forma ad-hoc destruiría la predictibilidad del flujo de datos.
 2.  **Prevención de Excepciones de Expiración**: La adición manual de elementos fuera del flujo síncrono del pipeline incrementa el tiempo de vida de la sesión en la pila. Si el código del usuario retiene la consulta abierta interactuando con ella manualmente, es muy probable que supere el límite de inactividad de **5 minutos (medido)** del StateManager, provocando que el temporizador de fondo expire el slot y lance excepciones de sesión expirada al intentar reutilizar el token.
-3.  **Evitación de Fugas de Memoria (Memory Leaks)**: Si el método `Añadir` fuera público, los desarrolladores podrían verse tentados a instanciar y poblar manualmente estructuras de consulta sin la debida protección de un bloque `using`. Dado que estas estructuras reservan buffers del pool global, cualquier omisión de `Dispose()` provocaría que el buffer quedara huérfano hasta la recolección periódica del StateManager, degradando el rendimiento del pool.
+3.  **Evitación de Fugas de Memoria (Memory Leaks)**: Si el método `Añadir` fuera público, los desarrolladores podrían verse tentados a instanciar y poblar manualmente estructuras de consulta sin la debida protección de un bloque `using`. Dado que estas estructuras reservar buffers del pool global, cualquier omisión de `Dispose()` provocaría que el buffer quedara huérfano hasta la recolección periódica del StateManager, degradando el rendimiento del pool.
 4.  **Evasión de Costes de Sincronización**: Las llamadas a `Añadir` requieren adquirir un lock local sobre el slot de la tabla fija del StateManager para asegurar espacio y copiar datos. El framework encapsula estas llamadas en operaciones optimizadas en bloque (como la población a partir de Spans). Exponer `Añadir` al público invitaría a inserciones unitarias en bucles del usuario, resultando en un overhead severo de sincronización ($O(N)$ locks).
 
 ---
@@ -78,3 +80,7 @@ using var query = datos.ToValueRefQuery();
 // Al salir del alcance (scope), el compilador inserta una llamada directa a query.Dispose()
 ```
 Este enfoque elimina la necesidad de despachos virtuales a través de la interfaz `IDisposable`, logrando una llamada directa y estática altamente eficiente que devuelve los recursos al StateManager de forma atómica.
+
+---
+[Volver al Core de ValueLINQ](README.md)
+

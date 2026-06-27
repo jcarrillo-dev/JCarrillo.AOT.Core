@@ -1,10 +1,13 @@
+[Volver al Sitemap de Documentación](../README.md) | [Volver a ValueLINQ](README.md)
+
 # Reporte de Benchmarks Consolidado de ValueLINQ
+
 
 Este documento presenta el análisis cuantitativo completo de rendimiento y eficiencia de memoria (Allocated Bytes en el Heap) de **ValueLINQ (versión 1.1.0)** frente a las colecciones y métodos estándar de .NET. Las pruebas evalúan el comportamiento bajo compilación JIT y **Native AOT** en múltiples runtimes.
 
 ---
 
-## 💻 Entorno de Ejecución y Metodología
+## Entorno de Ejecución y Metodología
 
 Todas las mediciones empíricas fueron registradas bajo las siguientes condiciones controladas de hardware y software (medido):
 
@@ -22,7 +25,7 @@ Todas las mediciones empíricas fueron registradas bajo las siguientes condicion
 
 ---
 
-## 📊 Tablas de Resultados Comparativos (Medidos)
+## Tablas de Resultados Comparativos (Medidos)
 
 ### 1. Consultas Fluent (`Where` + `Select`)
 Prueba que simula un pipeline común de procesamiento de datos compuesto por un filtrado y una proyección en cadena.
@@ -102,7 +105,7 @@ Mide la sobrecarga del modelo síncrono al alimentar la colección. Compara la i
 
 ---
 
-## 🧠 Conclusiones de Ingeniería de Rendimiento
+## Conclusiones de Rendimiento
 
 1.  **Eficiencia del Heap**: En todas las pruebas y runtimes, las colecciones estructuradas de ValueLINQ registraron **0 B (medido)** de allocations en el Heap de GC. Esto reduce a cero la frecuencia de recolección de basura (Gen 0/1/2) en las rutas críticas.
 2.  **Ventaja Crítica en Native AOT**: En Native AOT, la resolución dinámica de interfaces penaliza severamente al LINQ estándar de .NET, degradando su rendimiento hasta en **7.84x (medido)** respecto a ValueLINQ ($N=1000$). ValueLINQ se beneficia del inlining a nivel de compilación estática, operando a máxima velocidad de hardware.

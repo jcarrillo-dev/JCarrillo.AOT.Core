@@ -1,3 +1,5 @@
+[Volver a Métodos y Extensiones](README.md) | [Volver a ValueLINQ](../README.md)
+
 # Operador Where
 
 El operador `Where` filtra los elementos de una colección basándose en un predicado estructurado de tipo `struct`. A diferencia del operador `Where` de LINQ estándar, que recibe un delegado `Func<T, bool>` (provocando asignaciones en el heap e impidiendo el inlining del JIT/AOT), ValueLINQ utiliza un parámetro genérico de tipo struct que implementa la interfaz `IWhereDelegado<TOrigen, TDato>`.
@@ -115,3 +117,7 @@ Los siguientes datos de rendimiento corresponden a la ejecución combinada de un
 1.  **Reducción Absoluta de Allocations**: Tanto `ValueLINQStruct` como `ValueLINQRefStruct` registran **0 bytes (medido)** de allocations en el Heap del GC en todas las ejecuciones, frente a los 104-144 bytes de LINQ estándar generados por la instanciación de clases enumeradoras y la captura de variables en clausuras.
 2.  **Comportamiento en Escala ($N=1000$)**: Para colecciones pequeñas ($N=100$) en JIT, el LINQ estándar aprovecha optimizaciones de RyuJIT logrando menor latencia inicial. Sin embargo, al escalar a $N=1000$, ValueLINQ resulta un **37% más rápido (medido)** (reduciendo la latencia de 2,029.38 ns a 1,271.76 ns) gracias al inlining completo del predicado estructurado y la ausencia de indirecciones.
 3.  **Ventaja Crítica bajo Native AOT**: En escenarios Native AOT, la diferencia es sustancial. `StandardLINQ` sufre una severa penalización de latencia (escalando hasta 15,826.87 ns para $N=1000$) debido al coste del despacho de interfaces dinámicas y metadatos no compilados estáticamente. ValueLINQ mantiene una latencia altamente predecible y optimizada de **2,022.59 ns (medido)**, lo cual representa una reducción de latencia del **87.2% (medido)** (casi 8 veces más rápido).
+
+---
+[Volver a Métodos y Extensiones](README.md)
+

@@ -1,3 +1,5 @@
+[Volver al Sitemap de Documentación](../README.md)
+
 # ValueLINQ: Pipeline de Consultas Estructuradas con Cero Asignaciones y Compatibilidad Native AOT
 
 ValueLINQ (versión 1.1.0) es un motor de procesamiento de consultas estructuradas de alto rendimiento para .NET, diseñado específicamente para entornos restrictivos como **Native AOT** y sistemas con latencia crítica que requieren **cero asignaciones en el Heap de GC** (0 bytes de allocation).
@@ -24,15 +26,15 @@ La versión inicial 1.1.0 de la biblioteca `JCarrillo.AOT.Core` marca el nacimie
 *   **Tokens de Seguridad de 64 bits**: Helper atómico `TokenHelper` que codifica la versión incremental y el índice físico de slot en un entero `long` de 64 bits. Implementa accesos volátiles y atómicos seguros de hardware (con soporte híbrido mediante `Interlocked` en arquitecturas de 32 bits), previniendo lecturas fragmentadas (torn reads) y resolviendo accesos simultáneos sin bloqueos en la ruta caliente.
 *   **Operadores Fluent Síncronos y Cero Asignaciones**: Soporte para operadores estructurados (`Where`, `Select`, `Concat`) implementados directamente sobre `ValueLINQStruct<T>` y `ValueLINQRefStruct<T>`. Utilizan restricciones de estructura genérica (`where TDelegado : struct`) para habilitar el inlining agresivo por parte del compilador JIT y garantizar **0 bytes de asignación (medido)** en el Heap de GC.
 *   **Enumeradores Estructurales Directos**: Enumeración ultrarrápida a velocidad de hardware mediante el `ref struct` `ValueLINQEnumerator<T>`, recuperando el Span del búfer una sola vez al inicio del bucle `foreach` y devolviendo los elementos por referencia (`ref T`) para evitar copias costosas.
-*   **Población en Bloque (Bulk Population)**: Transferencia vectorial masiva de datos a nivel físico mediante `Añadir(ReadOnlySpan<T>)` y `Span.CopyTo`, amortizando la sincronización del StateManager a una única operación al inicio de la carga de datos.
+*   **Población en Bloque (Bulk Population)**: Transferencia vectorial masiva de datos a nivel físico mediante `Añadir(ReadOnlySpan<T>)` y `Span.CopyTo`, amortizando la sincronización del StateManager a una única operation al inicio de la carga de datos.
 *   **Materialización y Caching de Largo Ciclo de Vida**: Operadores de materialización (`ToList()`, `ToArray()`, `ToListRef()`, `ToArrayRef()`) que copian en bloque hacia colecciones rápidas de ciclo de vida prolongado (`PooledList<T>`, `PooledArray<T>`) y liberan inmediatamente el búfer transitorio en el StateManager, previniendo excepciones de expiración por parte del limpiador de fondo.
 *   **Operador de Particionamiento (Chunking)**: Implementación de `Chunk` y `ProcessChunks` sin asignaciones en el montón. Divide colecciones lógicas almacenando cada fragmento como un struct `ValueLINQStruct<T>` directamente en un contenedor de pila `ValueLINQRefStruct<ValueLINQStruct<T>>` (o `ValueLINQStruct<ValueLINQStruct<T>>`), garantizando total seguridad de tipos en compilación.
 *   **Robustez y Seguridad ante Excepciones (Rollback Atómico)**: Envoltura sistemática de todos los pipelines de datos intermedios en bloques `try-finally`. Si ocurre una excepción en medio de la población, segmentación o procesamiento de datos, los operadores realizan un rollback ordenado: liberan cada búfer parcial instanciado y devuelven el contenedor al pool de forma inmediata, evitando cualquier riesgo de fuga de búferes en el `ArrayPool`.
-
-### ⚖️ Limitaciones y Trade-offs del Motor de Consultas
-
+ 
+## Limitaciones y Compromisos de Diseño del Motor de Consultas
+ 
 De acuerdo con el estándar de ingeniería honesta, se declaran los siguientes límites físicos y compromisos de diseño asociados a la versión inicial de ValueLINQ:
-
+ 
 1.  **Hard Cap de Sesiones Activas Concurrentes**: El StateManager está limitado físicamente a un máximo estricto de **4096 ranuras de sesión activas (medido)** en toda la aplicación. Si se alcanza este límite de concurrencia simultánea, las nuevas solicitudes de consulta fallarán o se verán bloqueadas hasta que se liberen slots existentes.
 2.  **Contención Menor del Asignador**: El stack estático de ranuras libres se gestiona bajo un bloqueo síncrono exclusivo global (`_stackRoot`). Aunque esta operación dura apenas nanosegundos (un simple ajuste de índice), representa un cuello de botella de contención teórico bajo cargas extremas de concurrencia en la fase de inicialización.
 3.  **Degradación Menor en Sistemas de 32 bits**: La atómica de 64 bits en sistemas x86, ARM32 o Wasm32 requiere operaciones de hardware más pesadas a través de `Interlocked.Read` e `Interlocked.Exchange` en `TokenHelper`, lo que introduce una penalización menor de latencia en comparación con el acceso directo a memoria disponible en sistemas de 64 bits.
@@ -60,7 +62,7 @@ sequenceDiagram
     SM-->>VS: Retorna referencia a MetadatosSesion (con Token y Buffer)
     VS-->>App: Query inicializada y bloqueada
 
-    rect rgb(240, 248, 255)
+    rect rgb(120, 120, 120)
         Note over App, VS: Fase de Operaciones (Where / Select)
         App->>VS: Añadir(ReadOnlySpan<T> data)
         VS->>SM: AsegurarEspacio(Token, nuevoTamaño)
@@ -77,8 +79,10 @@ sequenceDiagram
 ```
 
 ### Componentes Clave:
-*   **[ValueLINQStructs.md](Core/ValueLINQStructs.md)**: Documento técnico que detalla las estructuras de sesión `ValueLINQStruct<T>` (record struct para flujos generales) y `ValueLINQRefStruct<T>` (ref struct de solo pila), analizando sus reglas de ciclo de vida y prevención de excepciones por copias huérfanas.
-*   **[ValueLINQStateManager.md](Core/ValueLINQStateManager.md)**: Documento técnico del gestor de estados centralizado que controla la tabla fija de 4096 slots, el ayudante de bits `TokenHelper` de 64 bits para prevenir torn reads, y el limpiador periódico de fondo.
-*   **[Operadores y Extensiones](Metodos/README.md)**: Guía de referencia para el pipeline de operadores de consulta fluent (`Where`, `Select`, `Concat`, `Chunk` y materializadores de caching como `ToList` y `ToArray`).
+*   **[Núcleo y Arquitectura (Core)](Core/README.md)**: Estructura interna, modelos de sesión y gestor de estados centralizado.
+    *   **[ValueLINQStructs: Modelos de Sesión](Core/ValueLINQStructs.md)**: Diferencias, ciclo de vida y reglas de pila de `ValueLINQStruct` y `ValueLINQRefStruct`.
+    *   **[ValueLINQStateManager: Gestor y Sincronización](Core/ValueLINQStateManager.md)**: Análisis del gestor estático de 4096 slots, lock striping y el timer de limpieza de fondo.
+*   **[Métodos y Extensiones (Operadores)](Metodos/README.md)**: Guía de referencia para el pipeline de operadores de consulta fluent (`Where`, `Select`, `Concat`, `Chunk` y materializadores de caching como `ToList` y `ToArray`).
 *   **[Reporte de Benchmarks Completo](BENCHMARK.md)**: Comparativa analítica detallada de todos los tiempos que contrasta el rendimiento de ValueLINQ frente a LINQ estándar y colecciones de .NET en JIT y Native AOT.
+
 

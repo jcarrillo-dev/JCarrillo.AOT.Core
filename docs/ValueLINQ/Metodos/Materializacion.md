@@ -1,3 +1,5 @@
+[Volver a Métodos y Extensiones](README.md) | [Volver a ValueLINQ](../README.md)
+
 # Operadores de Materialización y Caching de Largo Ciclo de Vida
 
 Los operadores de materialización (`ToList`, `ToArray`, `ToListRef` y `ToArrayRef`) permiten persistir el resultado de una consulta de ValueLINQ en colecciones estables fuera de la tabla de estados de `ValueLINQStateManager<T>`. Esta operación es indispensable para almacenar datos por periodos prolongados o transmitir resultados a través de fronteras asíncronas de largo ciclo de vida.
@@ -107,3 +109,7 @@ public class CacheDeEventos
     }
 }
 ```
+
+---
+[Volver a Métodos y Extensiones](README.md)
+
