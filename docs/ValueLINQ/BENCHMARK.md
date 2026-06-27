@@ -83,7 +83,7 @@ Mide la alocación silenciosa inducida por el compilador al resolver el paso de 
 | Runtime / Engine | Método | Latencia Media (Mean) | Heap Allocated | Estado de Asignaciones |
 | :--- | :--- | :---: | :---: | :--- |
 | **.NET 8.0 JIT** | `ValueLINQStruct_Concat_Static_4Elements` | 961.65 ns | **0 B** | Llamada con argumentos fijos estáticos. |
-| **.NET 8.0 JIT** | `ValueLINQStruct_Concat_Params_5Elements` | 1,210.63 ns | **56 B** | **Alocación heap detectada** (creación del array array temporal). |
+| **.NET 8.0 JIT** | `ValueLINQStruct_Concat_Params_5Elements` | 1,210.63 ns | **56 B** | **Alocación heap detectada** (creación del array temporal). |
 | **.NET 9.0 JIT** | `ValueLINQStruct_Concat_Static_4Elements` | 958.64 ns | **0 B** | Llamada con argumentos fijos estáticos. |
 | **.NET 9.0 JIT** | `ValueLINQStruct_Concat_Params_5Elements` | 1,219.21 ns | **0 B** | **0 Allocations** (JIT inline de `ReadOnlySpan<T>`). |
 | **.NET 10.0 JIT** | `ValueLINQStruct_Concat_Static_4Elements` | 933.26 ns | **0 B** | Sin params. |
