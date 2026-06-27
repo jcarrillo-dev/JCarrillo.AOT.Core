@@ -35,7 +35,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
             if (capacidadInicial <= 0) ThrowArgumentOutOfRange(capacidadInicial);
 
             _items = ArrayPool<TItem>.Shared.Rent(capacidadInicial);
-            _indiceInserccion = 0;
+            _indiceInsercion = 0;
         }
 
         /// <summary>
@@ -50,7 +50,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
             if (tamaño < 0 || tamaño > items.Length) ThrowArgumentOutOfRange(tamaño);
 
             _items = items;
-            _indiceInserccion = tamaño;
+            _indiceInsercion = tamaño;
             _disposed = false;
         }
 
@@ -58,7 +58,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
 
         #region Tamaño
 
-        private int _indiceInserccion;
+        private int _indiceInsercion;
 
         /// <summary>
         /// Obtiene el número actual de elementos válidos en la lista.
@@ -73,7 +73,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
             get
             {
                 if (_disposed) ThrowObjectDisposed();
-                return _indiceInserccion;
+                return _indiceInsercion;
             }
         }
 
@@ -113,7 +113,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
             get
             {
                 if (_disposed) ThrowObjectDisposed();
-                return _items!.AsSpan(0, _indiceInserccion);
+                return _items!.AsSpan(0, _indiceInsercion);
             }
         }
 
@@ -140,7 +140,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
             {
                 if (_disposed) ThrowObjectDisposed();
                 TItem[]? items = _items;
-                if (items is null || (uint)indice >= (uint)_indiceInserccion) ThrowIndexOutOfRange(indice);
+                if (items is null || (uint)indice >= (uint)_indiceInsercion) ThrowIndexOutOfRange(indice);
                 return ref items[indice];
             }
         }
@@ -188,7 +188,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
             _disposed = true;
             if (_items != null)
             {
-                _indiceInserccion = 0;
+                _indiceInsercion = 0;
                 ArrayPool<TItem>.Shared.Return(_items, RuntimeHelpers.IsReferenceOrContainsReferences<TItem>());
                 _items = null;
             }
@@ -215,7 +215,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
             int nuevaCapacidad = Math.Max(nuevoTamaño, _items.Length * 2);
 
             TItem[] nuevoArray = ArrayPool<TItem>.Shared.Rent(nuevaCapacidad);
-            _items.AsSpan(0, _indiceInserccion).CopyTo(nuevoArray.AsSpan());
+            _items.AsSpan(0, _indiceInsercion).CopyTo(nuevoArray.AsSpan());
 
             ArrayPool<TItem>.Shared.Return(_items, RuntimeHelpers.IsReferenceOrContainsReferences<TItem>());
 
@@ -257,18 +257,18 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
         public void Add(TItem item)
         {
             if (_disposed) ThrowObjectDisposed();
-            IntentarAmpliar(_indiceInserccion + 1);
+            IntentarAmpliar(_indiceInsercion + 1);
             // IntentarAmpliar asegura que hay espacio suficiente, así que podemos añadir el elemento, tambien aumenta la variable _tamaño internamente.
-            _items![_indiceInserccion++] = item;
+            _items![_indiceInsercion++] = item;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddRange(ReadOnlySpan<TItem> items)
         {
             if (_disposed) ThrowObjectDisposed();
-            IntentarAmpliar(_indiceInserccion + items.Length);
-            items.CopyTo(_items!.AsSpan(_indiceInserccion));
-            _indiceInserccion += items.Length;
+            IntentarAmpliar(_indiceInsercion + items.Length);
+            items.CopyTo(_items!.AsSpan(_indiceInsercion));
+            _indiceInsercion += items.Length;
         }
 
         #endregion
@@ -288,7 +288,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
             if (_disposed) ThrowObjectDisposed();
             if (RuntimeHelpers.IsReferenceOrContainsReferences<TItem>())
                 Span.Clear();
-            _indiceInserccion = 0;
+            _indiceInsercion = 0;
         }
 
         #endregion
