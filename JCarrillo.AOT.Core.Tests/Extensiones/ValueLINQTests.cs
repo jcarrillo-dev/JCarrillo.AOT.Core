@@ -885,5 +885,251 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
         }
 
         #endregion
+
+        #region 8. Pruebas de Materializadores Estándar (Nuevas)
+
+        [Fact]
+        public void ValueLINQStruct_ToArrayStandard_HappyPath_ShouldReturnExpectedElements()
+        {
+            var array = new[] { 10, 20, 30 };
+            var query = array.ToValueQuery();
+
+#pragma warning disable CS0618
+            var result = query.ToArrayStandard();
+#pragma warning restore CS0618
+
+            result.Should().Equal(array);
+        }
+
+        [Fact]
+        public void ValueLINQStruct_ToListStandard_HappyPath_ShouldReturnExpectedElements()
+        {
+            var array = new[] { 10, 20, 30 };
+            var query = array.ToValueQuery();
+
+#pragma warning disable CS0618
+            var result = query.ToListStandard();
+#pragma warning restore CS0618
+
+            result.Should().Equal(array);
+        }
+
+        [Fact]
+        public void ValueLINQRefStruct_ToArrayStandard_HappyPath_ShouldReturnExpectedElements()
+        {
+            var array = new[] { 10, 20, 30 };
+            var query = array.ToValueRefQuery();
+
+#pragma warning disable CS0618
+            var result = query.ToArrayStandard();
+#pragma warning restore CS0618
+
+            result.Should().Equal(array);
+        }
+
+        [Fact]
+        public void ValueLINQRefStruct_ToListStandard_HappyPath_ShouldReturnExpectedElements()
+        {
+            var array = new[] { 10, 20, 30 };
+            var query = array.ToValueRefQuery();
+
+#pragma warning disable CS0618
+            var result = query.ToListStandard();
+#pragma warning restore CS0618
+
+            result.Should().Equal(array);
+        }
+
+        [Fact]
+        public void ValueLINQStruct_ToArrayStandard_ShouldDisposeSourceImmediately()
+        {
+            var array = new[] { 10, 20, 30 };
+            var query = array.ToValueQuery();
+            long token = query.Token;
+
+#pragma warning disable CS0618
+            var result = query.ToArrayStandard();
+#pragma warning restore CS0618
+
+            ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse("ToArrayStandard should dispose the session");
+
+            Action act = () => query.Añadir(42);
+            act.Should().Throw<ValueLinqSesionExpiradaException>().WithMessage("*expirado*");
+        }
+
+        [Fact]
+        public void ValueLINQStruct_ToListStandard_ShouldDisposeSourceImmediately()
+        {
+            var array = new[] { 10, 20, 30 };
+            var query = array.ToValueQuery();
+            long token = query.Token;
+
+#pragma warning disable CS0618
+            var result = query.ToListStandard();
+#pragma warning restore CS0618
+
+            ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse("ToListStandard should dispose the session");
+
+            Action act = () => query.Añadir(42);
+            act.Should().Throw<ValueLinqSesionExpiradaException>().WithMessage("*expirado*");
+        }
+
+        [Fact]
+        public void ValueLINQRefStruct_ToArrayStandard_ShouldDisposeSourceImmediately()
+        {
+            var array = new[] { 10, 20, 30 };
+            var query = array.ToValueRefQuery();
+            long token = query.Token;
+
+#pragma warning disable CS0618
+            var result = query.ToArrayStandard();
+#pragma warning restore CS0618
+
+            ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse("ToArrayStandard should dispose the session");
+
+            try
+            {
+                query.Añadir(42);
+                Assert.Fail("Should have thrown ValueLinqSesionExpiradaException");
+            }
+            catch (ValueLinqSesionExpiradaException ex)
+            {
+                ex.Message.Should().Contain("expirado");
+            }
+        }
+
+        [Fact]
+        public void ValueLINQRefStruct_ToListStandard_ShouldDisposeSourceImmediately()
+        {
+            var array = new[] { 10, 20, 30 };
+            var query = array.ToValueRefQuery();
+            long token = query.Token;
+
+#pragma warning disable CS0618
+            var result = query.ToListStandard();
+#pragma warning restore CS0618
+
+            ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse("ToListStandard should dispose the session");
+
+            try
+            {
+                query.Añadir(42);
+                Assert.Fail("Should have thrown ValueLinqSesionExpiradaException");
+            }
+            catch (ValueLinqSesionExpiradaException ex)
+            {
+                ex.Message.Should().Contain("expirado");
+            }
+        }
+
+        [Fact]
+        public void ValueLINQStruct_ToArrayStandard_EmptyQuery_ShouldReturnEmptyArrayAndDispose()
+        {
+            var query = new int[0].ToValueQuery();
+            long token = query.Token;
+
+#pragma warning disable CS0618
+            var result = query.ToArrayStandard();
+#pragma warning restore CS0618
+
+            result.Should().BeEmpty();
+            result.Should().BeSameAs(Array.Empty<int>());
+            ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse("Empty query session should be disposed after ToArrayStandard");
+        }
+
+        [Fact]
+        public void ValueLINQStruct_ToListStandard_EmptyQuery_ShouldReturnEmptyListAndDispose()
+        {
+            var query = new int[0].ToValueQuery();
+            long token = query.Token;
+
+#pragma warning disable CS0618
+            var result = query.ToListStandard();
+#pragma warning restore CS0618
+
+            result.Should().BeEmpty();
+            ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse("Empty query session should be disposed after ToListStandard");
+        }
+
+        [Fact]
+        public void ValueLINQRefStruct_ToArrayStandard_EmptyQuery_ShouldReturnEmptyArrayAndDispose()
+        {
+            var query = new int[0].ToValueRefQuery();
+            long token = query.Token;
+
+#pragma warning disable CS0618
+            var result = query.ToArrayStandard();
+#pragma warning restore CS0618
+
+            result.Should().BeEmpty();
+            result.Should().BeSameAs(Array.Empty<int>());
+            ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse("Empty query session should be disposed after ToArrayStandard");
+        }
+
+        [Fact]
+        public void ValueLINQRefStruct_ToListStandard_EmptyQuery_ShouldReturnEmptyListAndDispose()
+        {
+            var query = new int[0].ToValueRefQuery();
+            long token = query.Token;
+
+#pragma warning disable CS0618
+            var result = query.ToListStandard();
+#pragma warning restore CS0618
+
+            result.Should().BeEmpty();
+            ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse("Empty query session should be disposed after ToListStandard");
+        }
+
+        [Fact]
+        public void ValueLINQStruct_ToArrayStandard_InvalidToken_ShouldReturnEmptyArraySafely()
+        {
+            var query = new ValueLINQStruct<int>(); // Token is 0
+
+#pragma warning disable CS0618
+            var result = query.ToArrayStandard();
+#pragma warning restore CS0618
+
+            result.Should().BeEmpty();
+            result.Should().BeSameAs(Array.Empty<int>());
+        }
+
+        [Fact]
+        public void ValueLINQStruct_ToListStandard_InvalidToken_ShouldReturnEmptyListSafely()
+        {
+            var query = new ValueLINQStruct<int>(); // Token is 0
+
+#pragma warning disable CS0618
+            var result = query.ToListStandard();
+#pragma warning restore CS0618
+
+            result.Should().BeEmpty();
+        }
+
+        [Fact]
+        public void ValueLINQRefStruct_ToArrayStandard_InvalidToken_ShouldReturnEmptyArraySafely()
+        {
+            var query = new ValueLINQRefStruct<int>(); // Token is 0
+
+#pragma warning disable CS0618
+            var result = query.ToArrayStandard();
+#pragma warning restore CS0618
+
+            result.Should().BeEmpty();
+            result.Should().BeSameAs(Array.Empty<int>());
+        }
+
+        [Fact]
+        public void ValueLINQRefStruct_ToListStandard_InvalidToken_ShouldReturnEmptyListSafely()
+        {
+            var query = new ValueLINQRefStruct<int>(); // Token is 0
+
+#pragma warning disable CS0618
+            var result = query.ToListStandard();
+#pragma warning restore CS0618
+
+            result.Should().BeEmpty();
+        }
+
+        #endregion
     }
 }
