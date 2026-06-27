@@ -19,22 +19,22 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
 
         private struct IntEqualsPredicate : IWhereDelegado<int, int>
         {
-            public bool Ejectuar(int item, int otro) => item == otro;
+            public bool Ejecutar(int item, int otro) => item == otro;
         }
 
         private struct IntDoubleSelector : ISelectDelegado<int, int>
         {
-            public int Ejectuar(int item) => item * 2;
+            public int Ejecutar(int item) => item * 2;
         }
 
         private struct IntToStringSelector : ISelectDelegado<int, string>
         {
-            public string Ejectuar(int item) => item.ToString();
+            public string Ejecutar(int item) => item.ToString();
         }
 
         private struct ThrowingPredicate : IWhereDelegado<int, int>
         {
-            public bool Ejectuar(int item, int otro)
+            public bool Ejecutar(int item, int otro)
             {
                 if (item == 2)
                     throw new InvalidOperationException("Simulated error");
@@ -44,7 +44,7 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
 
         private struct ThrowingSelector : ISelectDelegado<int, int>
         {
-            public int Ejectuar(int item)
+            public int Ejecutar(int item)
             {
                 if (item == 2)
                     throw new InvalidOperationException("Simulated selector error");

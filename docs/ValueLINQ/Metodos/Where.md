@@ -41,12 +41,12 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Interfaces
 {
     public interface IWhereDelegado<TOrigen, TDato>
     {
-        bool Ejectuar(TOrigen objetoLista, TDato otro);
+        bool Ejecutar(TOrigen objetoLista, TDato otro);
     }
 }
 ```
 
-*Nota: La interfaz define el método con el nombre exacto `Ejectuar`.*
+*Nota: La interfaz define el método con el nombre exacto `Ejecutar`.*
 
 ---
 
@@ -62,7 +62,7 @@ using JCarrillo.AOT.Core.ValueLINQ.Interfaces;
 public struct FiltroPares : IWhereDelegado<int, int>
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool Ejectuar(int numero, int divisor)
+    public bool Ejecutar(int numero, int divisor)
     {
         return numero % divisor == 0;
     }

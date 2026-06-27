@@ -32,13 +32,13 @@ namespace JCarrillo.AOT.Core.Benchmarks.Extensiones
         private struct EvenFilter : IWhereDelegado<int, int>
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public bool Ejectuar(int item, int otro) => (item & 1) == 0;
+            public bool Ejecutar(int item, int otro) => (item & 1) == 0;
         }
 
         private struct MultiplyByTwoSelector : ISelectDelegado<int, int>
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public int Ejectuar(int item) => item * 2;
+            public int Ejecutar(int item) => item * 2;
         }
 
         [GlobalSetup]

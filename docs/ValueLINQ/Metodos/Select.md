@@ -39,12 +39,12 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Interfaces
 {
     public interface ISelectDelegado<TOrigen, TResultado>
     {
-        TResultado Ejectuar(TOrigen objetoLista);
+        TResultado Ejecutar(TOrigen objetoLista);
     }
 }
 ```
 
-*Nota: La interfaz define el método con el nombre exacto `Ejectuar`.*
+*Nota: La interfaz define el método con el nombre exacto `Ejecutar`.*
 
 ---
 
@@ -60,7 +60,7 @@ using JCarrillo.AOT.Core.ValueLINQ.Interfaces;
 public struct DuplicadorSelector : ISelectDelegado<int, int>
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public int Ejectuar(int numero)
+    public int Ejecutar(int numero)
     {
         return numero * 2;
     }
@@ -113,7 +113,7 @@ El operador `Select` de LINQ estándar (`IEnumerable<TResult>.Select`) introduce
 1.  **Barrera de Inlining**: El compilador JIT/AOT no puede inlinear una llamada a través de un delegado `Func<TSource, TResult>` ya que el target del delegado solo se conoce en tiempo de ejecución. Esto añade la latencia de una llamada indirecta (`calli` a nivel de ensamblador) por cada elemento de la colección.
 2.  **Presión en el GC**: La reserva continua de memoria del enumerador intermedio genera recolecciones frecuentes de Generación 0.
 
-En cambio, `Select` en ValueLINQ utiliza restricciones genéricas sobre estructuras (`where TPredicate : struct`). Esto permite que el compilador Genérico genere una especialización física del método `Select` en tiempo de compilación. El método `Ejectuar` de la estructura se resuelve de forma estática, permitiendo que el compilador inserte el cuerpo del selector directamente dentro del bucle de procesamiento. Esto elimina la llamada indirecta por completo y resulta en una ejecución a velocidad de hardware nativo.
+En cambio, `Select` en ValueLINQ utiliza restricciones genéricas sobre estructuras (`where TPredicate : struct`). Esto permite que el compilador Genérico genere una especialización física del método `Select` en tiempo de compilación. El método `Ejecutar` de la estructura se resuelve de forma estática, permitiendo que el compilador inserte el cuerpo del selector directamente dentro del bucle de procesamiento. Esto elimina la llamada indirecta por completo y resulta en una ejecución a velocidad de hardware nativo.
 
 ---
 [Volver a Métodos y Extensiones](README.md)

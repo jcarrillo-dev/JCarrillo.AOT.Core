@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -8,6 +8,6 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Interfaces
 {
     public interface ISelectDelegado<TOrigen, TResultado>
     {
-        TResultado Ejectuar(TOrigen objetoLista);
+        TResultado Ejecutar(TOrigen objetoLista);
     }
 }

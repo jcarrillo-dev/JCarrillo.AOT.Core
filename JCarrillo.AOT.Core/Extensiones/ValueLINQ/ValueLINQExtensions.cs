@@ -183,7 +183,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                         for (int i = 0; i < len; i++)
                         {
                             TOrigen item = origenArray![i];
-                            if (predicado.Ejectuar(item, dato))
+                            if (predicado.Ejecutar(item, dato))
                                 destinoArray![destinoIndex++] = item;
                         }
                         metadatosDestino.TamañoActual = destinoIndex;
@@ -235,7 +235,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                         for (int i = 0; i < len; i++)
                         {
                             TOrigen item = origenArray![i];
-                            if (predicado.Ejectuar(item, dato))
+                            if (predicado.Ejecutar(item, dato))
                                 destinoArray![destinoIndex++] = item;
                         }
                         metadatosDestino.TamañoActual = destinoIndex;
@@ -287,7 +287,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                         TResultado[]? destinoArray = metadatosDestino.Array;
 
                         for (int i = 0; i < len; i++)
-                            destinoArray![i] = selector.Ejectuar(origenArray![i]);
+                            destinoArray![i] = selector.Ejecutar(origenArray![i]);
 
                         metadatosDestino.TamañoActual = len;
                     }
@@ -334,7 +334,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                         TResultado[]? destinoArray = metadatosDestino.Array;
 
                         for (int i = 0; i < len; i++)
-                            destinoArray![i] = selector.Ejectuar(origenArray![i]);
+                            destinoArray![i] = selector.Ejecutar(origenArray![i]);
 
                         metadatosDestino.TamañoActual = len;
                     }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -8,6 +8,6 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Interfaces
 {
     public interface IWhereDelegado<TOrigen, TDato>
     {
-        bool Ejectuar(TOrigen objetoLista, TDato otro);
+        bool Ejecutar(TOrigen objetoLista, TDato otro);
     }
 }

@@ -26,7 +26,7 @@ A continuación se detallan los operadores implementados en la versión inicial.
 
 Para lograr un rendimiento óptimo de cero asignaciones y permitir la optimización en tiempo de compilación por el JIT, ValueLINQ no acepta expresiones lambda convencionales (`Func<T, bool>` o `Func<T, TResult>`). En su lugar, el cliente debe definir estructuras que implementen interfaces dedicadas:
 
-*   **[IWhereDelegado.cs](../../../JCarrillo.AOT.Core/ValueLINQ/Interfaces/IWhereDelegado.cs)**: Utilizada en `Where` para evaluar un predicado con firma `bool Ejectuar(T objetoLista, TDato parametro)`.
+*   **[IWhereDelegado.cs](../../../JCarrillo.AOT.Core/ValueLINQ/Interfaces/IWhereDelegado.cs)**: Utilizada en `Where` para evaluar un predicado con firma `bool Ejecutar(T objetoLista, TDato parametro)`.
 *   **[ISelectDelegado.cs](../../../JCarrillo.AOT.Core/ValueLINQ/Interfaces/ISelectDelegado.cs)**: Utilizada en `Select` para transformar tipos con firma `TResult Ejecutar(TOrigen objetoLista, TDato parametro)`.
 *   **[IProcesarChunkDelegado.cs](../../../JCarrillo.AOT.Core/ValueLINQ/Interfaces/IProcesarChunkDelegado.cs)**: Utilizada en `ProcessChunks` para consumir y liberar subconsultas chunked con firma `void Ejecutar(ValueLINQStruct<T> listaChunk)`.
 

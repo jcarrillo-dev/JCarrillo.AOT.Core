@@ -1,4 +1,4 @@
-﻿using JCarrillo.AOT.Core.ValueLINQ.Interfaces;
+using JCarrillo.AOT.Core.ValueLINQ.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,7 +9,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Ejemplos
 {
     internal struct EjemploWhereDelegado<T> : IWhereDelegado<T, T>
     {
-        public bool Ejectuar(T objetoLista, T otro)
+        public bool Ejecutar(T objetoLista, T otro)
         {
             bool 
                 objetoListaEsNulo = objetoLista is null,
