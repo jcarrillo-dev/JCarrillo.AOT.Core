@@ -278,5 +278,45 @@ namespace JCarrillo.AOT.Core.Benchmarks.Extensiones
         }
 
         #endregion
+
+        #region Materialization Benchmarks (Pooled vs Standard)
+
+        [Benchmark]
+        public int ValueLINQStruct_ToArray_Pooled()
+        {
+            var query = _array.ToValueQuery();
+            using var array = query.ToArray();
+            return array.Tamaño;
+        }
+
+        [Benchmark]
+        public int ValueLINQStruct_ToArrayStandard_Heap()
+        {
+            var query = _array.ToValueQuery();
+#pragma warning disable CS0618
+            var array = query.ToArrayStandard();
+#pragma warning restore CS0618
+            return array.Length;
+        }
+
+        [Benchmark]
+        public int ValueLINQStruct_ToList_Pooled()
+        {
+            var query = _array.ToValueQuery();
+            using var list = query.ToList();
+            return list.Tamaño;
+        }
+
+        [Benchmark]
+        public int ValueLINQStruct_ToListStandard_Heap()
+        {
+            var query = _array.ToValueQuery();
+#pragma warning disable CS0618
+            var list = query.ToListStandard();
+#pragma warning restore CS0618
+            return list.Count;
+        }
+
+        #endregion
     }
 }
