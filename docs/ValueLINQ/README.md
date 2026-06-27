@@ -42,6 +42,42 @@ De acuerdo con el estándar de ingeniería honesta, se declaran los siguientes l
 
 ---
 
+## Estado del Proyecto y Hoja de Ruta
+
+Esta sección separa de forma explícita **lo que la biblioteca hace hoy** (medido y publicado) de **las direcciones de diseño que se exploran**, para no mezclar capacidades reales con intenciones futuras.
+
+### Estado Actual (Lanzamiento Inicial v1.1.0)
+
+*   **Cobertura de operadores deliberadamente mínima**: el motor expone `Where`, `Select`, `Concat`, `Chunk`/`ProcessChunks` y los materializadores (`ToList`, `ToArray`, `ToListRef`, `ToArrayRef`). **No** persigue paridad de operadores con LINQ estándar en esta fase (no hay `GroupBy`, `OrderBy`, `Distinct`, etc.).
+*   **Única ruta disponible**: el modelo **eager con delegados de tipo struct** (`IWhereDelegado`, `ISelectDelegado`). Materializa cada operador en un búfer rentado del `ArrayPool` y resuelve la lógica del usuario de forma estática (inlining completo, compatible con Native AOT).
+*   **Perfil de asignación**: esta ruta es **actualmente la única**, y opera con **0 B (medido)** en el Heap de GC.
+
+### Taxonomía de Asignación (presente y futura)
+
+Conviene fijar la terminología para evitar afirmaciones que envejezcan mal: el perfil *zero-allocation* **no es exclusivo del modelo eager**. Las direcciones previstas se reparten así:
+
+| Ruta | ¿Zero-Allocation? | Estado |
+| :--- | :---: | :--- |
+| **Eager + delegado struct** | **Sí** (0 B) | Publicada (v1.1.0) |
+| **Lazy/Diferida + delegado struct** | **Sí** (incluso sin búferes intermedios) | Dirección de diseño |
+| **Delegados `Func`/`Action`** | **No** (asigna el delegado/clausura en el Heap) | Dirección de diseño |
+
+Es decir, la futura ruta lazy mantendría el perfil zero-allocation —fusionando la cadena de operadores en una sola pasada sin rentar búferes intermedios—, mientras que la ruta de delegados `Func`/`Action` cambiaría conscientemente ese perfil por la ergonomía de las expresiones lambda y la captura de clausuras.
+
+### Direcciones de Diseño Previstas
+
+Por orden de secuenciación natural (no de calendario):
+
+1.  **Ampliación de operadores sobre la ruta eager**: incrementar la cobertura del modelo zero-allocation ya publicado.
+2.  **Ruta lazy/diferida (`net9.0+`)**: encadenamiento de enumeradores estructurados que permite al compilador fusionar el pipeline en un único bucle, con cortocircuito natural y sin asignaciones intermedias. Requiere características de lenguaje disponibles a partir de C# 13 (interfaces sobre `ref struct` y el anti-constraint `allows ref struct`), por lo que queda restringida a `net9.0` y superiores.
+3.  **Sobrecargas con `Func`/`Action`**: capa ergonómica para quien prioriza la sintaxis de lambda sobre el perfil zero-allocation, disponible en todos los TFM soportados.
+
+> [!WARNING]
+> **Intención de Diseño, no Compromiso de Entrega**:
+> Las direcciones descritas en esta sección son **intenciones de diseño sujetas a medición empírica y viabilidad técnica**. No constituyen un compromiso de release, ni una garantía de implementación, ni un calendario. Únicamente la sección «Estado Actual» describe capacidades realmente publicadas y medidas; cualquier funcionalidad futura solo se considerará disponible cuando aparezca documentada con sus métricas correspondientes.
+
+---
+
 ## 3. Esquema de Arquitectura
 
 El flujo de ejecución síncrono de ValueLINQ desacopla la API del usuario del almacenamiento físico de los datos mediante el siguiente esquema de comunicación:
