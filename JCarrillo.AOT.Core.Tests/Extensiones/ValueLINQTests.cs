@@ -1,5 +1,3 @@
-using System;
-using System.Threading.Tasks;
 using FluentAssertions;
 using Xunit;
 using JCarrillo.AOT.Core.ValueLINQ;
@@ -19,44 +17,34 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
 
         private struct IntEqualsPredicate : IWhereDelegado<int, int>
         {
-            public bool Ejecutar(int item, int otro) => item == otro;
+            public readonly bool Ejecutar(int item, int otro) => item == otro;
         }
 
         private struct IntDoubleSelector : ISelectDelegado<int, int>
         {
-            public int Ejecutar(int item) => item * 2;
+            public readonly int Ejecutar(int item) => item * 2;
         }
 
         private struct IntToStringSelector : ISelectDelegado<int, string>
         {
-            public string Ejecutar(int item) => item.ToString();
+            public readonly string Ejecutar(int item) => item.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
         private struct ThrowingPredicate : IWhereDelegado<int, int>
         {
-            public bool Ejecutar(int item, int otro)
-            {
-                if (item == 2)
-                    throw new InvalidOperationException("Simulated error");
-                return true;
-            }
+            public readonly bool Ejecutar(int item, int otro) => item == 2 ? throw new InvalidOperationException("Simulated error") : true;
         }
 
         private struct ThrowingSelector : ISelectDelegado<int, int>
         {
-            public int Ejecutar(int item)
-            {
-                if (item == 2)
-                    throw new InvalidOperationException("Simulated selector error");
-                return item;
-            }
+            public readonly int Ejecutar(int item) => item == 2 ? throw new InvalidOperationException("Simulated selector error") : item;
         }
 
-        private struct ChunkProcessorCounter : IProcesarChunkDelegado<int>
+        private readonly struct ChunkProcessorCounter(int[] counter) : IProcesarChunkDelegado<int>
         {
-            private readonly int[] _counter;
-            public ChunkProcessorCounter(int[] counter) => _counter = counter;
-            public void Ejecutar(ValueLINQStruct<int> listaChunk)
+            private readonly int[] _counter = counter;
+
+            public readonly void Ejecutar(ValueLINQStruct<int> listaChunk)
             {
                 int count = 0;
                 foreach (ref int item in listaChunk)
@@ -67,7 +55,7 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
 
         private struct ChunkProcessorThrowing : IProcesarChunkDelegado<int>
         {
-            public void Ejecutar(ValueLINQStruct<int> listaChunk)
+            public readonly void Ejecutar(ValueLINQStruct<int> listaChunk)
             {
                 foreach (ref int item in listaChunk)
                     if (item == 3)
@@ -88,31 +76,31 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
         #region 1. Pruebas de TokenHelper (Existentes)
 
         [Fact]
-        public void TokenHelper_CrearToken_ShouldPackSlotAndVersionCorrectly()
+        public void TokenHelperCrearTokenShouldPackSlotAndVersionCorrectly()
         {
             int slot = 123;
             long version = 456789L;
 
             long token = TokenHelper.CrearToken(slot, version);
 
-            TokenHelper.ObtenerSlotIndex(token).Should().Be(slot);
-            TokenHelper.ObtenerVersion(token).Should().Be(version);
+            _ = TokenHelper.ObtenerSlotIndex(token).Should().Be(slot);
+            _ = TokenHelper.ObtenerVersion(token).Should().Be(version);
         }
 
         [Fact]
-        public void TokenHelper_VersionRightShift_ShouldPreventSignExtension()
+        public void TokenHelperVersionRightShiftShouldPreventSignExtension()
         {
             int slot = 4095;
             long version = 0x7FFFFFFFFFFFL;
 
             long token = TokenHelper.CrearToken(slot, version);
 
-            TokenHelper.ObtenerSlotIndex(token).Should().Be(slot);
-            TokenHelper.ObtenerVersion(token).Should().Be(version);
+            _ = TokenHelper.ObtenerSlotIndex(token).Should().Be(slot);
+            _ = TokenHelper.ObtenerVersion(token).Should().Be(version);
         }
 
         [Fact]
-        public void TokenHelper_ReadWriteToken_ShouldBeCorrect()
+        public void TokenHelperReadWriteTokenShouldBeCorrect()
         {
             long location = 0;
             long token = TokenHelper.CrearToken(1, 99);
@@ -120,7 +108,7 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
             TokenHelper.EscribirToken(ref location, token);
             long read = TokenHelper.LeerToken(ref location);
 
-            read.Should().Be(token);
+            _ = read.Should().Be(token);
         }
 
         #endregion
@@ -128,12 +116,12 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
         #region 2. Pruebas de ValueLINQStateManager y Structs (Existentes y Nuevas)
 
         [Fact]
-        public void ValueLINQStateManager_ShouldUseStackAllocatorAndVersionIncrement()
+        public void ValueLINQStateManagerShouldUseStackAllocatorAndVersionIncrement()
         {
             long token1;
             int index1;
             long version1;
-            using (var struct1 = new ValueLINQStruct<int>(10))
+            using (ValueLINQStruct<int> struct1 = new(10))
             {
                 token1 = struct1.Token;
                 index1 = TokenHelper.ObtenerSlotIndex(token1);
@@ -143,27 +131,27 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
             long token2;
             int index2;
             long version2;
-            using (var struct2 = new ValueLINQStruct<int>(10))
+            using (ValueLINQStruct<int> struct2 = new(10))
             {
                 token2 = struct2.Token;
                 index2 = TokenHelper.ObtenerSlotIndex(token2);
                 version2 = TokenHelper.ObtenerVersion(token2);
             }
 
-            index2.Should().Be(index1, "it should reuse the released slot index from the O(1) stack allocator");
-            version2.Should().Be(version1 + 1, "it should increment the slot version monotonically to prevent ABA");
+            _ = index2.Should().Be(index1, "it should reuse the released slot index from the O(1) stack allocator");
+            _ = version2.Should().Be(version1 + 1, "it should increment the slot version monotonically to prevent ABA");
         }
 
         [Fact]
-        public void ValueLINQStateManager_ObtenerMetadatos_ShouldThrowSessionExpiredOnABAToken()
+        public void ValueLINQStateManagerObtenerMetadatosShouldThrowSessionExpiredOnABAToken()
         {
             long token1;
-            using (var struct1 = new ValueLINQStruct<int>(10))
+            using (ValueLINQStruct<int> struct1 = new(10))
                 token1 = struct1.Token;
 
-            using var struct2 = new ValueLINQStruct<int>(10);
+            using ValueLINQStruct<int> struct2 = new(10);
 
-            var struct1Fake = new ValueLINQStruct<int>(token1);
+            ValueLINQStruct<int> struct1Fake = new(token1);
             try
             {
                 struct1Fake.Añadir(42);
@@ -171,63 +159,63 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
             }
             catch (ValueLinqSesionExpiradaException ex)
             {
-                ex.Message.Should().Contain("expirado");
+                _ = ex.Message.Should().Contain("expirado");
             }
         }
 
         [Fact]
-        public void ValueLINQStruct_IsValido_ShouldReturnCorrectStatus()
+        public void ValueLINQStructIsValidoShouldReturnCorrectStatus()
         {
             ValueLINQStruct<int> query;
 
             using (query = new ValueLINQStruct<int>(10))
-                query.IsValido.Should().BeTrue();
+                _ = query.IsValido.Should().BeTrue();
 
-            query.IsValido.Should().BeFalse();
+            _ = query.IsValido.Should().BeFalse();
         }
 
         [Fact]
-        public void ValueLINQStruct_Añadir_ShouldWorkCorrectly()
+        public void ValueLINQStructAñadirShouldWorkCorrectly()
         {
-            using var query = new ValueLINQStruct<int>(5);
+            using ValueLINQStruct<int> query = new(5);
 
             query.Añadir(10);
             query.Añadir(20);
 
-            query.IsValido.Should().BeTrue();
+            _ = query.IsValido.Should().BeTrue();
         }
 
         [Fact]
-        public void ValueLINQStruct_Dispose_DefaultStruct_ShouldNotCrash()
+        public void ValueLINQStructDisposeDefaultStructShouldNotCrash()
         {
-            var query = new ValueLINQStruct<int>();
+            ValueLINQStruct<int> query = new();
 
-            Action act = () => query.Dispose();
+            Action act = query.Dispose;
 
-            act.Should().NotThrow("Disposing a default struct should be a safe no-op and not crash the manager");
+            _ = act.Should().NotThrow("Disposing a default struct should be a safe no-op and not crash the manager");
         }
 
         [Fact]
-        public void ValueLINQRefStruct_Dispose_DefaultStruct_ShouldNotCrash()
+        public void ValueLINQRefStructDisposeDefaultStructShouldNotCrash()
         {
-            var query = new ValueLINQRefStruct<int>();
+            ValueLINQRefStruct<int> query = new();
             query.Dispose();
         }
 
         [Fact]
-        public void ValueLINQStruct_Añadir_DefaultStruct_ShouldThrowValueLinqTokenInvalidoException()
+        public void ValueLINQStructAñadirDefaultStructShouldThrowValueLinqTokenInvalidoException()
         {
-            var query = new ValueLINQStruct<int>();
+            ValueLINQStruct<int> query = new();
 
             Action act = () => query.Añadir(42);
-            act.Should().Throw<ValueLinqTokenInvalidoException>()
+            _ = act.Should().Throw<ValueLinqTokenInvalidoException>()
                .WithMessage("*no es válido*");
         }
 
         [Fact]
-        public void ValueLINQRefStruct_Añadir_DefaultStruct_ShouldThrowValueLinqTokenInvalidoException()
+        public void ValueLINQRefStructAñadirDefaultStructShouldThrowValueLinqTokenInvalidoException()
         {
-            var query = new ValueLINQRefStruct<int>();
+            ValueLINQRefStruct<int> query = new();
             try
             {
                 query.Añadir(42);
@@ -235,87 +223,85 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
             }
             catch (ValueLinqTokenInvalidoException ex)
             {
-                ex.Message.Should().Contain("no es válido");
+                _ = ex.Message.Should().Contain("no es válido");
             }
         }
 
         [Fact]
-        public void ValueLINQStruct_Operations_OnDefaultStruct_ShouldReturnValidEmptyQueryAndCleanUp()
+        public void ValueLINQStructOperationsOnDefaultStructShouldReturnValidEmptyQueryAndCleanUp()
         {
-            var query = new ValueLINQStruct<int>();
+            ValueLINQStruct<int> query = new();
 
-            using var filtered = query.Where(2, new IntEqualsPredicate());
-            using var projected = query.Select<int, IntDoubleSelector, int>(new IntDoubleSelector());
-            using var chunks = query.Chunk(2);
+            using ValueLINQStruct<int> filtered = query.Where(2, new IntEqualsPredicate());
+            using ValueLINQStruct<int> projected = query.Select<int, IntDoubleSelector, int>(new IntDoubleSelector());
+            using ValueLINQRefStruct<ValueLINQStruct<int>> chunks = query.Chunk(2);
 
-            filtered.IsValido.Should().BeTrue();
-            projected.IsValido.Should().BeTrue();
-            chunks.IsValido.Should().BeTrue();
+            _ = filtered.IsValido.Should().BeTrue();
+            _ = projected.IsValido.Should().BeTrue();
+            _ = chunks.IsValido.Should().BeTrue();
         }
 
         [Fact]
-        public void ValueLINQRefStruct_Operations_OnDefaultStruct_ShouldReturnValidEmptyQueryAndCleanUp()
+        public void ValueLINQRefStructOperationsOnDefaultStructShouldReturnValidEmptyQueryAndCleanUp()
         {
-            var query = new ValueLINQRefStruct<int>();
+            ValueLINQRefStruct<int> query = new();
 
-            using var filtered = query.Where(2, new IntEqualsPredicate());
-            using var projected = query.Select<int, IntDoubleSelector, int>(new IntDoubleSelector());
-            using var chunks = query.Chunk(2);
+            using ValueLINQRefStruct<int> filtered = query.Where(2, new IntEqualsPredicate());
+            using ValueLINQRefStruct<int> projected = query.Select<int, IntDoubleSelector, int>(new IntDoubleSelector());
+            using ValueLINQRefStruct<ValueLINQStruct<int>> chunks = query.Chunk(2);
 
-            filtered.IsValido.Should().BeTrue();
-            projected.IsValido.Should().BeTrue();
-            chunks.IsValido.Should().BeTrue();
+            _ = filtered.IsValido.Should().BeTrue();
+            _ = projected.IsValido.Should().BeTrue();
+            _ = chunks.IsValido.Should().BeTrue();
         }
 
         [Fact]
-        public void ValueLINQExtensions_SymmetricCreationAPI_ShouldReturnCorrectStructTypes()
+        public void ValueLINQExtensionsSymmetricCreationAPIShouldReturnCorrectStructTypes()
         {
-            var array = new int[] { 1, 2, 3 };
-            var span = array.AsSpan(0, array.Length);
-            var readOnlySpan = (ReadOnlySpan<int>)span;
-            var memory = new Memory<int>(array);
+            int[] array = [1, 2, 3];
+            Span<int> span = array.AsSpan(0, array.Length);
+            ReadOnlySpan<int> readOnlySpan = span;
+            Memory<int> memory = new(array);
 
-            using (var pooledList = new PooledList<int>())
-            {
-                pooledList.AddRange(array.AsSpan(0, array.Length));
+            using PooledList<int> pooledList = new();
+            pooledList.AddRange(array.AsSpan(0, array.Length));
 
-                // 1. Array
-                using (ValueLINQStruct<int> qStruct = array.ToValueQuery())
-                    qStruct.Token.Should().NotBe(0);
+            // 1. Array
+            using (ValueLINQStruct<int> qStruct = array.ToValueQuery())
+                _ = qStruct.Token.Should().NotBe(0);
 
-                using (ValueLINQRefStruct<int> qRef = array.ToValueRefQuery())
-                    qRef.Token.Should().NotBe(0);
+            using (ValueLINQRefStruct<int> qRef = array.ToValueRefQuery())
+                _ = qRef.Token.Should().NotBe(0);
 
-                // 2. Span
-                using (ValueLINQStruct<int> qStruct = span.ToValueQuery())
-                    qStruct.Token.Should().NotBe(0);
+            // 2. Span
+            using (ValueLINQStruct<int> qStruct = span.ToValueQuery())
+                _ = qStruct.Token.Should().NotBe(0);
 
-                using (ValueLINQRefStruct<int> qRef = span.ToValueRefQuery())
-                    qRef.Token.Should().NotBe(0);
+            using (ValueLINQRefStruct<int> qRef = span.ToValueRefQuery())
+                _ = qRef.Token.Should().NotBe(0);
 
-                // 3. ReadOnlySpan
-                using (ValueLINQStruct<int> qStruct = readOnlySpan.ToValueQuery())
-                    qStruct.Token.Should().NotBe(0);
+            // 3. ReadOnlySpan
+            using (ValueLINQStruct<int> qStruct = readOnlySpan.ToValueQuery())
+                _ = qStruct.Token.Should().NotBe(0);
 
-                using (ValueLINQRefStruct<int> qRef = readOnlySpan.ToValueRefQuery())
-                    qRef.Token.Should().NotBe(0);
+            using (ValueLINQRefStruct<int> qRef = readOnlySpan.ToValueRefQuery())
+                _ = qRef.Token.Should().NotBe(0);
 
-                // 4. ref Memory
-                var localMemory = memory;
-                using (ValueLINQStruct<int> qStruct = localMemory.ToValueQuery())
-                    qStruct.Token.Should().NotBe(0);
+            // 4. ref Memory
+            Memory<int> localMemory = memory;
+            using (ValueLINQStruct<int> qStruct = localMemory.ToValueQuery())
+                _ = qStruct.Token.Should().NotBe(0);
 
-                using (ValueLINQRefStruct<int> qRef = localMemory.ToValueRefQuery())
-                    qRef.Token.Should().NotBe(0);
+            using (ValueLINQRefStruct<int> qRef = localMemory.ToValueRefQuery())
+                _ = qRef.Token.Should().NotBe(0);
 
-                // 5. ref PooledList
-                var localList = pooledList;
-                using (ValueLINQStruct<int> qStruct = localList.ToValueQuery())
-                    qStruct.Token.Should().NotBe(0);
+            // 5. ref PooledList
+            PooledList<int> localList = pooledList;
+            using (ValueLINQStruct<int> qStruct = localList.ToValueQuery())
+                _ = qStruct.Token.Should().NotBe(0);
 
-                using (ValueLINQRefStruct<int> qRef = localList.ToValueRefQuery())
-                    qRef.Token.Should().NotBe(0);
-            }
+            using (ValueLINQRefStruct<int> qRef = localList.ToValueRefQuery())
+                _ = qRef.Token.Should().NotBe(0);
         }
 
         #endregion
@@ -323,199 +309,194 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
         #region 3. Pruebas de Comportamiento Lógico Exhaustivo (Existentes y Nuevas)
 
         [Fact]
-        public void ValueLINQEnumerator_ShouldIterateCorrectlyByRef()
+        public void ValueLINQEnumeratorShouldIterateCorrectlyByRef()
         {
-            var array = new[] { 10, 20, 30 };
-            using var query = array.ToValueQuery();
+            int[] array = [10, 20, 30];
+            using ValueLINQStruct<int> query = array.ToValueQuery();
 
             int index = 0;
             foreach (ref int item in query)
             {
-                item.Should().Be(array[index]);
-                item = item + 1;
+                _ = item.Should().Be(array[index]);
+                item++;
                 index++;
             }
-            index.Should().Be(3);
+            _ = index.Should().Be(3);
 
-            ref var metadatos = ref ValueLINQStateManager<int>.ObtenerMetadatos(query.Token);
-            metadatos.Array![0].Should().Be(11);
-            metadatos.Array![1].Should().Be(21);
-            metadatos.Array![2].Should().Be(31);
+            ref MetadatosSesion<int> metadatos = ref ValueLINQStateManager<int>.ObtenerMetadatos(query.Token);
+            _ = metadatos.Array![0].Should().Be(11);
+            _ = metadatos.Array![1].Should().Be(21);
+            _ = metadatos.Array![2].Should().Be(31);
         }
 
         [Fact]
-        public void ValueLINQExtensions_Where_ShouldFilterElementsAndCleanUp()
+        public void ValueLINQExtensionsWhereShouldFilterElementsAndCleanUp()
         {
-            var array = new[] { 1, 2, 3, 2, 4 };
-            var query = array.ToValueQuery();
+            int[] array = [1, 2, 3, 2, 4];
+            ValueLINQStruct<int> query = array.ToValueQuery();
             long originalToken = query.Token;
 
-            var filtered = query.Where(2, new IntEqualsPredicate());
+            ValueLINQStruct<int> filtered = query.Where(2, new IntEqualsPredicate());
 
-            filtered.IsValido.Should().BeTrue();
-            ValueLINQStateManager<int>.IsMetadatoValido(originalToken).Should().BeFalse("Source should be disposed");
-            
+            _ = filtered.IsValido.Should().BeTrue();
+            _ = ValueLINQStateManager<int>.IsMetadatoValido(originalToken).Should().BeFalse("Source should be disposed");
+
             int count = 0;
             foreach (ref int item in filtered)
             {
-                item.Should().Be(2);
+                _ = item.Should().Be(2);
                 count++;
             }
-            count.Should().Be(2);
+            _ = count.Should().Be(2);
             filtered.Dispose();
         }
 
         [Fact]
-        public void ValueLINQExtensions_Select_TypeProjection_ShouldWorkCorrectly()
+        public void ValueLINQExtensionsSelectTypeProjectionShouldWorkCorrectly()
         {
-            var array = new[] { 1, 2, 3 };
-            using var query = array.ToValueQuery();
-            
-            using var projected = query.Select<int, IntToStringSelector, string>(new IntToStringSelector());
+            int[] array = [1, 2, 3];
+            using ValueLINQStruct<int> query = array.ToValueQuery();
 
-            projected.IsValido.Should().BeTrue();
-            
+            using ValueLINQStruct<string> projected = query.Select<int, IntToStringSelector, string>(new IntToStringSelector());
+
+            _ = projected.IsValido.Should().BeTrue();
+
             int index = 0;
             foreach (ref string item in projected)
             {
-                item.Should().Be(array[index].ToString());
+                _ = item.Should().Be(array[index].ToString(System.Globalization.CultureInfo.InvariantCulture));
                 index++;
             }
-            index.Should().Be(3);
+            _ = index.Should().Be(3);
         }
 
         [Fact]
-        public void ValueLINQExtensions_Where_EmptyCollection_ShouldProduceEmptyQuery()
+        public void ValueLINQExtensionsWhereEmptyCollectionShouldProduceEmptyQuery()
         {
-            var array = new int[0];
-            using var query = array.ToValueQuery();
-            using var filtered = query.Where(2, new IntEqualsPredicate());
+            int[] array = [];
+            using ValueLINQStruct<int> query = array.ToValueQuery();
+            using ValueLINQStruct<int> filtered = query.Where(2, new IntEqualsPredicate());
 
-            filtered.IsValido.Should().BeTrue();
-            
+            _ = filtered.IsValido.Should().BeTrue();
+
             int count = 0;
             foreach (ref int item in filtered)
                 count++;
 
-            count.Should().Be(0);
+            _ = count.Should().Be(0);
         }
 
         [Fact]
-        public void ValueLINQExtensions_Chunk_ShouldSplitElementsAndDisposeOrigin()
+        public void ValueLINQExtensionsChunkShouldSplitElementsAndDisposeOrigin()
         {
-            var array = new[] { 1, 2, 3, 4, 5 };
-            var query = array.ToValueQuery();
+            int[] array = [1, 2, 3, 4, 5];
+            ValueLINQStruct<int> query = array.ToValueQuery();
             long originalToken = query.Token;
 
-            var chunks = query.Chunk(2);
+            ValueLINQRefStruct<ValueLINQStruct<int>> chunks = query.Chunk(2);
 
-            chunks.IsValido.Should().BeTrue();
-            ValueLINQStateManager<int>.IsMetadatoValido(originalToken).Should().BeFalse("Source should be disposed");
+            _ = chunks.IsValido.Should().BeTrue();
+            _ = ValueLINQStateManager<int>.IsMetadatoValido(originalToken).Should().BeFalse("Source should be disposed");
 
             int chunkIndex = 0;
-            foreach (ref var chunk in chunks)
+            foreach (ref ValueLINQStruct<int> chunk in chunks)
             {
-                chunk.IsValido.Should().BeTrue();
+                _ = chunk.IsValido.Should().BeTrue();
                 int elementCount = 0;
                 foreach (ref int item in chunk)
                     elementCount++;
 
-                if (chunkIndex < 2)
-                    elementCount.Should().Be(2);
-                else
-                    elementCount.Should().Be(1);
+                _ = elementCount.Should().Be(chunkIndex < 2 ? 2 : 1);
 
                 chunkIndex++;
             }
-            chunkIndex.Should().Be(3);
+            _ = chunkIndex.Should().Be(3);
 
-            foreach (ref var chunk in chunks)
+            foreach (ref ValueLINQStruct<int> chunk in chunks)
                 chunk.Dispose();
             chunks.Dispose();
         }
 
         [Fact]
-        public void ValueLINQExtensions_ProcessChunks_ShouldExecuteSuccessfully()
+        public void ValueLINQExtensionsProcessChunksShouldExecuteSuccessfully()
         {
-            var array = new[] { 1, 2, 3, 4, 5 };
-            var query = array.ToValueQuery();
-            var chunks = query.Chunk(2);
-            var sharedCounter = new int[1];
-            var counter = new ChunkProcessorCounter(sharedCounter);
+            int[] array = [1, 2, 3, 4, 5];
+            ValueLINQStruct<int> query = array.ToValueQuery();
+            ValueLINQRefStruct<ValueLINQStruct<int>> chunks = query.Chunk(2);
+            int[] sharedCounter = new int[1];
+            ChunkProcessorCounter counter = new(sharedCounter);
 
             chunks.ProcessChunks(counter);
 
-            sharedCounter[0].Should().Be(5);
+            _ = sharedCounter[0].Should().Be(5);
         }
 
         [Fact]
-        public void ValueLINQExtensions_MaterializationOperators_ShouldCopyElementsAndDisposeSource()
+        public void ValueLINQExtensionsMaterializationOperatorsShouldCopyElementsAndDisposeSource()
         {
-            var sourceArray = new[] { 10, 20, 30, 40 };
+            int[] sourceArray = [10, 20, 30, 40];
 
             // 1. ToList
-            var query1 = sourceArray.ToValueQuery();
+            ValueLINQStruct<int> query1 = sourceArray.ToValueQuery();
             long token1 = query1.Token;
-            using (var list = query1.ToList())
+            using (PooledList<int> list = query1.ToList())
             {
-                list.Tamaño.Should().Be(4);
-                list.Span[0].Should().Be(10);
-                list.Span[3].Should().Be(40);
-                ValueLINQStateManager<int>.IsMetadatoValido(token1).Should().BeFalse("ToList should dispose source session immediately");
+                _ = list.Tamaño.Should().Be(4);
+                _ = list.Span[0].Should().Be(10);
+                _ = list.Span[3].Should().Be(40);
+                _ = ValueLINQStateManager<int>.IsMetadatoValido(token1).Should().BeFalse("ToList should dispose source session immediately");
             }
 
             // 2. ToArray
-            var query2 = sourceArray.ToValueQuery();
+            ValueLINQStruct<int> query2 = sourceArray.ToValueQuery();
             long token2 = query2.Token;
-            using (var array = query2.ToArray())
+            using (PooledArray<int> array = query2.ToArray())
             {
-                array.Tamaño.Should().Be(4);
-                array.Span[0].Should().Be(10);
-                array.Span[3].Should().Be(40);
-                ValueLINQStateManager<int>.IsMetadatoValido(token2).Should().BeFalse("ToArray should dispose source session immediately");
+                _ = array.Tamaño.Should().Be(4);
+                _ = array.Span[0].Should().Be(10);
+                _ = array.Span[3].Should().Be(40);
+                _ = ValueLINQStateManager<int>.IsMetadatoValido(token2).Should().BeFalse("ToArray should dispose source session immediately");
             }
 
             // 3. ToListRef
-            var query3 = sourceArray.ToValueQuery();
+            ValueLINQStruct<int> query3 = sourceArray.ToValueQuery();
             long token3 = query3.Token;
-            using (var listRef = query3.ToListRef())
+            using (PooledListRef<int> listRef = query3.ToListRef())
             {
-                listRef.Tamaño.Should().Be(4);
-                listRef.Span[0].Should().Be(10);
-                listRef.Span[3].Should().Be(40);
-                ValueLINQStateManager<int>.IsMetadatoValido(token3).Should().BeFalse("ToListRef should dispose source session immediately");
+                _ = listRef.Tamaño.Should().Be(4);
+                _ = listRef.Span[0].Should().Be(10);
+                _ = listRef.Span[3].Should().Be(40);
+                _ = ValueLINQStateManager<int>.IsMetadatoValido(token3).Should().BeFalse("ToListRef should dispose source session immediately");
             }
 
             // 4. ToArrayRef
-            var query4 = sourceArray.ToValueQuery();
+            ValueLINQStruct<int> query4 = sourceArray.ToValueQuery();
             long token4 = query4.Token;
-            using (var arrayRef = query4.ToArrayRef())
-            {
-                arrayRef.Tamaño.Should().Be(4);
-                arrayRef.Span[0].Should().Be(10);
-                arrayRef.Span[3].Should().Be(40);
-                ValueLINQStateManager<int>.IsMetadatoValido(token4).Should().BeFalse("ToArrayRef should dispose source session immediately");
-            }
+            using PooledArrayRef<int> arrayRef = query4.ToArrayRef();
+            _ = arrayRef.Tamaño.Should().Be(4);
+            _ = arrayRef.Span[0].Should().Be(10);
+            _ = arrayRef.Span[3].Should().Be(40);
+            _ = ValueLINQStateManager<int>.IsMetadatoValido(token4).Should().BeFalse("ToArrayRef should dispose source session immediately");
         }
 
         [Fact]
-        public void ValueLINQExtensions_MaterializationOperators_EmptyAndInvalidStreams_ShouldHandleGracefully()
+        public void ValueLINQExtensionsMaterializationOperatorsEmptyAndInvalidStreamsShouldHandleGracefully()
         {
-            var queryEmpty = new int[0].ToValueQuery();
-            using (var list = queryEmpty.ToList())
-                list.Tamaño.Should().Be(0);
+            ValueLINQStruct<int> queryEmpty = Array.Empty<int>().ToValueQuery();
+            using (PooledList<int> list = queryEmpty.ToList())
+                _ = list.Tamaño.Should().Be(0);
 
-            var queryEmptyArr = new int[0].ToValueQuery();
-            using (var arr = queryEmptyArr.ToArray())
-                arr.Tamaño.Should().Be(0);
+            ValueLINQStruct<int> queryEmptyArr = Array.Empty<int>().ToValueQuery();
+            using (PooledArray<int> arr = queryEmptyArr.ToArray())
+                _ = arr.Tamaño.Should().Be(0);
 
-            var queryInvalid = new ValueLINQRefStruct<int>();
-            using (var list = queryInvalid.ToList())
-                list.Tamaño.Should().Be(0);
+            ValueLINQRefStruct<int> queryInvalid = new();
+            using (PooledList<int> list = queryInvalid.ToList())
+                _ = list.Tamaño.Should().Be(0);
 
-            var queryInvalidArr = new ValueLINQRefStruct<int>();
-            using (var arr = queryInvalidArr.ToArray())
-                arr.Tamaño.Should().Be(0);
+            ValueLINQRefStruct<int> queryInvalidArr = new();
+            using (PooledArray<int> arr = queryInvalidArr.ToArray())
+                _ = arr.Tamaño.Should().Be(0);
         }
 
         #endregion
@@ -525,69 +506,69 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
         private struct UniqueTestType { }
 
         [Fact]
-        public void ValueLINQStateManager_StaticConstructor_ShouldInitializeAllSlotsCorrectly()
+        public void ValueLINQStateManagerStaticConstructorShouldInitializeAllSlotsCorrectly()
         {
             int capacity = 4096;
-            var tokens = new long[capacity];
-            
+            long[] tokens = new long[capacity];
+
             Action rentAll = () =>
             {
                 for (int i = 0; i < capacity; i++)
                 {
-                    ref var metadatos = ref ValueLINQStateManager<UniqueTestType>.ObtenerMetadatos(10);
+                    ref MetadatosSesion<UniqueTestType> metadatos = ref ValueLINQStateManager<UniqueTestType>.ObtenerMetadatos(10);
                     tokens[i] = metadatos.Token;
                 }
             };
-            
-            rentAll.Should().NotThrow("All 4096 slots should be rentable because the stack is initialized exactly to 4096");
-            
+
+            _ = rentAll.Should().NotThrow("All 4096 slots should be rentable because the stack is initialized exactly to 4096");
+
             Action rentOneMore = () => ValueLINQStateManager<UniqueTestType>.ObtenerMetadatos(10);
-            rentOneMore.Should().Throw<InvalidOperationException>().WithMessage("*Capacidad máxima*");
-            
+            _ = rentOneMore.Should().Throw<InvalidOperationException>().WithMessage("*Capacidad máxima*");
+
             Action releaseAll = () =>
             {
                 for (int i = 0; i < capacity; i++)
                     ValueLINQStateManager<UniqueTestType>.LiberarMetadatos(tokens[i]);
             };
-            
-            releaseAll.Should().NotThrow("All slots should be released cleanly");
-            rentAll.Should().NotThrow("All slots should be rentable again without any stack corruption or overflow");
-            
+
+            _ = releaseAll.Should().NotThrow("All slots should be released cleanly");
+            _ = rentAll.Should().NotThrow("All slots should be rentable again without any stack corruption or overflow");
+
             releaseAll();
         }
 
         [Fact]
-        public void ValueLINQStateManager_IsLimpiezaRequerida_ShouldReturnFalseForUninitializedOrDisposedSlots()
+        public void ValueLINQStateManagerIsLimpiezaRequeridaShouldReturnFalseForUninitializedOrDisposedSlots()
         {
-            var type = typeof(ValueLINQStateManager<UniqueTestType>);
-            var method = type.GetMethod("IsLimpiezaRequerida", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
-            method.Should().NotBeNull("IsLimpiezaRequerida method should exist");
+            Type type = typeof(ValueLINQStateManager<UniqueTestType>);
+            System.Reflection.MethodInfo? method = type.GetMethod("IsLimpiezaRequerida", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+            _ = method.Should().NotBeNull("IsLimpiezaRequerida method should exist");
 
-            var result = method!.Invoke(null, new object[] { 0, System.Diagnostics.Stopwatch.GetTimestamp(), TimeSpan.FromMinutes(5) });
-            result.Should().Be(false, "Uninitialized slot should not require cleanup");
+            object? result = method!.Invoke(null, [0, System.Diagnostics.Stopwatch.GetTimestamp(), TimeSpan.FromMinutes(5)]);
+            _ = result.Should().Be(false, "Uninitialized slot should not require cleanup");
         }
 
         [Fact]
-        public void ValueLINQStateManager_UnderHighConcurrency_ShouldNotLeakOrCorruptStack()
+        public void ValueLINQStateManagerUnderHighConcurrencyShouldNotLeakOrCorruptStack()
         {
             int initialActive = GetActiveSlotsCount<int>();
 
             int iterations = 1000;
             int degreeOfParallelism = 10;
 
-            Parallel.For(0, iterations, new ParallelOptions { MaxDegreeOfParallelism = degreeOfParallelism }, i =>
+            _ = Parallel.For(0, iterations, new ParallelOptions { MaxDegreeOfParallelism = degreeOfParallelism }, i =>
             {
-                var localArray = new[] { i, i + 1, i + 2, i + 3 };
-                using var query = localArray.ToValueQuery();
-                using var filtered = query.Where(i + 1, new IntEqualsPredicate());
-                using var projected = filtered.Select<int, IntDoubleSelector, int>(new IntDoubleSelector());
-                using var resultList = projected.ToArray();
+                int[] localArray = [i, i + 1, i + 2, i + 3];
+                using ValueLINQStruct<int> query = localArray.ToValueQuery();
+                using ValueLINQStruct<int> filtered = query.Where(i + 1, new IntEqualsPredicate());
+                using ValueLINQStruct<int> projected = filtered.Select<int, IntDoubleSelector, int>(new IntDoubleSelector());
+                using PooledArray<int> resultList = projected.ToArray();
 
-                resultList.Tamaño.Should().BeInRange(0, 4);
+                _ = resultList.Tamaño.Should().BeInRange(0, 4);
             });
 
             int finalActive = GetActiveSlotsCount<int>();
-            finalActive.Should().Be(initialActive, "All slots must be cleanly returned to the allocator stack after concurrent executions");
+            _ = finalActive.Should().Be(initialActive, "All slots must be cleanly returned to the allocator stack after concurrent executions");
         }
 
         #endregion
@@ -595,16 +576,16 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
         #region 5. Pruebas de Programación Defensiva y Recuperación ante Excepciones (Nuevas)
 
         [Fact]
-        public void ValueLINQExtensions_Where_ShouldDisposeBothOnException()
+        public void ValueLINQExtensionsWhereShouldDisposeBothOnException()
         {
-            var array = new[] { 1, 2, 3 };
+            int[] array = [1, 2, 3];
 
             for (int i = 0; i < 5000; i++)
             {
-                var query = array.ToValueQuery();
+                ValueLINQStruct<int> query = array.ToValueQuery();
                 try
                 {
-                    query.Where(0, new ThrowingPredicate());
+                    _ = query.Where(0, new ThrowingPredicate());
                     Assert.Fail("Should have thrown InvalidOperationException");
                 }
                 catch (InvalidOperationException ex) when (ex.Message == "Simulated error")
@@ -615,14 +596,14 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
         }
 
         [Fact]
-        public void ValueLINQExtensions_Chunk_ShouldPreventLeaksOnException()
+        public void ValueLINQExtensionsChunkShouldPreventLeaksOnException()
         {
-            var array = new[] { 1, 2, 3, 4, 5 };
+            int[] array = [1, 2, 3, 4, 5];
 
             for (int i = 0; i < 2000; i++)
             {
-                var query = array.ToValueQuery();
-                var chunks = query.Chunk(2);
+                ValueLINQStruct<int> query = array.ToValueQuery();
+                ValueLINQRefStruct<ValueLINQStruct<int>> chunks = query.Chunk(2);
                 bool isExcepcionLanzada = false;
                 try
                 {
@@ -634,57 +615,57 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
                 }
 
                 if (!isExcepcionLanzada)
-                    throw new Exception("Simulated chunk processor error was not thrown!");
+                    throw new InvalidOperationException("Simulated chunk processor error was not thrown!");
             }
         }
 
         [Fact]
-        public void Where_ShouldReclaimBuffers_WhenPredicateThrowsException()
+        public void WhereShouldReclaimBuffersWhenPredicateThrowsException()
         {
             int initialActive = GetActiveSlotsCount<int>();
-            var array = new[] { 1, 2, 3 };
-            var query = array.ToValueQuery();
+            int[] array = [1, 2, 3];
+            ValueLINQStruct<int> query = array.ToValueQuery();
 
             try
             {
-                query.Where(0, new ThrowingPredicate());
+                _ = query.Where(0, new ThrowingPredicate());
                 Assert.Fail("Should have thrown InvalidOperationException");
             }
             catch (InvalidOperationException ex) when (ex.Message == "Simulated error")
             {
                 // Expected
             }
-            
-            GetActiveSlotsCount<int>().Should().Be(initialActive, "active slot count must return to initial state to prevent memory leaks");
+
+            _ = GetActiveSlotsCount<int>().Should().Be(initialActive, "active slot count must return to initial state to prevent memory leaks");
         }
 
         [Fact]
-        public void Select_ShouldReclaimBuffers_WhenSelectorThrowsException()
+        public void SelectShouldReclaimBuffersWhenSelectorThrowsException()
         {
             int initialActive = GetActiveSlotsCount<int>();
-            var array = new[] { 1, 2, 3 };
-            var query = array.ToValueQuery();
+            int[] array = [1, 2, 3];
+            ValueLINQStruct<int> query = array.ToValueQuery();
 
             try
             {
-                query.Select<int, ThrowingSelector, int>(new ThrowingSelector());
+                _ = query.Select<int, ThrowingSelector, int>(new ThrowingSelector());
                 Assert.Fail("Should have thrown InvalidOperationException");
             }
             catch (InvalidOperationException ex) when (ex.Message == "Simulated selector error")
             {
                 // Expected
             }
-            
-            GetActiveSlotsCount<int>().Should().Be(initialActive, "active slot count must return to initial state to prevent memory leaks");
+
+            _ = GetActiveSlotsCount<int>().Should().Be(initialActive, "active slot count must return to initial state to prevent memory leaks");
         }
 
         [Fact]
-        public void ProcessChunks_ShouldReclaimBuffers_WhenProcessorThrowsException()
+        public void ProcessChunksShouldReclaimBuffersWhenProcessorThrowsException()
         {
             int initialActive = GetActiveSlotsCount<int>();
-            var array = new[] { 1, 2, 3, 4, 5 };
-            var query = array.ToValueQuery();
-            var chunks = query.Chunk(2);
+            int[] array = [1, 2, 3, 4, 5];
+            ValueLINQStruct<int> query = array.ToValueQuery();
+            ValueLINQRefStruct<ValueLINQStruct<int>> chunks = query.Chunk(2);
 
             try
             {
@@ -695,8 +676,8 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
             {
                 // Expected
             }
-            
-            GetActiveSlotsCount<int>().Should().Be(initialActive, "all rented chunk buffers must be immediately returned to the pool");
+
+            _ = GetActiveSlotsCount<int>().Should().Be(initialActive, "all rented chunk buffers must be immediately returned to the pool");
         }
 
         #endregion
@@ -704,34 +685,34 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
         #region 6. Pruebas de Rendimiento y Cero Asignaciones (Nuevas)
 
         [Fact]
-        public void ValueLINQ_QueryPipeline_ShouldHaveZeroHeapAllocations()
+        public void ValueLINQQueryPipelineShouldHaveZeroHeapAllocations()
         {
-            var array = new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
-            
+            int[] array = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
             // Warmup para compilar por JIT todos los métodos involucrados
             {
-                using var query = array.ToValueQuery();
-                using var filtered = query.Where(2, new IntEqualsPredicate());
-                using var projected = filtered.Select<int, IntDoubleSelector, int>(new IntDoubleSelector());
-                using var chunks = projected.Chunk(2);
+                using ValueLINQStruct<int> query = array.ToValueQuery();
+                using ValueLINQStruct<int> filtered = query.Where(2, new IntEqualsPredicate());
+                using ValueLINQStruct<int> projected = filtered.Select<int, IntDoubleSelector, int>(new IntDoubleSelector());
+                using ValueLINQRefStruct<ValueLINQStruct<int>> chunks = projected.Chunk(2);
                 chunks.ProcessChunks(new ChunkProcessorCounter(new int[1]));
             }
 
-            var counterArray = new int[1];
+            int[] counterArray = new int[1];
 
             // Registro de memoria asignada antes del Act
             long bytesBefore = GC.GetAllocatedBytesForCurrentThread();
-            
-            using (var query = array.ToValueQuery())
-            using (var filtered = query.Where(2, new IntEqualsPredicate()))
-            using (var projected = filtered.Select<int, IntDoubleSelector, int>(new IntDoubleSelector()))
-            using (var chunks = projected.Chunk(2))
+
+            using (ValueLINQStruct<int> query = array.ToValueQuery())
+            using (ValueLINQStruct<int> filtered = query.Where(2, new IntEqualsPredicate()))
+            using (ValueLINQStruct<int> projected = filtered.Select<int, IntDoubleSelector, int>(new IntDoubleSelector()))
+            using (ValueLINQRefStruct<ValueLINQStruct<int>> chunks = projected.Chunk(2))
                 chunks.ProcessChunks(new ChunkProcessorCounter(counterArray));
-            
+
             long bytesAfter = GC.GetAllocatedBytesForCurrentThread();
             long allocated = bytesAfter - bytesBefore;
-            
-            allocated.Should().Be(0, "the entire querying pipeline must run with exactly zero heap allocations");
+
+            _ = allocated.Should().Be(0, "the entire querying pipeline must run with exactly zero heap allocations");
         }
 
         #endregion
@@ -739,121 +720,121 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
         #region 7. Pruebas de Añadir(ReadOnlySpan<T> span) (Nuevas)
 
         [Fact]
-        public void ValueLINQStruct_AñadirReadOnlySpan_HappyCase_ShouldAddElementsCorrectly()
+        public void ValueLINQStructAñadirReadOnlySpanHappyCaseShouldAddElementsCorrectly()
         {
-            using var query = new ValueLINQStruct<int>(5);
-            var elementsToAdd = new[] { 10, 20, 30 };
+            using ValueLINQStruct<int> query = new(5);
+            int[] elementsToAdd = [10, 20, 30];
 
             query.Añadir(elementsToAdd.AsSpan());
 
             int index = 0;
             foreach (ref int item in query)
             {
-                item.Should().Be(elementsToAdd[index]);
+                _ = item.Should().Be(elementsToAdd[index]);
                 index++;
             }
-            index.Should().Be(3);
+            _ = index.Should().Be(3);
         }
 
         [Fact]
-        public void ValueLINQRefStruct_AñadirReadOnlySpan_HappyCase_ShouldAddElementsCorrectly()
+        public void ValueLINQRefStructAñadirReadOnlySpanHappyCaseShouldAddElementsCorrectly()
         {
-            using var query = new ValueLINQRefStruct<int>(5);
-            var elementsToAdd = new[] { 10, 20, 30 };
+            using ValueLINQRefStruct<int> query = new(5);
+            int[] elementsToAdd = [10, 20, 30];
 
             query.Añadir(elementsToAdd.AsSpan());
 
             int index = 0;
             foreach (ref int item in query)
             {
-                item.Should().Be(elementsToAdd[index]);
+                _ = item.Should().Be(elementsToAdd[index]);
                 index++;
             }
-            index.Should().Be(3);
+            _ = index.Should().Be(3);
         }
 
         [Fact]
-        public void ValueLINQStruct_AñadirReadOnlySpan_EmptySpan_ShouldBeSafeNoOp()
+        public void ValueLINQStructAñadirReadOnlySpanEmptySpanShouldBeSafeNoOp()
         {
-            using var query = new ValueLINQStruct<int>(5);
+            using ValueLINQStruct<int> query = new(5);
             query.Añadir(10);
 
-            query.Añadir(ReadOnlySpan<int>.Empty);
+            query.Añadir([]);
 
             int count = 0;
             foreach (ref int item in query)
             {
-                item.Should().Be(10);
+                _ = item.Should().Be(10);
                 count++;
             }
-            count.Should().Be(1);
+            _ = count.Should().Be(1);
         }
 
         [Fact]
-        public void ValueLINQRefStruct_AñadirReadOnlySpan_EmptySpan_ShouldBeSafeNoOp()
+        public void ValueLINQRefStructAñadirReadOnlySpanEmptySpanShouldBeSafeNoOp()
         {
-            using var query = new ValueLINQRefStruct<int>(5);
+            using ValueLINQRefStruct<int> query = new(5);
             query.Añadir(10);
 
-            query.Añadir(ReadOnlySpan<int>.Empty);
+            query.Añadir([]);
 
             int count = 0;
             foreach (ref int item in query)
             {
-                item.Should().Be(10);
+                _ = item.Should().Be(10);
                 count++;
             }
-            count.Should().Be(1);
+            _ = count.Should().Be(1);
         }
 
         [Fact]
-        public void ValueLINQStruct_AñadirReadOnlySpan_Resize_ShouldResizeCorrectlyAndKeepIntegrity()
+        public void ValueLINQStructAñadirReadOnlySpanResizeShouldResizeCorrectlyAndKeepIntegrity()
         {
-            using var query = new ValueLINQStruct<int>(2);
+            using ValueLINQStruct<int> query = new(2);
             query.Añadir(1);
             query.Añadir(2);
 
-            var elementsToAdd = new[] { 3, 4, 5, 6, 7, 8 };
+            int[] elementsToAdd = [3, 4, 5, 6, 7, 8];
             query.Añadir(elementsToAdd.AsSpan());
 
-            var expected = new[] { 1, 2, 3, 4, 5, 6, 7, 8 };
+            int[] expected = [1, 2, 3, 4, 5, 6, 7, 8];
             int index = 0;
             foreach (ref int item in query)
             {
-                item.Should().Be(expected[index]);
+                _ = item.Should().Be(expected[index]);
                 index++;
             }
-            index.Should().Be(8);
+            _ = index.Should().Be(8);
         }
 
         [Fact]
-        public void ValueLINQRefStruct_AñadirReadOnlySpan_Resize_ShouldResizeCorrectlyAndKeepIntegrity()
+        public void ValueLINQRefStructAñadirReadOnlySpanResizeShouldResizeCorrectlyAndKeepIntegrity()
         {
-            using var query = new ValueLINQRefStruct<int>(2);
+            using ValueLINQRefStruct<int> query = new(2);
             query.Añadir(1);
             query.Añadir(2);
 
-            var elementsToAdd = new[] { 3, 4, 5, 6, 7, 8 };
+            int[] elementsToAdd = [3, 4, 5, 6, 7, 8];
             query.Añadir(elementsToAdd.AsSpan());
 
-            var expected = new[] { 1, 2, 3, 4, 5, 6, 7, 8 };
+            int[] expected = [1, 2, 3, 4, 5, 6, 7, 8];
             int index = 0;
             foreach (ref int item in query)
             {
-                item.Should().Be(expected[index]);
+                _ = item.Should().Be(expected[index]);
                 index++;
             }
-            index.Should().Be(8);
+            _ = index.Should().Be(8);
         }
 
         [Fact]
-        public void ValueLINQStruct_AñadirReadOnlySpan_AfterDispose_ShouldThrowValueLinqSesionExpiradaException()
+        public void ValueLINQStructAñadirReadOnlySpanAfterDisposeShouldThrowValueLinqSesionExpiradaException()
         {
-            var query = new ValueLINQStruct<int>(5);
+            ValueLINQStruct<int> query = new(5);
             query.Añadir(10);
             query.Dispose();
 
-            var elementsToAdd = new[] { 20, 30 };
+            int[] elementsToAdd = [20, 30];
             try
             {
                 query.Añadir(elementsToAdd.AsSpan());
@@ -861,18 +842,18 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
             }
             catch (ValueLinqSesionExpiradaException ex)
             {
-                ex.Message.Should().Contain("expirado");
+                _ = ex.Message.Should().Contain("expirado");
             }
         }
 
         [Fact]
-        public void ValueLINQRefStruct_AñadirReadOnlySpan_AfterDispose_ShouldThrowValueLinqSesionExpiradaException()
+        public void ValueLINQRefStructAñadirReadOnlySpanAfterDisposeShouldThrowValueLinqSesionExpiradaException()
         {
-            var query = new ValueLINQRefStruct<int>(5);
+            ValueLINQRefStruct<int> query = new(5);
             query.Añadir(10);
             query.Dispose();
 
-            var elementsToAdd = new[] { 20, 30 };
+            int[] elementsToAdd = [20, 30];
             try
             {
                 query.Añadir(elementsToAdd.AsSpan());
@@ -880,7 +861,7 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
             }
             catch (ValueLinqSesionExpiradaException ex)
             {
-                ex.Message.Should().Contain("expirado");
+                _ = ex.Message.Should().Contain("expirado");
             }
         }
 
@@ -889,103 +870,89 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
         #region 8. Pruebas de Materializadores Estándar (Nuevas)
 
         [Fact]
-        public void ValueLINQStruct_ToArrayStandard_HappyPath_ShouldReturnExpectedElements()
+        public void ValueLINQStructToArrayStandardHappyPathShouldReturnExpectedElements()
         {
-            var array = new[] { 10, 20, 30 };
-            var query = array.ToValueQuery();
+            int[] array = [10, 20, 30];
+            ValueLINQStruct<int> query = array.ToValueQuery();
 
-#pragma warning disable CS0618
-            var result = query.ToArrayStandard();
-#pragma warning restore CS0618
+            int[] result = query.ToArrayStandard();
 
-            result.Should().Equal(array);
+            _ = result.Should().Equal(array);
         }
 
         [Fact]
-        public void ValueLINQStruct_ToListStandard_HappyPath_ShouldReturnExpectedElements()
+        public void ValueLINQStructToListStandardHappyPathShouldReturnExpectedElements()
         {
-            var array = new[] { 10, 20, 30 };
-            var query = array.ToValueQuery();
+            int[] array = [10, 20, 30];
+            ValueLINQStruct<int> query = array.ToValueQuery();
 
-#pragma warning disable CS0618
-            var result = query.ToListStandard();
-#pragma warning restore CS0618
+            List<int> result = query.ToListStandard();
 
-            result.Should().Equal(array);
+            _ = result.Should().Equal(array);
         }
 
         [Fact]
-        public void ValueLINQRefStruct_ToArrayStandard_HappyPath_ShouldReturnExpectedElements()
+        public void ValueLINQRefStructToArrayStandardHappyPathShouldReturnExpectedElements()
         {
-            var array = new[] { 10, 20, 30 };
-            var query = array.ToValueRefQuery();
+            int[] array = [10, 20, 30];
+            ValueLINQRefStruct<int> query = array.ToValueRefQuery();
 
-#pragma warning disable CS0618
-            var result = query.ToArrayStandard();
-#pragma warning restore CS0618
+            int[] result = query.ToArrayStandard();
 
-            result.Should().Equal(array);
+            _ = result.Should().Equal(array);
         }
 
         [Fact]
-        public void ValueLINQRefStruct_ToListStandard_HappyPath_ShouldReturnExpectedElements()
+        public void ValueLINQRefStructToListStandardHappyPathShouldReturnExpectedElements()
         {
-            var array = new[] { 10, 20, 30 };
-            var query = array.ToValueRefQuery();
+            int[] array = [10, 20, 30];
+            ValueLINQRefStruct<int> query = array.ToValueRefQuery();
 
-#pragma warning disable CS0618
-            var result = query.ToListStandard();
-#pragma warning restore CS0618
+            List<int> result = query.ToListStandard();
 
-            result.Should().Equal(array);
+            _ = result.Should().Equal(array);
         }
 
         [Fact]
-        public void ValueLINQStruct_ToArrayStandard_ShouldDisposeSourceImmediately()
+        public void ValueLINQStructToArrayStandardShouldDisposeSourceImmediately()
         {
-            var array = new[] { 10, 20, 30 };
-            var query = array.ToValueQuery();
+            int[] array = [10, 20, 30];
+            ValueLINQStruct<int> query = array.ToValueQuery();
             long token = query.Token;
 
-#pragma warning disable CS0618
-            var result = query.ToArrayStandard();
-#pragma warning restore CS0618
+            int[] result = query.ToArrayStandard();
 
-            ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse("ToArrayStandard should dispose the session");
+            _ = ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse("ToArrayStandard should dispose the session");
 
             Action act = () => query.Añadir(42);
-            act.Should().Throw<ValueLinqSesionExpiradaException>().WithMessage("*expirado*");
+            _ = act.Should().Throw<ValueLinqSesionExpiradaException>().WithMessage("*expirado*");
         }
 
         [Fact]
-        public void ValueLINQStruct_ToListStandard_ShouldDisposeSourceImmediately()
+        public void ValueLINQStructToListStandardShouldDisposeSourceImmediately()
         {
-            var array = new[] { 10, 20, 30 };
-            var query = array.ToValueQuery();
+            int[] array = [10, 20, 30];
+            ValueLINQStruct<int> query = array.ToValueQuery();
             long token = query.Token;
 
-#pragma warning disable CS0618
-            var result = query.ToListStandard();
-#pragma warning restore CS0618
+            List<int> result = query.ToListStandard();
 
-            ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse("ToListStandard should dispose the session");
+            _ = ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse("ToListStandard should dispose the session");
 
             Action act = () => query.Añadir(42);
-            act.Should().Throw<ValueLinqSesionExpiradaException>().WithMessage("*expirado*");
+            _ = act.Should().Throw<ValueLinqSesionExpiradaException>().WithMessage("*expirado*");
         }
 
         [Fact]
-        public void ValueLINQRefStruct_ToArrayStandard_ShouldDisposeSourceImmediately()
+        public void ValueLINQRefStructToArrayStandardShouldDisposeSourceImmediately()
         {
-            var array = new[] { 10, 20, 30 };
-            var query = array.ToValueRefQuery();
+            int[] array = [10, 20, 30];
+            ValueLINQRefStruct<int> query = array.ToValueRefQuery();
             long token = query.Token;
 
-#pragma warning disable CS0618
-            var result = query.ToArrayStandard();
-#pragma warning restore CS0618
+            _ = query.ToArrayStandard();
 
-            ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse("ToArrayStandard should dispose the session");
+            _ = ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse("ToArrayStandard should dispose the session");
 
             try
             {
@@ -994,22 +961,20 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
             }
             catch (ValueLinqSesionExpiradaException ex)
             {
-                ex.Message.Should().Contain("expirado");
+                _ = ex.Message.Should().Contain("expirado");
             }
         }
 
         [Fact]
-        public void ValueLINQRefStruct_ToListStandard_ShouldDisposeSourceImmediately()
+        public void ValueLINQRefStructToListStandardShouldDisposeSourceImmediately()
         {
-            var array = new[] { 10, 20, 30 };
-            var query = array.ToValueRefQuery();
+            int[] array = [10, 20, 30];
+            ValueLINQRefStruct<int> query = array.ToValueRefQuery();
             long token = query.Token;
 
-#pragma warning disable CS0618
-            var result = query.ToListStandard();
-#pragma warning restore CS0618
+            _ = query.ToListStandard();
 
-            ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse("ToListStandard should dispose the session");
+            _ = ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse("ToListStandard should dispose the session");
 
             try
             {
@@ -1018,116 +983,100 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
             }
             catch (ValueLinqSesionExpiradaException ex)
             {
-                ex.Message.Should().Contain("expirado");
+                _ = ex.Message.Should().Contain("expirado");
             }
         }
 
         [Fact]
-        public void ValueLINQStruct_ToArrayStandard_EmptyQuery_ShouldReturnEmptyArrayAndDispose()
+        public void ValueLINQStructToArrayStandardEmptyQueryShouldReturnEmptyArrayAndDispose()
         {
-            var query = new int[0].ToValueQuery();
+            ValueLINQStruct<int> query = Array.Empty<int>().ToValueQuery();
             long token = query.Token;
 
-#pragma warning disable CS0618
-            var result = query.ToArrayStandard();
-#pragma warning restore CS0618
+            int[] result = query.ToArrayStandard();
 
-            result.Should().BeEmpty();
-            result.Should().BeSameAs(Array.Empty<int>());
-            ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse("Empty query session should be disposed after ToArrayStandard");
+            _ = result.Should().BeEmpty();
+            _ = result.Should().BeSameAs([]);
+            _ = ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse("Empty query session should be disposed after ToArrayStandard");
         }
 
         [Fact]
-        public void ValueLINQStruct_ToListStandard_EmptyQuery_ShouldReturnEmptyListAndDispose()
+        public void ValueLINQStructToListStandardEmptyQueryShouldReturnEmptyListAndDispose()
         {
-            var query = new int[0].ToValueQuery();
+            ValueLINQStruct<int> query = Array.Empty<int>().ToValueQuery();
             long token = query.Token;
 
-#pragma warning disable CS0618
-            var result = query.ToListStandard();
-#pragma warning restore CS0618
+            List<int> result = query.ToListStandard();
 
-            result.Should().BeEmpty();
-            ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse("Empty query session should be disposed after ToListStandard");
+            _ = result.Should().BeEmpty();
+            _ = ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse("Empty query session should be disposed after ToListStandard");
         }
 
         [Fact]
-        public void ValueLINQRefStruct_ToArrayStandard_EmptyQuery_ShouldReturnEmptyArrayAndDispose()
+        public void ValueLINQRefStructToArrayStandardEmptyQueryShouldReturnEmptyArrayAndDispose()
         {
-            var query = new int[0].ToValueRefQuery();
+            ValueLINQRefStruct<int> query = Array.Empty<int>().ToValueRefQuery();
             long token = query.Token;
 
-#pragma warning disable CS0618
-            var result = query.ToArrayStandard();
-#pragma warning restore CS0618
+            int[] result = query.ToArrayStandard();
 
-            result.Should().BeEmpty();
-            result.Should().BeSameAs(Array.Empty<int>());
-            ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse("Empty query session should be disposed after ToArrayStandard");
+            _ = result.Should().BeEmpty();
+            _ = result.Should().BeSameAs([]);
+            _ = ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse("Empty query session should be disposed after ToArrayStandard");
         }
 
         [Fact]
-        public void ValueLINQRefStruct_ToListStandard_EmptyQuery_ShouldReturnEmptyListAndDispose()
+        public void ValueLINQRefStructToListStandardEmptyQueryShouldReturnEmptyListAndDispose()
         {
-            var query = new int[0].ToValueRefQuery();
+            ValueLINQRefStruct<int> query = Array.Empty<int>().ToValueRefQuery();
             long token = query.Token;
 
-#pragma warning disable CS0618
-            var result = query.ToListStandard();
-#pragma warning restore CS0618
+            List<int> result = query.ToListStandard();
 
-            result.Should().BeEmpty();
-            ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse("Empty query session should be disposed after ToListStandard");
+            _ = result.Should().BeEmpty();
+            _ = ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse("Empty query session should be disposed after ToListStandard");
         }
 
         [Fact]
-        public void ValueLINQStruct_ToArrayStandard_InvalidToken_ShouldReturnEmptyArraySafely()
+        public void ValueLINQStructToArrayStandardInvalidTokenShouldReturnEmptyArraySafely()
         {
-            var query = new ValueLINQStruct<int>(); // Token is 0
+            ValueLINQStruct<int> query = new(); // Token is 0
 
-#pragma warning disable CS0618
-            var result = query.ToArrayStandard();
-#pragma warning restore CS0618
+            int[] result = query.ToArrayStandard();
 
-            result.Should().BeEmpty();
-            result.Should().BeSameAs(Array.Empty<int>());
+            _ = result.Should().BeEmpty();
+            _ = result.Should().BeSameAs([]);
         }
 
         [Fact]
-        public void ValueLINQStruct_ToListStandard_InvalidToken_ShouldReturnEmptyListSafely()
+        public void ValueLINQStructToListStandardInvalidTokenShouldReturnEmptyListSafely()
         {
-            var query = new ValueLINQStruct<int>(); // Token is 0
+            ValueLINQStruct<int> query = new(); // Token is 0
 
-#pragma warning disable CS0618
-            var result = query.ToListStandard();
-#pragma warning restore CS0618
+            List<int> result = query.ToListStandard();
 
-            result.Should().BeEmpty();
+            _ = result.Should().BeEmpty();
         }
 
         [Fact]
-        public void ValueLINQRefStruct_ToArrayStandard_InvalidToken_ShouldReturnEmptyArraySafely()
+        public void ValueLINQRefStructToArrayStandardInvalidTokenShouldReturnEmptyArraySafely()
         {
-            var query = new ValueLINQRefStruct<int>(); // Token is 0
+            ValueLINQRefStruct<int> query = new(); // Token is 0
 
-#pragma warning disable CS0618
-            var result = query.ToArrayStandard();
-#pragma warning restore CS0618
+            int[] result = query.ToArrayStandard();
 
-            result.Should().BeEmpty();
-            result.Should().BeSameAs(Array.Empty<int>());
+            _ = result.Should().BeEmpty();
+            _ = result.Should().BeSameAs([]);
         }
 
         [Fact]
-        public void ValueLINQRefStruct_ToListStandard_InvalidToken_ShouldReturnEmptyListSafely()
+        public void ValueLINQRefStructToListStandardInvalidTokenShouldReturnEmptyListSafely()
         {
-            var query = new ValueLINQRefStruct<int>(); // Token is 0
+            ValueLINQRefStruct<int> query = new(); // Token is 0
 
-#pragma warning disable CS0618
-            var result = query.ToListStandard();
-#pragma warning restore CS0618
+            List<int> result = query.ToListStandard();
 
-            result.Should().BeEmpty();
+            _ = result.Should().BeEmpty();
         }
 
         #endregion

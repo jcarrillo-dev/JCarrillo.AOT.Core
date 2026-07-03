@@ -8,10 +8,10 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
     public class PooledListTests
     {
         [Fact]
-        public void Add_ShouldAddItemsAndExpandCapacity()
+        public void AddShouldAddItemsAndExpandCapacity()
         {
             // Preparar
-            using var list = new PooledList<int>(2);
+            using PooledList<int> list = new(2);
 
             // Actuar
             list.Add(10);
@@ -19,18 +19,18 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
             list.Add(30); // Desencadena la expansión
 
             // Verificar
-            list.Tamaño.Should().Be(3);
-            list[0].Should().Be(10);
-            list[1].Should().Be(20);
-            list[2].Should().Be(30);
-            list.Span.Length.Should().Be(3);
+            _ = list.Tamaño.Should().Be(3);
+            _ = list[0].Should().Be(10);
+            _ = list[1].Should().Be(20);
+            _ = list[2].Should().Be(30);
+            _ = list.Span.Length.Should().Be(3);
         }
 
         [Fact]
-        public void Indexer_ByRef_ShouldAllowModification()
+        public void IndexerByRefShouldAllowModification()
         {
             // Preparar
-            using var list = new PooledList<int>(5);
+            using PooledList<int> list = new(5);
             list.Add(1);
 
             // Actuar
@@ -38,71 +38,71 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
             itemRef = 99;
 
             // Verificar
-            list[0].Should().Be(99);
+            _ = list[0].Should().Be(99);
         }
 
         [Fact]
-        public void Dispose_ShouldBeIdempotent()
+        public void DisposeShouldBeIdempotent()
         {
             // Preparar
-            var list = new PooledList<int>(10);
+            PooledList<int> list = new(10);
             list.Add(1);
 
             // Actuar y Verificar
             list.Dispose();
-            list.EstaDisposed.Should().BeTrue();
+            _ = list.EstaDisposed.Should().BeTrue();
 
             // Llamar a Dispose de nuevo no debería lanzar una excepción
             list.Dispose();
         }
 
         [Fact]
-        public async Task DisposeAsync_ShouldBeIdempotent()
+        public async Task DisposeAsyncShouldBeIdempotent()
         {
             // Preparar
-            var list = new PooledList<int>(10);
+            PooledList<int> list = new(10);
             list.Add(1);
 
             // Actuar y Verificar
             await list.DisposeAsync();
-            list.EstaDisposed.Should().BeTrue();
+            _ = list.EstaDisposed.Should().BeTrue();
 
             // Llamar a DisposeAsync de nuevo no debería lanzar una excepción
             await list.DisposeAsync();
         }
 
         [Fact]
-        public void AccessAfterDispose_ShouldThrowObjectDisposedException()
+        public void AccessAfterDisposeShouldThrowObjectDisposedException()
         {
             // Preparar
-            var list = new PooledList<int>(10);
+            PooledList<int> list = new(10);
             list.Dispose();
 
             // Actuar y Verificar
             try
             {
-                var size = list.Tamaño;
+                int size = list.Tamaño;
                 Assert.Fail("Debería haber lanzado ObjectDisposedException");
             }
             catch (ObjectDisposedException) { }
 
             try
             {
-                var span = list.Span;
+                Span<int> span = list.Span;
                 Assert.Fail("Debería haber lanzado ObjectDisposedException");
             }
             catch (ObjectDisposedException) { }
 
             try
             {
-                var memory = list.Memory;
+                Memory<int> memory = list.Memory;
                 Assert.Fail("Debería haber lanzado ObjectDisposedException");
             }
             catch (ObjectDisposedException) { }
 
             try
             {
-                var x = list[0];
+                int x = list[0];
                 Assert.Fail("Debería haber lanzado ObjectDisposedException");
             }
             catch (ObjectDisposedException) { }
@@ -123,13 +123,13 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
         }
 
         [Fact]
-        public void RuntimeHelpers_IsReferenceOrContainsReferences_Validation()
+        public void RuntimeHelpersIsReferenceOrContainsReferencesValidation()
         {
             // Validar la lógica subyacente de clearArray en ArrayPool.Return:
             // string tiene tipo de referencia (IsReferenceOrContainsReferences = true), por lo que el pool lo limpia.
             // int es un tipo de valor sin referencias (IsReferenceOrContainsReferences = false), por lo que el pool no lo limpia.
-            RuntimeHelpers.IsReferenceOrContainsReferences<string>().Should().BeTrue();
-            RuntimeHelpers.IsReferenceOrContainsReferences<int>().Should().BeFalse();
+            _ = RuntimeHelpers.IsReferenceOrContainsReferences<string>().Should().BeTrue();
+            _ = RuntimeHelpers.IsReferenceOrContainsReferences<int>().Should().BeFalse();
         }
     }
 }

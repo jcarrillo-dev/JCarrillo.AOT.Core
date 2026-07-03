@@ -7,23 +7,23 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
     public class PooledArrayRefTests
     {
         [Fact]
-        public void Constructor_ShouldInitializeCorrectly()
+        public void ConstructorShouldInitializeCorrectly()
         {
             // Preparar y Actuar
-            using var array = new PooledArrayRef<int>(10);
+            using PooledArrayRef<int> array = new(10);
 
             // Verificar
-            array.Tamaño.Should().Be(10);
-            array.Span.Length.Should().Be(10);
-            array.EsAmpliable.Should().BeFalse();
-            PooledArrayRef<int>.IntentarAmpliar(20).Should().BeFalse();
+            _ = array.Tamaño.Should().Be(10);
+            _ = array.Span.Length.Should().Be(10);
+            _ = array.EsAmpliable.Should().BeFalse();
+            _ = array.IntentarAmpliar(20).Should().BeFalse();
         }
 
         [Fact]
-        public void Indexer_ShouldAllowReadingAndWritingByRef()
+        public void IndexerShouldAllowReadingAndWritingByRef()
         {
             // Preparar
-            using var array = new PooledArrayRef<int>(5);
+            using PooledArrayRef<int> array = new(5);
 
             // Actuar
             array[2] = 42;
@@ -31,70 +31,70 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
             itemRef = 100;
 
             // Verificar
-            array[2].Should().Be(100);
+            _ = array[2].Should().Be(100);
         }
 
         [Fact]
-        public void Indexer_OutOfBounds_ShouldThrowIndexOutOfRangeException()
+        public void IndexerOutOfBoundsShouldThrowArgumentOutOfRangeException()
         {
             // Preparar
-            using var array = new PooledArrayRef<int>(5);
+            using PooledArrayRef<int> array = new(5);
 
             // Actuar y Verificar
             try
             {
-                var x = array[-1];
-                Assert.Fail("Debería haber lanzado IndexOutOfRangeException");
+                int x = array[-1];
+                Assert.Fail("Debería haber lanzado ArgumentOutOfRangeException");
             }
-            catch (IndexOutOfRangeException) { }
+            catch (ArgumentOutOfRangeException) { }
 
             try
             {
-                var x = array[5];
-                Assert.Fail("Debería haber lanzado IndexOutOfRangeException");
+                int x = array[5];
+                Assert.Fail("Debería haber lanzado ArgumentOutOfRangeException");
             }
-            catch (IndexOutOfRangeException) { }
+            catch (ArgumentOutOfRangeException) { }
         }
 
         [Fact]
-        public void Dispose_ShouldBeIdempotent()
+        public void DisposeShouldBeIdempotent()
         {
             // Preparar
-            var array = new PooledArrayRef<int>(5);
+            PooledArrayRef<int> array = new(5);
 
             // Actuar y Verificar
             array.Dispose();
-            array.EstaDisposed.Should().BeTrue();
+            _ = array.EstaDisposed.Should().BeTrue();
 
             // Llamar a Dispose de nuevo no debería lanzar una excepción
             array.Dispose();
         }
 
         [Fact]
-        public void AccessAfterDispose_ShouldThrowObjectDisposedException()
+        public void AccessAfterDisposeShouldThrowObjectDisposedException()
         {
             // Preparar
-            var array = new PooledArrayRef<int>(5);
+            PooledArrayRef<int> array = new(5);
             array.Dispose();
 
             // Actuar y Verificar
             try
             {
-                var size = array.Tamaño;
+                int size = array.Tamaño;
                 Assert.Fail("Debería haber lanzado ObjectDisposedException");
             }
             catch (ObjectDisposedException) { }
 
             try
             {
-                var span = array.Span;
+                Span<int> span = array.Span;
                 Assert.Fail("Debería haber lanzado ObjectDisposedException");
             }
             catch (ObjectDisposedException) { }
 
             try
             {
-                var x = array[0];
+                int x = array[0];
                 Assert.Fail("Debería haber lanzado ObjectDisposedException");
             }
             catch (ObjectDisposedException) { }
@@ -108,10 +108,10 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
         }
 
         [Fact]
-        public void ForeachLoop_ShouldWorkCorrectly()
+        public void ForeachLoopShouldWorkCorrectly()
         {
             // Preparar
-            using var array = new PooledArrayRef<int>(3);
+            using PooledArrayRef<int> array = new(3);
             array[0] = 10;
             array[1] = 20;
             array[2] = 30;
@@ -119,21 +119,21 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
             // Actuar & Verificar
             int sum = 0;
             int count = 0;
-            foreach (var item in array)
+            foreach (int item in array)
             {
                 sum += item;
                 count++;
             }
 
-            sum.Should().Be(60);
-            count.Should().Be(3);
+            _ = sum.Should().Be(60);
+            _ = count.Should().Be(3);
         }
 
         [Fact]
-        public void Clear_ShouldClearTheSpan()
+        public void ClearShouldClearTheSpan()
         {
             // Preparar
-            using var array = new PooledArrayRef<int>(3);
+            using PooledArrayRef<int> array = new(3);
             array[0] = 10;
             array[1] = 20;
             array[2] = 30;
@@ -142,9 +142,9 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
             array.Clear();
 
             // Verificar
-            array[0].Should().Be(0);
-            array[1].Should().Be(0);
-            array[2].Should().Be(0);
+            _ = array[0].Should().Be(0);
+            _ = array[1].Should().Be(0);
+            _ = array[2].Should().Be(0);
         }
     }
 }

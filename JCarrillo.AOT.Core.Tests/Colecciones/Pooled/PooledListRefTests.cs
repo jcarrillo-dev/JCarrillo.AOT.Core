@@ -7,22 +7,22 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
     public class PooledListRefTests
     {
         [Fact]
-        public void Constructor_ShouldInitializeCorrectly()
+        public void ConstructorShouldInitializeCorrectly()
         {
             // Preparar y Actuar
-            using var list = new PooledListRef<int>(10);
+            using PooledListRef<int> list = new(10);
 
             // Verificar
-            list.Tamaño.Should().Be(0);
-            list.Span.Length.Should().Be(0);
-            list.EsAmpliable.Should().BeTrue();
+            _ = list.Tamaño.Should().Be(0);
+            _ = list.Span.Length.Should().Be(0);
+            _ = list.EsAmpliable.Should().BeTrue();
         }
 
         [Fact]
-        public void Add_ShouldAddItemsAndExpandCapacity()
+        public void AddShouldAddItemsAndExpandCapacity()
         {
             // Preparar
-            using var list = new PooledListRef<int>(2);
+            using PooledListRef<int> list = new(2);
 
             // Actuar
             list.Add(10);
@@ -30,18 +30,18 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
             list.Add(30); // Desencadena la expansión
 
             // Verificar
-            list.Tamaño.Should().Be(3);
-            list[0].Should().Be(10);
-            list[1].Should().Be(20);
-            list[2].Should().Be(30);
-            list.Span.Length.Should().Be(3);
+            _ = list.Tamaño.Should().Be(3);
+            _ = list[0].Should().Be(10);
+            _ = list[1].Should().Be(20);
+            _ = list[2].Should().Be(30);
+            _ = list.Span.Length.Should().Be(3);
         }
 
         [Fact]
-        public void Indexer_ShouldAllowReadingAndWritingByRef()
+        public void IndexerShouldAllowReadingAndWritingByRef()
         {
             // Preparar
-            using var list = new PooledListRef<int>(5);
+            using PooledListRef<int> list = new(5);
             list.Add(1);
 
             // Actuar
@@ -50,72 +50,72 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
             itemRef = 100;
 
             // Verificar
-            list[0].Should().Be(100);
+            _ = list[0].Should().Be(100);
         }
 
         [Fact]
-        public void Indexer_OutOfBounds_ShouldThrowIndexOutOfRangeException()
+        public void IndexerOutOfBoundsShouldThrowArgumentOutOfRangeException()
         {
             // Preparar
-            using var list = new PooledListRef<int>(5);
+            using PooledListRef<int> list = new(5);
             list.Add(10);
 
             // Actuar y Verificar
             try
             {
-                var x = list[-1];
-                Assert.Fail("Debería haber lanzado IndexOutOfRangeException");
+                int x = list[-1];
+                Assert.Fail("Debería haber lanzado ArgumentOutOfRangeException");
             }
-            catch (IndexOutOfRangeException) { }
+            catch (ArgumentOutOfRangeException) { }
 
             try
             {
-                var x = list[1];
-                Assert.Fail("Debería haber lanzado IndexOutOfRangeException");
+                int x = list[1];
+                Assert.Fail("Debería haber lanzado ArgumentOutOfRangeException");
             }
-            catch (IndexOutOfRangeException) { }
+            catch (ArgumentOutOfRangeException) { }
         }
 
         [Fact]
-        public void Dispose_ShouldBeIdempotent()
+        public void DisposeShouldBeIdempotent()
         {
             // Preparar
-            var list = new PooledListRef<int>(5);
+            PooledListRef<int> list = new(5);
             list.Add(1);
 
             // Actuar y Verificar
             list.Dispose();
-            list.EstaDisposed.Should().BeTrue();
+            _ = list.EstaDisposed.Should().BeTrue();
 
             // Llamar a Dispose de nuevo no debería lanzar una excepción
             list.Dispose();
         }
 
         [Fact]
-        public void AccessAfterDispose_ShouldThrowObjectDisposedException()
+        public void AccessAfterDisposeShouldThrowObjectDisposedException()
         {
             // Preparar
-            var list = new PooledListRef<int>(5);
+            PooledListRef<int> list = new(5);
             list.Dispose();
 
             // Actuar y Verificar
             try
             {
-                var size = list.Tamaño;
+                int size = list.Tamaño;
                 Assert.Fail("Debería haber lanzado ObjectDisposedException");
             }
             catch (ObjectDisposedException) { }
 
             try
             {
-                var span = list.Span;
+                Span<int> span = list.Span;
                 Assert.Fail("Debería haber lanzado ObjectDisposedException");
             }
             catch (ObjectDisposedException) { }
 
             try
             {
-                var x = list[0];
+                int x = list[0];
                 Assert.Fail("Debería haber lanzado ObjectDisposedException");
             }
             catch (ObjectDisposedException) { }
@@ -136,10 +136,10 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
         }
 
         [Fact]
-        public void ForeachLoop_ShouldWorkCorrectly()
+        public void ForeachLoopShouldWorkCorrectly()
         {
             // Preparar
-            using var list = new PooledListRef<int>(5);
+            using PooledListRef<int> list = new(5);
             list.Add(10);
             list.Add(20);
             list.Add(30);
@@ -147,21 +147,21 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
             // Actuar & Verificar
             int sum = 0;
             int count = 0;
-            foreach (var item in list)
+            foreach (int item in list)
             {
                 sum += item;
                 count++;
             }
 
-            sum.Should().Be(60);
-            count.Should().Be(3);
+            _ = sum.Should().Be(60);
+            _ = count.Should().Be(3);
         }
 
         [Fact]
-        public void Clear_ShouldClearTheSpanAndResetLength()
+        public void ClearShouldClearTheSpanAndResetLength()
         {
             // Preparar
-            using var list = new PooledListRef<int>(3);
+            using PooledListRef<int> list = new(3);
             list.Add(10);
             list.Add(20);
 
@@ -169,8 +169,8 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
             list.Clear();
 
             // Verificar
-            list.Tamaño.Should().Be(0);
-            list.Span.Length.Should().Be(0);
+            _ = list.Tamaño.Should().Be(0);
+            _ = list.Span.Length.Should().Be(0);
         }
     }
 }
