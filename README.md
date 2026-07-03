@@ -57,6 +57,7 @@ En la prueba `Where_Select` (filtrar y proyectar en cadena), la resolución din�
 *   **Standard LINQ**: **11,946.24 ns (11.9 µs) (medido)** | Heap Allocated: **144 B (medido)**
 *   **ValueLINQStruct**: **1,522.53 ns (1.5 µs) (medido)** | Heap Allocated: **0 B (medido)** (7.84x más rápido)
 *   **ValueLINQRefStruct**: **1,504.89 ns (1.5 µs) (medido)** | Heap Allocated: **0 B (medido)** (7.93x más rápido)
+*   **ValueLINQDelay (net9+)**: **626.07 ns (0.6 µs) (medido)** | Heap Allocated: **0 B (medido)** (23.07x más rápido)
 
 ### 2. Población en Bloque vs Inserción Unitaria ($N = 1000$)
 Comparativa entre la población iterativa (que adquiere $O(N)$ locks) y la población en bloque (`Añadir(ReadOnlySpan<T>)` que ejecuta un único lock $O(1)$ con copia vectorial):
