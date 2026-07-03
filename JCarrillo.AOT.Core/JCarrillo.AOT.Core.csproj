@@ -47,4 +47,8 @@
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0' or '$(TargetFramework)' == 'net9.0'">
+	<AssemblyMetadata Include="IsAotCompatible" Value="True" />
+  </ItemGroup>
+
 </Project>
