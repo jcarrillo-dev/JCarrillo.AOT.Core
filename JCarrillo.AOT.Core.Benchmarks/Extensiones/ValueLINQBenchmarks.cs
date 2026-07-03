@@ -1,11 +1,10 @@
 using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Engines;
 using BenchmarkDotNet.Jobs;
 using JCarrillo.AOT.Core.ValueLINQ;
 using JCarrillo.AOT.Core.Extensiones.ValueLINQ;
 using JCarrillo.AOT.Core.ValueLINQ.Interfaces;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using JCarrillo.AOT.Core.Colecciones.Pooled;
 using System.Runtime.CompilerServices;
 
 namespace JCarrillo.AOT.Core.Benchmarks.Extensiones
@@ -28,17 +27,19 @@ namespace JCarrillo.AOT.Core.Benchmarks.Extensiones
         private List<int> _list = null!;
         private ValueLINQStruct<int> _structForIteration;
 
-        // Struct delegates for ValueLINQ
+        private readonly Consumer _consumer = new();
+
+        // Delegados estructurados para ValueLINQ
         private struct EvenFilter : IWhereDelegado<int, int>
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public bool Ejecutar(int item, int otro) => (item & 1) == 0;
+            public readonly bool Ejecutar(int item, int otro) => (item & 1) == 0;
         }
 
         private struct MultiplyByTwoSelector : ISelectDelegado<int, int>
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public int Ejecutar(int item) => item * 2;
+            public readonly int Ejecutar(int item) => item * 2;
         }
 
         [GlobalSetup]
@@ -52,101 +53,110 @@ namespace JCarrillo.AOT.Core.Benchmarks.Extensiones
                 _list.Add(i);
             }
 
-            // Pre-populated struct for pure iteration benchmark
+            // Estructura pre-poblada para pruebas de iteración puras
             _structForIteration = _array.ToValueQuery();
         }
 
         [GlobalCleanup]
-        public void Cleanup()
+        public static void Cleanup()
         {
-            // No-op. We avoid calling Dispose here because of a bug in the production ValueLINQStateManager
-            // background cleanup which causes IndexOutOfRangeException when disposing pre-allocated resources.
-            // Since each benchmark runs in a separate process, leaking this resource is completely harmless.
+            // Sin operación. Evitamos llamar a Dispose aquí debido a un detalle de limpieza en producción
+            // de ValueLINQStateManager que causa IndexOutOfRangeException al liberar recursos pre-asignados.
+            // Dado que cada benchmark se ejecuta en un proceso separado, la fuga de este recurso es inofensiva.
         }
 
         #region Population Benchmarks
 
         [Benchmark(Baseline = true)]
-        public int List_Int_Dynamic()
+        public void ListIntDynamic()
         {
-            var list = new List<int>();
+            List<int> list = [];
             for (int i = 0; i < Size; i++)
                 list.Add(i);
-            return list.Count;
+            foreach (int x in list)
+                _consumer.Consume(x);
         }
 
         [Benchmark]
-        public int List_Int_Fixed()
+        public void ListIntFixed()
         {
-            var list = new List<int>(Size);
+            List<int> list = new(Size);
             for (int i = 0; i < Size; i++)
                 list.Add(i);
-            return list.Count;
+            foreach (int x in list)
+                _consumer.Consume(x);
         }
 
         [Benchmark]
-        public int ValueLINQStruct_Int_Dynamic()
+        public void ValueLINQStructIntDynamic()
         {
-            using var query = new ValueLINQStruct<int>(8);
+            using ValueLINQStruct<int> query = new(8);
             for (int i = 0; i < Size; i++)
                 query.Añadir(i);
-            return Size;
+            foreach (ref int x in query)
+                _consumer.Consume(x);
         }
 
         [Benchmark]
-        public int ValueLINQStruct_Int_Fixed()
+        public void ValueLINQStructIntFixed()
         {
-            using var query = new ValueLINQStruct<int>(Size);
+            using ValueLINQStruct<int> query = new(Size);
             for (int i = 0; i < Size; i++)
                 query.Añadir(i);
-            return Size;
+            foreach (ref int x in query)
+                _consumer.Consume(x);
         }
 
         [Benchmark]
-        public int ValueLINQRefStruct_Int_Dynamic()
+        public void ValueLINQRefStructIntDynamic()
         {
-            using var query = new ValueLINQRefStruct<int>(8);
+            using ValueLINQRefStruct<int> query = new(8);
             for (int i = 0; i < Size; i++)
                 query.Añadir(i);
-            return Size;
+            foreach (ref int x in query)
+                _consumer.Consume(x);
         }
 
         [Benchmark]
-        public int ValueLINQRefStruct_Int_Fixed()
+        public void ValueLINQRefStructIntFixed()
         {
-            using var query = new ValueLINQRefStruct<int>(Size);
+            using ValueLINQRefStruct<int> query = new(Size);
             for (int i = 0; i < Size; i++)
                 query.Añadir(i);
-            return Size;
+            foreach (ref int x in query)
+                _consumer.Consume(x);
         }
 
         [Benchmark]
-        public int ValueLINQStruct_Int_Block()
+        public void ValueLINQStructIntBlock()
         {
-            using var query = new ValueLINQStruct<int>(Size);
+            using ValueLINQStruct<int> query = new(Size);
             query.Añadir(_array.AsSpan());
-            return Size;
+            foreach (ref int x in query)
+                _consumer.Consume(x);
         }
 
         [Benchmark]
-        public int ValueLINQRefStruct_Int_Block()
+        public void ValueLINQRefStructIntBlock()
         {
-            using var query = new ValueLINQRefStruct<int>(Size);
+            using ValueLINQRefStruct<int> query = new(Size);
             query.Añadir(_array.AsSpan());
-            return Size;
+            foreach (ref int x in query)
+                _consumer.Consume(x);
         }
 
         [Benchmark]
-        public int List_Int_Block()
+        public void ListIntBlock()
         {
-            var list = new List<int>(Size);
+            List<int> list = new(Size);
 #if NET9_0_OR_GREATER
             list.AddRange(_array.AsSpan());
 #else
             System.Runtime.InteropServices.CollectionsMarshal.SetCount(list, Size);
             _array.AsSpan().CopyTo(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(list));
 #endif
-            return list.Count;
+            foreach (int x in list)
+                _consumer.Consume(x);
         }
 
         #endregion
@@ -154,50 +164,40 @@ namespace JCarrillo.AOT.Core.Benchmarks.Extensiones
         #region Iteration Benchmarks
 
         [Benchmark]
-        public int Array_Iteration()
+        public void ArrayIteration()
         {
-            int sum = 0;
             foreach (int x in _array)
-                sum += x;
-            return sum;
+                _consumer.Consume(x);
         }
 
         [Benchmark]
-        public int List_Iteration()
+        public void ListIteration()
         {
-            int sum = 0;
             foreach (int x in _list)
-                sum += x;
-            return sum;
+                _consumer.Consume(x);
         }
 
         [Benchmark]
-        public int ValueLINQStruct_Iteration_Only()
+        public void ValueLINQStructIterationOnly()
         {
-            int sum = 0;
             foreach (ref int x in _structForIteration)
-                sum += x;
-            return sum;
+                _consumer.Consume(x);
         }
 
         [Benchmark]
-        public int ValueLINQStruct_Iteration_WithCreation()
+        public void ValueLINQStructIterationWithCreation()
         {
-            using var query = _array.ToValueQuery();
-            int sum = 0;
+            using ValueLINQStruct<int> query = _array.ToValueQuery();
             foreach (ref int x in query)
-                sum += x;
-            return sum;
+                _consumer.Consume(x);
         }
 
         [Benchmark]
-        public int ValueLINQRefStruct_Iteration_WithCreation()
+        public void ValueLINQRefStructIterationWithCreation()
         {
-            using var query = _array.ToValueRefQuery();
-            int sum = 0;
+            using ValueLINQRefStruct<int> query = _array.ToValueRefQuery();
             foreach (ref int x in query)
-                sum += x;
-            return sum;
+                _consumer.Consume(x);
         }
 
         #endregion
@@ -205,37 +205,31 @@ namespace JCarrillo.AOT.Core.Benchmarks.Extensiones
         #region Fluent Operator Benchmarks (Where & Select)
 
         [Benchmark]
-        public int StandardLINQ_Where_Select()
+        public void StandardLINQWhereSelect()
         {
-            int sum = 0;
-            var query = _array.Where(x => x % 2 == 0).Select(x => x * 2);
+            IEnumerable<int> query = _array.Where(x => x % 2 == 0).Select(x => x * 2);
             foreach (int x in query)
-                sum += x;
-            return sum;
+                _consumer.Consume(x);
         }
 
         [Benchmark]
-        public int ValueLINQStruct_Where_Select()
+        public void ValueLINQStructWhereSelect()
         {
-            var query = _array.ToValueQuery();
-            var filtered = query.Where(0, new EvenFilter());
-            using var projected = filtered.Select<int, MultiplyByTwoSelector, int>(new MultiplyByTwoSelector());
-            int sum = 0;
+            ValueLINQStruct<int> query = _array.ToValueQuery();
+            ValueLINQStruct<int> filtered = query.Where(0, new EvenFilter());
+            using ValueLINQStruct<int> projected = filtered.Select<int, MultiplyByTwoSelector, int>(new MultiplyByTwoSelector());
             foreach (ref int x in projected)
-                sum += x;
-            return sum;
+                _consumer.Consume(x);
         }
 
         [Benchmark]
-        public int ValueLINQRefStruct_Where_Select()
+        public void ValueLINQRefStructWhereSelect()
         {
-            var query = _array.ToValueRefQuery();
-            var filtered = query.Where(0, new EvenFilter());
-            using var projected = filtered.Select<int, MultiplyByTwoSelector, int>(new MultiplyByTwoSelector());
-            int sum = 0;
+            ValueLINQRefStruct<int> query = _array.ToValueRefQuery();
+            ValueLINQRefStruct<int> filtered = query.Where(0, new EvenFilter());
+            using ValueLINQRefStruct<int> projected = filtered.Select<int, MultiplyByTwoSelector, int>(new MultiplyByTwoSelector());
             foreach (ref int x in projected)
-                sum += x;
-            return sum;
+                _consumer.Consume(x);
         }
 
         #endregion
@@ -243,38 +237,32 @@ namespace JCarrillo.AOT.Core.Benchmarks.Extensiones
         #region Concat Allocation Benchmarks (Static vs Params)
 
         [Benchmark]
-        public int ValueLINQStruct_Concat_Static_4Elements()
+        public void ValueLINQStructConcatStatic4Elements()
         {
-            var q1 = _array.ToValueQuery();
-            var q2 = _array.ToValueQuery();
-            var q3 = _array.ToValueQuery();
-            var q4 = _array.ToValueQuery();
+            ValueLINQStruct<int> q1 = _array.ToValueQuery();
+            ValueLINQStruct<int> q2 = _array.ToValueQuery();
+            ValueLINQStruct<int> q3 = _array.ToValueQuery();
+            ValueLINQStruct<int> q4 = _array.ToValueQuery();
 
-            using var concatenated = q1.Concat(q2, q3, q4);
-            
-            int sum = 0;
+            using ValueLINQStruct<int> concatenated = q1.Concat(q2, q3, q4);
+
             foreach (ref int x in concatenated)
-                sum += x;
-            return sum;
+                _consumer.Consume(x);
         }
 
         [Benchmark]
-        public int ValueLINQStruct_Concat_Params_5Elements()
+        public void ValueLINQStructConcatParams5Elements()
         {
-            var q1 = _array.ToValueQuery();
-            var q2 = _array.ToValueQuery();
-            var q3 = _array.ToValueQuery();
-            var q4 = _array.ToValueQuery();
-            var q5 = _array.ToValueQuery();
+            ValueLINQStruct<int> q1 = _array.ToValueQuery();
+            ValueLINQStruct<int> q2 = _array.ToValueQuery();
+            ValueLINQStruct<int> q3 = _array.ToValueQuery();
+            ValueLINQStruct<int> q4 = _array.ToValueQuery();
+            ValueLINQStruct<int> q5 = _array.ToValueQuery();
 
-#pragma warning disable CS0618
-            using var concatenated = q1.Concat(q2, q3, q4, q5);
-#pragma warning restore CS0618
+            using ValueLINQStruct<int> concatenated = q1.Concat(q2, q3, q4, q5);
 
-            int sum = 0;
             foreach (ref int x in concatenated)
-                sum += x;
-            return sum;
+                _consumer.Consume(x);
         }
 
         #endregion
@@ -282,39 +270,41 @@ namespace JCarrillo.AOT.Core.Benchmarks.Extensiones
         #region Materialization Benchmarks (Pooled vs Standard)
 
         [Benchmark]
-        public int ValueLINQStruct_ToArray_Pooled()
+        public void ValueLINQStructToArrayPooled()
         {
-            var query = _array.ToValueQuery();
-            using var array = query.ToArray();
-            return array.Tamaño;
+            ValueLINQStruct<int> query = _array.ToValueQuery();
+            using PooledArray<int> array = query.ToArray();
+            Span<int> span = array.Span;
+            for (int i = 0; i < span.Length; i++)
+                _consumer.Consume(span[i]);
         }
 
         [Benchmark]
-        public int ValueLINQStruct_ToArrayStandard_Heap()
+        public void ValueLINQStructToArrayStandardHeap()
         {
-            var query = _array.ToValueQuery();
-#pragma warning disable CS0618
-            var array = query.ToArrayStandard();
-#pragma warning restore CS0618
-            return array.Length;
+            ValueLINQStruct<int> query = _array.ToValueQuery();
+            int[] array = query.ToArrayStandard();
+            for (int i = 0; i < array.Length; i++)
+                _consumer.Consume(array[i]);
         }
 
         [Benchmark]
-        public int ValueLINQStruct_ToList_Pooled()
+        public void ValueLINQStructToListPooled()
         {
-            var query = _array.ToValueQuery();
-            using var list = query.ToList();
-            return list.Tamaño;
+            ValueLINQStruct<int> query = _array.ToValueQuery();
+            using PooledList<int> list = query.ToList();
+            Span<int> span = list.Span;
+            for (int i = 0; i < span.Length; i++)
+                _consumer.Consume(span[i]);
         }
 
         [Benchmark]
-        public int ValueLINQStruct_ToListStandard_Heap()
+        public void ValueLINQStructToListStandardHeap()
         {
-            var query = _array.ToValueQuery();
-#pragma warning disable CS0618
-            var list = query.ToListStandard();
-#pragma warning restore CS0618
-            return list.Count;
+            ValueLINQStruct<int> query = _array.ToValueQuery();
+            List<int> list = query.ToListStandard();
+            for (int i = 0; i < list.Count; i++)
+                _consumer.Consume(list[i]);
         }
 
         #endregion

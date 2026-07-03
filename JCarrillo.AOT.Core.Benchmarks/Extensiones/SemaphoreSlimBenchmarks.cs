@@ -4,36 +4,37 @@ using JCarrillo.AOT.Core.Extensiones.SemaphoreSlim;
 namespace JCarrillo.AOT.Core.Benchmarks.Extensiones
 {
     [MemoryDiagnoser]
+    [ThreadingDiagnoser]
     [HtmlExporter]
-    public class SemaphoreSlimBenchmarks
+    public class SemaphoreSlimBenchmarks : IDisposable
     {
-        private System.Threading.SemaphoreSlim? _semaphore;
+        private SemaphoreSlim? _semaphore;
 
-        [IterationSetup]
-        public void Setup()
-        {
-            _semaphore = new System.Threading.SemaphoreSlim(1, 1);
-        }
+        [GlobalSetup]
+        public void Setup() => _semaphore = new SemaphoreSlim(1, 1);
 
-        [IterationCleanup]
-        public void Cleanup()
+        [GlobalCleanup]
+        public void Cleanup() => _semaphore?.Dispose();
+
+        public void Dispose()
         {
             _semaphore?.Dispose();
+            GC.SuppressFinalize(this);
         }
 
         #region Synchronous Benchmarks
 
         [Benchmark(Baseline = true)]
-        public void SemaphoreSlim_Sincrono()
+        public void SemaphoreSlimSincrono()
         {
             _semaphore!.Wait();
-            _semaphore.Release();
+            _ = _semaphore.Release();
         }
 
         [Benchmark]
-        public void SemaphoreLock_Sincrono()
+        public void SemaphoreLockSincrono()
         {
-            using var l = _semaphore!.Esperar();
+            using SemaphoreLock l = _semaphore!.Esperar();
             // Operación bajo exclusión mutua
         }
 
@@ -42,16 +43,16 @@ namespace JCarrillo.AOT.Core.Benchmarks.Extensiones
         #region Asynchronous Benchmarks
 
         [Benchmark]
-        public async Task SemaphoreSlim_Asincrono()
+        public async Task SemaphoreSlimAsincrono()
         {
             await _semaphore!.WaitAsync().ConfigureAwait(false);
-            _semaphore.Release();
+            _ = _semaphore.Release();
         }
 
         [Benchmark]
-        public async ValueTask SemaphoreLock_Asincrono()
+        public async ValueTask SemaphoreLockAsincrono()
         {
-            await using var l = await _semaphore!.EsperarAsync().ConfigureAwait(false);
+            await using SemaphoreLock l = await _semaphore!.EsperarAsync().ConfigureAwait(false);
             // Operación bajo exclusión mutua
         }
 
