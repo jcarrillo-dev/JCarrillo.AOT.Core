@@ -1,82 +1,64 @@
-using System;
-using System.Buffers;
-using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace JCarrillo.AOT.Core.ValueLINQ
 {
-    public record struct ValueLINQStruct<T> : IDisposable
+    /// <summary>
+    /// Represents a high-performance record struct wrapper around pooled resources for value-based LINQ operations.
+    /// </summary>
+    /// <typeparam name="T">The type of the elements in the struct.</typeparam>
+    public readonly record struct ValueLINQStruct<T> : IDisposable
     {
         #region Token
-
-        private readonly long _token;
 
         internal readonly long Token
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => _token;
+            get;
         }
 
         #endregion
 
         #region EsValido
 
+        /// <summary>
+        /// Gets a value indicating whether the current instance is valid and has not been disposed.
+        /// </summary>
         public readonly bool IsValido
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => ValueLINQStateManager<T>.IsMetadatoValido(_token);
+            get => ValueLINQStateManager<T>.IsMetadatoValido(Token);
         }
 
         #endregion
 
         #region Constructores
 
-        // Construccion por defecto, esta clase se inicializara con token 0, lo cual no es valida para el manager
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ValueLINQStruct{T}"/> struct.
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ValueLINQStruct()
-            => _token = 0L;
+            => Token = 0L;
 
         // Creacion de los resultados, donde solo sabemos el resultado final (Solo deberia usarse este constructor)
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal ValueLINQStruct(int tamañoMinimo)
-            => _token = TokenHelper.LeerToken(ref ValueLINQStateManager<T>.ObtenerMetadatos(tamañoMinimo).Token);
+            => Token = TokenHelper.LeerToken(ref ValueLINQStateManager<T>.ObtenerMetadatos(tamañoMinimo).Token);
 
         // Clonacion que apunta al mismo array (Nunca deberia usarse, solo esta para pruebas internas)
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal ValueLINQStruct(long token)
-            => _token = token;
+            => Token = token;
 
         #endregion
 
         #region Añadir
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void Añadir(T valor)
-        {
-            ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(_token);
-
-            // Este metodo actualizara metadatos.Array para que pueda caber todos los datos, no es necesario obtenerlo de nuevo por que tenemos por puntero (ref) los metadatos del almacenamiento del manager
-            ValueLINQStateManager<T>.AsegurarEspacio(_token, metadatos.TamañoActual + 1);
-
-            metadatos.Array![metadatos.TamañoActual++] = valor;
-        }
+        internal readonly void Añadir(T valor) => ValueLINQStateManager<T>.Añadir(Token, valor);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void Añadir(ReadOnlySpan<T> span)
-        {
-            if (span.IsEmpty)
-                return;
-
-            ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(_token);
-            ValueLINQStateManager<T>.AsegurarEspacio(_token, metadatos.TamañoActual + span.Length);
-
-            span.CopyTo(metadatos.Array.AsSpan(metadatos.TamañoActual));
-            metadatos.TamañoActual += span.Length;
-        }
+        internal readonly void Añadir(ReadOnlySpan<T> span) => ValueLINQStateManager<T>.Añadir(Token, span);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void Añadir(ValueLINQRefStruct<T> valueLINQRefStruct)
@@ -84,44 +66,41 @@ namespace JCarrillo.AOT.Core.ValueLINQ
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void Añadir(ValueLINQStruct<T> valueLINQStruct)
-            => Añadir(valueLINQStruct._token);
+            => Añadir(valueLINQStruct.Token);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void Añadir(long token)
-        {
-            ref MetadatosSesion<T> metadatosOtro = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
+        private readonly void Añadir(long token) => ValueLINQStateManager<T>.Añadir(Token, token);
 
-            if (metadatosOtro.TamañoActual == 0)
-                return;
 
-            ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(_token);
-
-            ValueLINQStateManager<T>.AsegurarEspacio(_token, metadatos.TamañoActual + metadatosOtro.TamañoActual);
-
-            Span<T>
-                actual = metadatos.Array.AsSpan(metadatos.TamañoActual),
-                otro = metadatosOtro.Array.AsSpan(0, metadatosOtro.TamañoActual);
-
-            // Ya se hizo el span con el offset, con lo cual no hace falta especificarlo
-            otro.CopyTo(actual);
-            metadatos.TamañoActual += metadatosOtro.TamañoActual;
-        }
 
         #endregion
 
         #region Liberar
 
+        /// <summary>
+        /// Releases the pooled resources associated with this instance.
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Dispose()
-            => ValueLINQStateManager<T>.LiberarMetadatos(_token);
+        public readonly void Dispose()
+            => ValueLINQStateManager<T>.LiberarMetadatos(Token);
 
         #endregion
 
         #region Enumerator
 
+        /// <summary>
+        /// Returns an enumerator that iterates through the elements of the <see cref="ValueLINQStruct{T}"/>.
+        /// </summary>
+        /// <returns>A <see cref="Span{T}.Enumerator"/> for the elements.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly ValueLINQEnumerator<T> GetEnumerator()
-            => new(Token);
+        public readonly Span<T>.Enumerator GetEnumerator()
+        {
+            if (Token == 0L)
+                return Span<T>.Empty.GetEnumerator();
+
+            ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(Token);
+            return metadatos.Array.AsSpan(0, metadatos.TamañoActual).GetEnumerator();
+        }
 
         #endregion
     }

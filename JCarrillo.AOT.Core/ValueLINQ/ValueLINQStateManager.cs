@@ -1,29 +1,30 @@
 using JCarrillo.AOT.Core.Colecciones.Pooled;
 using JCarrillo.AOT.Core.ValueLINQ.Excepciones;
-using System;
 using System.Buffers;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace JCarrillo.AOT.Core.ValueLINQ
 {
-    internal class ValueLINQStateManager<T>
+    /// <summary>
+    /// Administrador de estado global para las consultas de ValueLINQ.
+    /// Gestiona el ciclo de vida y la reutilización de los búferes de memoria.
+    /// </summary>
+    /// <typeparam name="T">El tipo de los elementos gestionados en el estado.</typeparam>
+    public sealed class ValueLINQStateManager<T>
     {
         private const int _tamañoTabla = 4096;
-        private const int _mascara = _tamañoTabla - 1;
-
         private static readonly MetadatosSesion<T>[] _entradas = new MetadatosSesion<T>[_tamañoTabla];
         private static readonly int[] _indicesLibresStack = new int[_tamañoTabla];
         private static int _topStack;
         private static readonly long[] _versiones = new long[_tamañoTabla];
 
+#if NET9_0_OR_GREATER
+        private static readonly System.Threading.Lock _stackRoot = new();
+#else
         private static readonly object _stackRoot = new();
+#endif
         private static readonly object[] _slotLocks = new object[_tamañoTabla];
 
         static ValueLINQStateManager()
@@ -38,57 +39,53 @@ namespace JCarrillo.AOT.Core.ValueLINQ
             }
             _topStack = _tamañoTabla;
 
-            // Forzamos la ejecución asíncrona inmediata fuera del inicializador estático
-            _ = Task.Run(async () =>
-            {
-                await Task.Yield();
-                await LimpiezaPeriodicTimer();
-            });
+            ValueLINQGC.Registrar(LimpiarExpirados);
         }
 
         #region Limpieza
 
-        private static TimeSpan _tiempoLimpiezaMinimo = TimeSpan.FromMinutes(1);
-        private static TimeSpan _tiempoLimpieza = TimeSpan.FromMinutes(5);
+        private static readonly TimeSpan _tiempoLimpiezaMinimo = TimeSpan.FromMinutes(1);
 
         [DoesNotReturn]
-        private static void ThrowTiempoEntreLimpiezaInsuficiente(TimeSpan tiempo)
+        private static void ThrowTiempoEntreLimpiezaInsuficiente(TimeSpan tiempoLimpieza, string paramName)
             => throw new ArgumentOutOfRangeException(
-                nameof(TiempoLimpieza),
-                tiempo,
-                $"Operación inválida en ValueLINQ: El intervalo configurado ({tiempo.TotalSeconds}s) es insuficiente. Para prevenir la degradación del rendimiento por la recolección prematura de buffers activos, el tiempo mínimo permitido es de {_tiempoLimpiezaMinimo.TotalMinutes} minuto(s).");
+                paramName,
+                tiempoLimpieza,
+                $"Operación inválida en ValueLINQ: El intervalo configurado ({tiempoLimpieza.TotalSeconds}s) es insuficiente. Para prevenir la degradación del rendimiento por la recolección prematura de buffers activos, el tiempo mínimo permitido es de {_tiempoLimpiezaMinimo.TotalMinutes} minuto(s).");
 
+        /// <summary>
+        /// Obtiene o establece el intervalo de tiempo para la limpieza de sesiones expiradas.
+        /// </summary>
+        private static TimeSpan _tiempoLimpieza = TimeSpan.FromMinutes(5);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static TimeSpan GetTiempoLimpieza() => _tiempoLimpieza;
+
+        /// <summary>
+        /// Obtiene o establece el intervalo de tiempo para la limpieza de sesiones expiradas.
+        /// </summary>
+        [SuppressMessage("Design", "CA1000:Do not declare static members on generic types", Justification = "Diseño heredado necesario para la gestión de estados por tipo.")]
         public static TimeSpan TiempoLimpieza
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => _tiempoLimpieza;
+            get => GetTiempoLimpieza();
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             set
             {
                 if (value < _tiempoLimpiezaMinimo)
-                    ThrowTiempoEntreLimpiezaInsuficiente(value);
+                    ThrowTiempoEntreLimpiezaInsuficiente(value, nameof(value));
 
                 _tiempoLimpieza = value;
             }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static long ObtenerTicksDesdeTimeSpan(TimeSpan timeSpan)
-        {
-            // Transforma el TimeSpan a la escala nativa del hardware del sistema actual
-            return (long)(timeSpan.TotalSeconds * Stopwatch.Frequency);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool IsLimpiezaRequerida(int indice, long tiempoInicio, TimeSpan tiempoMaximo)
         {
-            ref var entrada = ref _entradas[indice];
+            ref MetadatosSesion<T> entrada = ref _entradas[indice];
             long token = TokenHelper.LeerToken(ref entrada.Token);
-
-            if (token == 0L || entrada.UltimoAcceso == -1 || entrada.IsDisposed)
-                return false;
-
-            return Stopwatch.GetElapsedTime(entrada.UltimoAcceso, tiempoInicio) >= tiempoMaximo;
+            return token != 0L && entrada.UltimoAcceso != -1 && !entrada.IsDisposed &&
+                   Stopwatch.GetElapsedTime(entrada.UltimoAcceso, tiempoInicio) >= tiempoMaximo;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -114,31 +111,21 @@ namespace JCarrillo.AOT.Core.ValueLINQ
             }
         }
 
-        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
-        private static async ValueTask LimpiezaPeriodicTimer()
+        private static void LimpiarExpirados()
         {
-            using (var timer = new PeriodicTimer(TimeSpan.FromMinutes(1)))
-            using (var candidatosALiberar = new PooledList<int>())
-                while (await timer.WaitForNextTickAsync())
-                    try
-                    {
-                        long timeSpanActual = Stopwatch.GetTimestamp();
-                        TimeSpan tiempoLimpieza = _tiempoLimpieza;
-                        candidatosALiberar.Clear();
+            using PooledList<int> candidatosALiberar = new();
+            long timeSpanActual = Stopwatch.GetTimestamp();
+            TimeSpan tiempoLimpieza = TiempoLimpieza;
+            candidatosALiberar.Clear();
 
-                        for (int i = 0; i < _tamañoTabla; i++)
-                            if (IsLimpiezaRequerida(i, timeSpanActual, tiempoLimpieza))
-                                candidatosALiberar.Add(i);
+            for (int i = 0; i < _tamañoTabla; i++)
+                if (IsLimpiezaRequerida(i, timeSpanActual, tiempoLimpieza))
+                    candidatosALiberar.Add(i);
 
-                        if (candidatosALiberar.Tamaño == 0)
-                            continue;
+            if (candidatosALiberar.Tamaño == 0)
+                return;
 
-                        LimpiezaFinal(candidatosALiberar.Memory, Stopwatch.GetTimestamp(), tiempoLimpieza);
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"Error en la limpieza periódica de ValueLINQ: {ex}");
-                    }
+            LimpiezaFinal(candidatosALiberar.Memory, Stopwatch.GetTimestamp(), tiempoLimpieza);
         }
 
         #endregion
@@ -161,10 +148,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static void PushIndice(int indice)
-        {
-            _indicesLibresStack[_topStack++] = indice;
-        }
+        private static void PushIndice(int indice) => _indicesLibresStack[_topStack++] = indice;
 
         #endregion
 
@@ -250,6 +234,131 @@ namespace JCarrillo.AOT.Core.ValueLINQ
                 ArrayPool<T>.Shared.Return(arrayADevolver, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static void Añadir(long token, T valor)
+        {
+            int indice = TokenHelper.ObtenerSlotIndex(token);
+            T[]? arrayADevolver = null;
+
+            lock (_slotLocks[indice])
+            {
+                ref MetadatosSesion<T> metadatos = ref ObtenerMetadatos(token);
+                int nuevoTamañoRequerido = metadatos.TamañoActual + 1;
+
+                if (nuevoTamañoRequerido > metadatos.Array!.Length)
+                {
+                    int nuevoTamaño = Math.Max(nuevoTamañoRequerido, metadatos.Array.Length * 2);
+                    T[] nuevoArray = ArrayPool<T>.Shared.Rent(nuevoTamaño);
+                    arrayADevolver = metadatos.Array;
+
+                    arrayADevolver.AsSpan(0, metadatos.TamañoActual).CopyTo(nuevoArray);
+                    Volatile.Write(ref metadatos.Array, nuevoArray);
+                }
+
+                metadatos.Array[metadatos.TamañoActual++] = valor;
+                metadatos.UltimoAcceso = Stopwatch.GetTimestamp();
+            }
+
+            if (arrayADevolver != null)
+                ArrayPool<T>.Shared.Return(arrayADevolver, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static void Añadir(long token, ReadOnlySpan<T> span)
+        {
+            if (span.IsEmpty)
+                return;
+
+            int indice = TokenHelper.ObtenerSlotIndex(token);
+            T[]? arrayADevolver = null;
+
+            lock (_slotLocks[indice])
+            {
+                ref MetadatosSesion<T> metadatos = ref ObtenerMetadatos(token);
+                int nuevoTamañoRequerido = metadatos.TamañoActual + span.Length;
+
+                if (nuevoTamañoRequerido > metadatos.Array!.Length)
+                {
+                    int nuevoTamaño = Math.Max(nuevoTamañoRequerido, metadatos.Array.Length * 2);
+                    T[] nuevoArray = ArrayPool<T>.Shared.Rent(nuevoTamaño);
+                    arrayADevolver = metadatos.Array;
+
+                    arrayADevolver.AsSpan(0, metadatos.TamañoActual).CopyTo(nuevoArray);
+                    Volatile.Write(ref metadatos.Array, nuevoArray);
+                }
+
+                span.CopyTo(metadatos.Array.AsSpan(metadatos.TamañoActual));
+                metadatos.TamañoActual += span.Length;
+                metadatos.UltimoAcceso = Stopwatch.GetTimestamp();
+            }
+
+            if (arrayADevolver != null)
+                ArrayPool<T>.Shared.Return(arrayADevolver, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static void Añadir(long token, long otroToken)
+        {
+            if (otroToken == 0L)
+                return;
+
+            int indice = TokenHelper.ObtenerSlotIndex(token);
+            int otroIndice = TokenHelper.ObtenerSlotIndex(otroToken);
+
+            T[]? arrayADevolver = null;
+
+            if (indice < otroIndice)
+            {
+                lock (_slotLocks[indice])
+                    lock (_slotLocks[otroIndice])
+                    {
+                        AñadirInterno(token, otroToken, ref arrayADevolver);
+                    }
+            }
+            else if (indice > otroIndice)
+            {
+                lock (_slotLocks[otroIndice])
+                    lock (_slotLocks[indice])
+                    {
+                        AñadirInterno(token, otroToken, ref arrayADevolver);
+                    }
+            }
+            else
+            {
+                lock (_slotLocks[indice])
+                {
+                    AñadirInterno(token, otroToken, ref arrayADevolver);
+                }
+            }
+
+            if (arrayADevolver != null)
+                ArrayPool<T>.Shared.Return(arrayADevolver, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+        }
+
+        private static void AñadirInterno(long token, long otroToken, ref T[]? arrayADevolver)
+        {
+            ref MetadatosSesion<T> metadatosOtro = ref ObtenerMetadatos(otroToken);
+            if (metadatosOtro.TamañoActual == 0)
+                return;
+
+            ref MetadatosSesion<T> metadatos = ref ObtenerMetadatos(token);
+            int nuevoTamañoRequerido = metadatos.TamañoActual + metadatosOtro.TamañoActual;
+
+            if (nuevoTamañoRequerido > metadatos.Array!.Length)
+            {
+                int nuevoTamaño = Math.Max(nuevoTamañoRequerido, metadatos.Array.Length * 2);
+                T[] nuevoArray = ArrayPool<T>.Shared.Rent(nuevoTamaño);
+                arrayADevolver = metadatos.Array;
+
+                arrayADevolver.AsSpan(0, metadatos.TamañoActual).CopyTo(nuevoArray);
+                Volatile.Write(ref metadatos.Array, nuevoArray);
+            }
+
+            metadatosOtro.Array.AsSpan(0, metadatosOtro.TamañoActual).CopyTo(metadatos.Array.AsSpan(metadatos.TamañoActual));
+            metadatos.TamañoActual += metadatosOtro.TamañoActual;
+            metadatos.UltimoAcceso = Stopwatch.GetTimestamp();
+        }
+
         #region Liberacion de metadatos
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -277,18 +386,12 @@ namespace JCarrillo.AOT.Core.ValueLINQ
         private static bool HasLiberadoMetadato(int indice, long token, [NotNullWhen(true)] out T[]? arrayADevolver)
         {
             arrayADevolver = null;
-            ref var entrada = ref _entradas[indice];
+            ref MetadatosSesion<T> entrada = ref _entradas[indice];
 
             bool isTokenCorrecto = TokenHelper.LeerToken(ref entrada.Token) == token;
             bool isNotDisposed = !entrada.IsDisposed;
 
-            if (!isTokenCorrecto)
-                return false;
-
-            if (!isNotDisposed)
-                return false;
-
-            return HasLimpiadoMetadatos(ref entrada, out arrayADevolver);
+            return isTokenCorrecto && isNotDisposed && HasLimpiadoMetadatos(ref entrada, out arrayADevolver);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -321,16 +424,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ
             bool isNotDisposed = !entrada.IsDisposed;
             bool hasArray = entrada.Array != null;
 
-            if (!isTokenCorrecto)
-                return false;
-
-            if (!isNotDisposed)
-                return false;
-
-            if (!hasArray)
-                return false;
-
-            return true;
+            return isTokenCorrecto && isNotDisposed && hasArray;
         }
     }
 }
