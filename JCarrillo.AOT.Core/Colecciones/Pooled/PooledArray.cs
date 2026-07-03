@@ -7,7 +7,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
 {
     /// <summary>
     /// Representa un arreglo inmutable de tipo <see langword="struct"/> que encapsula un búfer en memoria
-    /// alquilado a partir de un <see cref="System.Buffers.ArrayPool{T}"/>.
+    /// alquilado a partir de un <see cref="ArrayPool{T}"/>.
     /// Esta estructura está diseñada para escenarios de ultra alto rendimiento y baja latencia, minimizando la presión sobre el recolector de basura (GC).
     /// </summary>
     /// <typeparam name="TItem">El tipo de los elementos almacenados en el arreglo.</typeparam>
@@ -17,7 +17,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
 
         /// <summary>
         /// Inicializa una nueva instancia de la estructura <see cref="PooledArray{TItem}"/> alquilando un búfer
-        /// con la capacidad inicial especificada desde el <see cref="System.Buffers.ArrayPool{TItem}.Shared"/> común.
+        /// con la capacidad inicial especificada desde el <see cref="ArrayPool{TItem}.Shared"/> común.
         /// </summary>
         /// <param name="capacidadInicial">La capacidad inicial (número de elementos) requerida para el arreglo.</param>
         /// <exception cref="ArgumentOutOfRangeException">
@@ -59,7 +59,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                if (_disposed) ThrowObjectDisposed();
+                if (EstaDisposed) ThrowObjectDisposed();
                 return _tamaño;
             }
         }
@@ -68,7 +68,6 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
 
         #region EsAmpliable
 
-        private readonly bool _esAmpliable = false;
 
         /// <summary>
         /// Obtiene un valor que indica si la estructura puede crecer dinámicamente.
@@ -77,8 +76,8 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         public readonly bool EsAmpliable
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get { return _esAmpliable; }
-        }
+            get;
+        } = false;
 
         #endregion
 
@@ -114,7 +113,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                if (_disposed || _items is null) ThrowObjectDisposed();
+                if (EstaDisposed || _items is null) ThrowObjectDisposed();
                 return _memory ??= new Memory<TItem>(_items, 0, _tamaño);
             }
         }
@@ -141,7 +140,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                if (_disposed) ThrowObjectDisposed();
+                if (EstaDisposed) ThrowObjectDisposed();
                 TItem[]? items = _items;
                 if (items is null || (uint)indice >= (uint)_tamaño) ThrowIndexOutOfRange(indice);
                 return ref items[indice];
@@ -165,20 +164,20 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
 
         #region Disposed
 
-        private bool _disposed = false;
 
         /// <summary>
         /// Obtiene un valor que indica si los recursos y el búfer subyacente ya han sido devueltos al pool.
         /// </summary>
-        public readonly bool EstaDisposed
+        public bool EstaDisposed
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => _disposed;
-        }
+            get;
+            private set;
+        } = false;
 
         /// <summary>
         /// Libera los recursos de la estructura de forma síncrona y devuelve el búfer de memoria alquilado
-        /// al <see cref="System.Buffers.ArrayPool{TItem}.Shared"/>.
+        /// al <see cref="ArrayPool{TItem}.Shared"/>.
         /// </summary>
         /// <exception cref="InvalidOperationException">
         /// Se lanza si se detecta que la estructura ha sido copiada o boxeada en el heap, violando la regla
@@ -186,14 +185,22 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         /// </exception>
         public void Dispose()
         {
-            this.ValidarNoBoxeado();
-            if (_disposed) return;
-            DisposePrivate();
+            try
+            {
+                this.ValidarNoBoxeado();
+            }
+            finally
+            {
+                if (!EstaDisposed)
+                {
+                    DisposePrivate();
+                }
+            }
         }
 
         /// <summary>
         /// Libera los recursos de la estructura de forma asíncrona y devuelve el búfer de memoria alquilado
-        /// al <see cref="System.Buffers.ArrayPool{TItem}.Shared"/>.
+        /// al <see cref="ArrayPool{TItem}.Shared"/>.
         /// </summary>
         /// <returns>Una <see cref="ValueTask"/> optimizada que representa la tarea de liberación completada de forma inmediata.</returns>
         /// <remarks>
@@ -205,14 +212,14 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         /// </remarks>
         public ValueTask DisposeAsync()
         {
-            if (_disposed) return ValueTask.CompletedTask;
+            if (EstaDisposed) return ValueTask.CompletedTask;
             DisposePrivate();
             return ValueTask.CompletedTask;
         }
 
         private void DisposePrivate()
         {
-            _disposed = true;
+            EstaDisposed = true;
             if (_items != null)
             {
                 _tamaño = 0;
@@ -247,7 +254,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
 
         [DoesNotReturn]
         private static void ThrowIndexOutOfRange(int indice)
-            => throw new IndexOutOfRangeException($"El índice {indice} está fuera del rango válido.");
+            => throw new ArgumentOutOfRangeException(nameof(indice), indice, "El índice está fuera del rango válido.");
 
         [DoesNotReturn]
         private static void ThrowArgumentOutOfRange(int capacidad)
@@ -265,7 +272,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         /// </exception>
         public void Clear()
         {
-            if (_disposed || _items is null) ThrowObjectDisposed();
+            if (EstaDisposed || _items is null) ThrowObjectDisposed();
             Span.Clear();
         }
 

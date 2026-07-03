@@ -1,5 +1,6 @@
 using JCarrillo.AOT.Core.Colecciones.Pooled;
 using System.Buffers;
+using System.Runtime.CompilerServices;
 
 namespace JCarrillo.AOT.Core.Extensiones.ArrayPool
 {
@@ -16,9 +17,10 @@ namespace JCarrillo.AOT.Core.Extensiones.ArrayPool
         /// <param name="arrayPool">El pool de arreglos subyacente.</param>
         /// <param name="tamaño">El tamaño inicial solicitado para la lista.</param>
         /// <returns>Una nueva instancia de <see cref="PooledList{TItem}"/> que administra el búfer alquilado.</returns>
-        /// <exception cref="System.ArgumentOutOfRangeException">
+        /// <exception cref="ArgumentOutOfRangeException">
         /// Se lanza cuando el <paramref name="tamaño"/> es menor que cero o supera el límite del búfer devuelto.
         /// </exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static PooledList<TItem> ObtenerLista<TItem>(this ArrayPool<TItem> arrayPool, int tamaño)
         {
             TItem[] array = arrayPool.Rent(tamaño);
@@ -33,9 +35,10 @@ namespace JCarrillo.AOT.Core.Extensiones.ArrayPool
         /// <param name="arrayPool">El pool de arreglos subyacente.</param>
         /// <param name="tamaño">El tamaño requerido para el arreglo.</param>
         /// <returns>Una nueva instancia de <see cref="PooledArray{TItem}"/> que administra el búfer alquilado.</returns>
-        /// <exception cref="System.ArgumentOutOfRangeException">
+        /// <exception cref="ArgumentOutOfRangeException">
         /// Se lanza cuando el <paramref name="tamaño"/> es menor que cero o supera el límite del búfer devuelto.
         /// </exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static PooledArray<TItem> ObtenerArreglo<TItem>(this ArrayPool<TItem> arrayPool, int tamaño)
         {
             TItem[] array = arrayPool.Rent(tamaño);

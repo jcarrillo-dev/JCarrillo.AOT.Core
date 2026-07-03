@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using FluentAssertions;
 using JCarrillo.AOT.Core.Colecciones.Pooled;
 using Xunit;
@@ -7,23 +8,23 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
     public class PooledArrayTests
     {
         [Fact]
-        public void Constructor_ShouldInitializeCorrectly()
+        public void ConstructorShouldInitializeCorrectly()
         {
             // Preparar y Actuar
-            using var array = new PooledArray<int>(10);
+            using PooledArray<int> array = new(10);
 
             // Verificar
-            array.Tamaño.Should().Be(10);
-            array.Span.Length.Should().Be(10);
-            array.Memory.Length.Should().Be(10);
-            array.EsAmpliable.Should().BeFalse();
+            _ = array.Tamaño.Should().Be(10);
+            _ = array.Span.Length.Should().Be(10);
+            _ = array.Memory.Length.Should().Be(10);
+            _ = array.EsAmpliable.Should().BeFalse();
         }
 
         [Fact]
-        public void Indexer_ShouldAllowReadingAndWritingByRef()
+        public void IndexerShouldAllowReadingAndWritingByRef()
         {
             // Preparar
-            using var array = new PooledArray<int>(5);
+            using PooledArray<int> array = new(5);
 
             // Actuar
             array[2] = 42;
@@ -31,100 +32,87 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
             itemRef = 100;
 
             // Verificar
-            array[2].Should().Be(100);
+            _ = array[2].Should().Be(100);
         }
 
         [Fact]
-        public void Indexer_OutOfBounds_ShouldThrowIndexOutOfRangeException()
+        public void IndexerOutOfBoundsShouldThrowArgumentOutOfRangeException()
         {
             // Preparar
-            using var array = new PooledArray<int>(5);
-
-            // Actuar y Verificar
-            try
-            {
-                var x = array[-1];
-                Assert.Fail("Debería haber lanzado IndexOutOfRangeException");
-            }
-            catch (IndexOutOfRangeException) { }
+            PooledArray<int> array = new(5);
 
             try
             {
-                var x = array[5];
-                Assert.Fail("Debería haber lanzado IndexOutOfRangeException");
+                // Actuar y Verificar
+                unsafe
+                {
+                    nint ptr = (nint)Unsafe.AsPointer(ref array);
+                    Action action1 = () => { int x = Unsafe.AsRef<PooledArray<int>>((void*)ptr)[-1]; };
+                    _ = action1.Should().Throw<ArgumentOutOfRangeException>();
+
+                    Action action2 = () => { int x = Unsafe.AsRef<PooledArray<int>>((void*)ptr)[5]; };
+                    _ = action2.Should().Throw<ArgumentOutOfRangeException>();
+                }
             }
-            catch (IndexOutOfRangeException) { }
+            finally
+            {
+                array.Dispose();
+            }
         }
 
         [Fact]
-        public void Dispose_ShouldBeIdempotent()
+        public void DisposeShouldBeIdempotent()
         {
             // Preparar
-            var array = new PooledArray<int>(5);
+            PooledArray<int> array = new(5);
 
             // Actuar y Verificar
             array.Dispose();
-            array.EstaDisposed.Should().BeTrue();
+            _ = array.EstaDisposed.Should().BeTrue();
 
             // Llamar a Dispose de nuevo no debería lanzar una excepción
             array.Dispose();
         }
 
         [Fact]
-        public async Task DisposeAsync_ShouldBeIdempotent()
+        public async Task DisposeAsyncShouldBeIdempotent()
         {
             // Preparar
-            var array = new PooledArray<int>(5);
+            PooledArray<int> array = new(5);
 
             // Actuar y Verificar
             await array.DisposeAsync();
-            array.EstaDisposed.Should().BeTrue();
+            _ = array.EstaDisposed.Should().BeTrue();
 
             await array.DisposeAsync();
         }
 
         [Fact]
-        public void AccessAfterDispose_ShouldThrowObjectDisposedException()
+        public void AccessAfterDisposeShouldThrowObjectDisposedException()
         {
             // Preparar
-            var array = new PooledArray<int>(5);
+            PooledArray<int> array = new(5);
             array.Dispose();
 
             // Actuar y Verificar
-            try
+            unsafe
             {
-                var size = array.Tamaño;
-                Assert.Fail("Debería haber lanzado ObjectDisposedException");
-            }
-            catch (ObjectDisposedException) { }
+                nint ptr = (nint)Unsafe.AsPointer(ref array);
+                Action action1 = () => { int size = Unsafe.AsRef<PooledArray<int>>((void*)ptr).Tamaño; };
+                _ = action1.Should().Throw<ObjectDisposedException>();
 
-            try
-            {
-                var span = array.Span;
-                Assert.Fail("Debería haber lanzado ObjectDisposedException");
-            }
-            catch (ObjectDisposedException) { }
+                Action action2 = () => { Span<int> span = Unsafe.AsRef<PooledArray<int>>((void*)ptr).Span; };
+                _ = action2.Should().Throw<ObjectDisposedException>();
 
-            try
-            {
-                var memory = array.Memory;
-                Assert.Fail("Debería haber lanzado ObjectDisposedException");
-            }
-            catch (ObjectDisposedException) { }
+                Action action3 = () => { Memory<int> memory = Unsafe.AsRef<PooledArray<int>>((void*)ptr).Memory; };
+                _ = action3.Should().Throw<ObjectDisposedException>();
 
-            try
-            {
-                var x = array[0];
-                Assert.Fail("Debería haber lanzado ObjectDisposedException");
-            }
-            catch (ObjectDisposedException) { }
+                Action action4 = () => { int x = Unsafe.AsRef<PooledArray<int>>((void*)ptr)[0]; };
+                _ = action4.Should().Throw<ObjectDisposedException>();
 
-            try
-            {
-                array.Clear();
-                Assert.Fail("Debería haber lanzado ObjectDisposedException");
+                Action action5 = () => Unsafe.AsRef<PooledArray<int>>((void*)ptr).Clear();
+                _ = action5.Should().Throw<ObjectDisposedException>();
             }
-            catch (ObjectDisposedException) { }
         }
     }
 }

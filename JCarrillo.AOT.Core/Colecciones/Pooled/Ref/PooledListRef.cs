@@ -6,7 +6,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
 {
     /// <summary>
     /// Representa una lista mutable de crecimiento dinámico de tipo <see langword="ref struct"/> confinada estrictamente al stack.
-    /// Encapsula un búfer en memoria alquilado a partir de un <see cref="System.Buffers.ArrayPool{T}"/>.
+    /// Encapsula un búfer en memoria alquilado a partir de un <see cref="ArrayPool{T}"/>.
     /// Al ser un <see langword="ref struct"/>, se garantiza que nunca se ubicará en el heap, evitando por completo
     /// el boxing y reduciendo a cero la asignación de memoria en el recolector de basura (GC).
     /// </summary>
@@ -35,7 +35,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
             if (capacidadInicial <= 0) ThrowArgumentOutOfRange(capacidadInicial);
 
             _items = ArrayPool<TItem>.Shared.Rent(capacidadInicial);
-            _indiceInserccion = 0;
+            _indiceInsercion = 0;
         }
 
         /// <summary>
@@ -50,15 +50,15 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
             if (tamaño < 0 || tamaño > items.Length) ThrowArgumentOutOfRange(tamaño);
 
             _items = items;
-            _indiceInserccion = tamaño;
-            _disposed = false;
+            _indiceInsercion = tamaño;
+            EstaDisposed = false;
         }
 
         #endregion
 
         #region Tamaño
 
-        private int _indiceInserccion;
+        private int _indiceInsercion;
 
         /// <summary>
         /// Obtiene el número actual de elementos válidos en la lista.
@@ -72,8 +72,8 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                if (_disposed) ThrowObjectDisposed();
-                return _indiceInserccion;
+                if (EstaDisposed) ThrowObjectDisposed();
+                return _indiceInsercion;
             }
         }
 
@@ -81,7 +81,6 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
 
         #region EsAmpliable
 
-        private readonly bool _esAmpliable = true;
 
         /// <summary>
         /// Obtiene un valor que indica si la estructura puede crecer dinámicamente.
@@ -90,8 +89,8 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
         public readonly bool EsAmpliable
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get { return _esAmpliable; }
-        }
+            get;
+        } = true;
 
         #endregion
 
@@ -112,8 +111,8 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                if (_disposed) ThrowObjectDisposed();
-                return _items!.AsSpan(0, _indiceInserccion);
+                if (EstaDisposed) ThrowObjectDisposed();
+                return _items.AsSpan(0, _indiceInsercion);
             }
         }
 
@@ -138,9 +137,9 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                if (_disposed) ThrowObjectDisposed();
+                if (EstaDisposed) ThrowObjectDisposed();
                 TItem[]? items = _items;
-                if (items is null || (uint)indice >= (uint)_indiceInserccion) ThrowIndexOutOfRange(indice);
+                if (items is null || (uint)indice >= (uint)_indiceInsercion) ThrowIndexOutOfRange(indice);
                 return ref items[indice];
             }
         }
@@ -162,33 +161,32 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
 
         #region Dispose
 
-        private bool _disposed;
 
         /// <summary>
         /// Obtiene un valor que indica si la lista ha sido devuelta al pool.
         /// </summary>
-        public readonly bool EstaDisposed => _disposed;
+        public bool EstaDisposed { get; private set; }
 
         /// <summary>
         /// Libera los recursos de la estructura de forma síncrona y devuelve el búfer de memoria alquilado
-        /// al <see cref="System.Buffers.ArrayPool{TItem}.Shared"/>.
+        /// al <see cref="ArrayPool{TItem}.Shared"/>.
         /// </summary>
         /// <remarks>
         /// Al ser un <see langword="ref struct"/>, está confinada al stack, por lo que no es posible que sea boxing
-        /// ni se guarde en el heap, omitiendo cualquier necesidad de validación de no-boxing (<see cref="JCarrillo.AOT.Core.Extensiones.Boxing.BoxingExtensions.ValidarNoBoxeado{T}"/>).
+        /// ni se guarde en el heap, omitiendo cualquier necesidad de validación de no-boxing (<see cref="Extensiones.Boxing.BoxingExtensions.ValidarNoBoxeado{T}"/>).
         /// </remarks>
         public void Dispose()
         {
-            if (_disposed) return;
+            if (EstaDisposed) return;
             DisposePrivate();
         }
 
         private void DisposePrivate()
         {
-            _disposed = true;
+            EstaDisposed = true;
             if (_items != null)
             {
-                _indiceInserccion = 0;
+                _indiceInsercion = 0;
                 ArrayPool<TItem>.Shared.Return(_items, RuntimeHelpers.IsReferenceOrContainsReferences<TItem>());
                 _items = null;
             }
@@ -209,13 +207,13 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IntentarAmpliar(int nuevoTamaño)
         {
-            if (_disposed) return false;
+            if (EstaDisposed) return false;
             if (_items!.Length >= nuevoTamaño) return true;
 
             int nuevaCapacidad = Math.Max(nuevoTamaño, _items.Length * 2);
 
             TItem[] nuevoArray = ArrayPool<TItem>.Shared.Rent(nuevaCapacidad);
-            _items.AsSpan(0, _indiceInserccion).CopyTo(nuevoArray.AsSpan());
+            _items.AsSpan(0, _indiceInsercion).CopyTo(nuevoArray.AsSpan());
 
             ArrayPool<TItem>.Shared.Return(_items, RuntimeHelpers.IsReferenceOrContainsReferences<TItem>());
 
@@ -236,7 +234,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
 
         [DoesNotReturn]
         private static void ThrowIndexOutOfRange(int indice)
-            => throw new IndexOutOfRangeException($"El índice {indice} está fuera del rango válido.");
+            => throw new ArgumentOutOfRangeException(nameof(indice), indice, "El índice está fuera del rango válido.");
 
         [DoesNotReturn]
         private static void ThrowArgumentOutOfRange(int capacidad)
@@ -256,10 +254,23 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Add(TItem item)
         {
-            if (_disposed) ThrowObjectDisposed();
-            IntentarAmpliar(_indiceInserccion + 1);
+            if (EstaDisposed) ThrowObjectDisposed();
+            _ = IntentarAmpliar(_indiceInsercion + 1);
             // IntentarAmpliar asegura que hay espacio suficiente, así que podemos añadir el elemento, tambien aumenta la variable _tamaño internamente.
-            _items![_indiceInserccion++] = item;
+            _items![_indiceInsercion++] = item;
+        }
+
+        /// <summary>
+        /// Añade un rango de elementos a la lista.
+        /// </summary>
+        /// <param name="items">Los elementos a añadir.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void AddRange(ReadOnlySpan<TItem> items)
+        {
+            if (EstaDisposed) ThrowObjectDisposed();
+            _ = IntentarAmpliar(_indiceInsercion + items.Length);
+            items.CopyTo(_items.AsSpan(_indiceInsercion));
+            _indiceInsercion += items.Length;
         }
 
         #endregion
@@ -276,10 +287,10 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
         /// </exception>
         public void Clear()
         {
-            if (_disposed) ThrowObjectDisposed();
+            if (EstaDisposed) ThrowObjectDisposed();
             if (RuntimeHelpers.IsReferenceOrContainsReferences<TItem>())
                 Span.Clear();
-            _indiceInserccion = 0;
+            _indiceInsercion = 0;
         }
 
         #endregion

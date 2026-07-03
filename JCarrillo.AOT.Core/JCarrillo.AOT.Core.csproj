@@ -17,7 +17,7 @@
 
     <IsTrimmable>true</IsTrimmable>
     <TrimMode>full</TrimMode>
-    <PublishAot>true</PublishAot>
+    <IsAotCompatible>true</IsAotCompatible>
     
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
     <EnableAotAnalyzer>true</EnableAotAnalyzer>
@@ -44,7 +44,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All"/>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
   </ItemGroup>
 
 </Project>
