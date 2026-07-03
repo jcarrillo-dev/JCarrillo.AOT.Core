@@ -1,47 +1,60 @@
 using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Engines;
 using JCarrillo.AOT.Core.Colecciones.Pooled;
 using JCarrillo.AOT.Core.Colecciones.Pooled.Ref;
 
 namespace JCarrillo.AOT.Core.Benchmarks.Colecciones
 {
     [MemoryDiagnoser]
+    [ThreadingDiagnoser]
     [HtmlExporter]
     public class PooledArrayBenchmarks
     {
         [Params(100, 1000)]
         public int Size { get; set; }
 
+        private readonly Consumer _consumer = new();
+
         [Benchmark(Baseline = true)]
-        public int[] StandardArray()
+        public void StandardArray()
         {
-            var arr = new int[Size];
+            int[] arr = new int[Size];
             for (int i = 0; i < Size; i++)
             {
                 arr[i] = i;
             }
-            return arr;
+            for (int i = 0; i < Size; i++)
+            {
+                _consumer.Consume(arr[i]);
+            }
         }
 
         [Benchmark]
-        public int PooledArray()
+        public void PooledArray()
         {
-            using var arr = new PooledArray<int>(Size);
+            using PooledArray<int> arr = new(Size);
             for (int i = 0; i < Size; i++)
             {
                 arr[i] = i;
             }
-            return arr.Tamaño;
+            for (int i = 0; i < Size; i++)
+            {
+                _consumer.Consume(arr[i]);
+            }
         }
 
         [Benchmark]
-        public int PooledArrayRef()
+        public void PooledArrayRef()
         {
-            using var arr = new PooledArrayRef<int>(Size);
+            using PooledArrayRef<int> arr = new(Size);
             for (int i = 0; i < Size; i++)
             {
                 arr[i] = i;
             }
-            return arr.Tamaño;
+            for (int i = 0; i < Size; i++)
+            {
+                _consumer.Consume(arr[i]);
+            }
         }
     }
 }

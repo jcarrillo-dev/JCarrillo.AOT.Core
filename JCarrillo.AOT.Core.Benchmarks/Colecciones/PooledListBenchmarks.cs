@@ -1,10 +1,12 @@
 using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Engines;
 using JCarrillo.AOT.Core.Colecciones.Pooled;
 using JCarrillo.AOT.Core.Colecciones.Pooled.Ref;
 
 namespace JCarrillo.AOT.Core.Benchmarks.Colecciones
 {
     [MemoryDiagnoser]
+    [ThreadingDiagnoser]
     [HtmlExporter]
     public class PooledListBenchmarks
     {
@@ -12,6 +14,8 @@ namespace JCarrillo.AOT.Core.Benchmarks.Colecciones
         public int Size { get; set; }
 
         private string[]? _strings;
+
+        private readonly Consumer _consumer = new();
 
         [GlobalSetup]
         public void Setup()
@@ -26,69 +30,87 @@ namespace JCarrillo.AOT.Core.Benchmarks.Colecciones
         #region Pruebas de rendimiento para Int (Tipo de valor)
 
         [Benchmark(Baseline = true)]
-        public int List_Int_Dynamic()
+        public void ListIntDynamic()
         {
-            var list = new List<int>();
+            List<int> list = [];
             for (int i = 0; i < Size; i++)
             {
                 list.Add(i);
             }
-            return list.Count;
+            for (int i = 0; i < list.Count; i++)
+            {
+                _consumer.Consume(list[i]);
+            }
         }
 
         [Benchmark]
-        public int List_Int_Fixed()
+        public void ListIntFixed()
         {
-            var list = new List<int>(Size);
+            List<int> list = new(Size);
             for (int i = 0; i < Size; i++)
             {
                 list.Add(i);
             }
-            return list.Count;
+            for (int i = 0; i < list.Count; i++)
+            {
+                _consumer.Consume(list[i]);
+            }
         }
 
         [Benchmark]
-        public int PooledList_Int_Dynamic()
+        public void PooledListIntDynamic()
         {
-            using var list = new PooledList<int>();
+            using PooledList<int> list = new();
             for (int i = 0; i < Size; i++)
             {
                 list.Add(i);
             }
-            return list.Tamaño;
+            for (int i = 0; i < list.Tamaño; i++)
+            {
+                _consumer.Consume(list[i]);
+            }
         }
 
         [Benchmark]
-        public int PooledList_Int_Fixed()
+        public void PooledListIntFixed()
         {
-            using var list = new PooledList<int>(Size);
+            using PooledList<int> list = new(Size);
             for (int i = 0; i < Size; i++)
             {
                 list.Add(i);
             }
-            return list.Tamaño;
+            for (int i = 0; i < list.Tamaño; i++)
+            {
+                _consumer.Consume(list[i]);
+            }
         }
 
         [Benchmark]
-        public int PooledListRef_Int_Dynamic()
+        public void PooledListRefIntDynamic()
         {
-            using var list = new PooledListRef<int>();
+            using PooledListRef<int> list = new();
             for (int i = 0; i < Size; i++)
             {
                 list.Add(i);
             }
-            return list.Tamaño;
+            for (int i = 0; i < list.Tamaño; i++)
+            {
+                _consumer.Consume(list[i]);
+            }
         }
 
         [Benchmark]
-        public int PooledListRef_Int_Fixed()
+        public void PooledListRefIntFixed()
         {
-            using var list = new PooledListRef<int>(Size);
+            using PooledListRef<int> list = new(Size);
             for (int i = 0; i < Size; i++)
             {
                 list.Add(i);
             }
-            return list.Tamaño;
+            for (int i = 0; i < list.Tamaño; i++)
+            {
+                _consumer.Consume(list[i]);
+            }
         }
 
         #endregion
@@ -96,69 +118,87 @@ namespace JCarrillo.AOT.Core.Benchmarks.Colecciones
         #region Pruebas de rendimiento para String (Tipo de referencia)
 
         [Benchmark]
-        public int List_String_Dynamic()
+        public void ListStringDynamic()
         {
-            var list = new List<string>();
+            List<string> list = [];
             for (int i = 0; i < Size; i++)
             {
                 list.Add(_strings![i]);
             }
-            return list.Count;
+            for (int i = 0; i < list.Count; i++)
+            {
+                _consumer.Consume(list[i]);
+            }
         }
 
         [Benchmark]
-        public int List_String_Fixed()
+        public void ListStringFixed()
         {
-            var list = new List<string>(Size);
+            List<string> list = new(Size);
             for (int i = 0; i < Size; i++)
             {
                 list.Add(_strings![i]);
             }
-            return list.Count;
+            for (int i = 0; i < list.Count; i++)
+            {
+                _consumer.Consume(list[i]);
+            }
         }
 
         [Benchmark]
-        public int PooledList_String_Dynamic()
+        public void PooledListStringDynamic()
         {
-            using var list = new PooledList<string>();
+            using PooledList<string> list = new();
             for (int i = 0; i < Size; i++)
             {
                 list.Add(_strings![i]);
             }
-            return list.Tamaño;
+            for (int i = 0; i < list.Tamaño; i++)
+            {
+                _consumer.Consume(list[i]);
+            }
         }
 
         [Benchmark]
-        public int PooledList_String_Fixed()
+        public void PooledListStringFixed()
         {
-            using var list = new PooledList<string>(Size);
+            using PooledList<string> list = new(Size);
             for (int i = 0; i < Size; i++)
             {
                 list.Add(_strings![i]);
             }
-            return list.Tamaño;
+            for (int i = 0; i < list.Tamaño; i++)
+            {
+                _consumer.Consume(list[i]);
+            }
         }
 
         [Benchmark]
-        public int PooledListRef_String_Dynamic()
+        public void PooledListRefStringDynamic()
         {
-            using var list = new PooledListRef<string>();
+            using PooledListRef<string> list = new();
             for (int i = 0; i < Size; i++)
             {
                 list.Add(_strings![i]);
             }
-            return list.Tamaño;
+            for (int i = 0; i < list.Tamaño; i++)
+            {
+                _consumer.Consume(list[i]);
+            }
         }
 
         [Benchmark]
-        public int PooledListRef_String_Fixed()
+        public void PooledListRefStringFixed()
         {
-            using var list = new PooledListRef<string>(Size);
+            using PooledListRef<string> list = new(Size);
             for (int i = 0; i < Size; i++)
             {
                 list.Add(_strings![i]);
             }
-            return list.Tamaño;
+            for (int i = 0; i < list.Tamaño; i++)
+            {
+                _consumer.Consume(list[i]);
+            }
         }
 
         #endregion
