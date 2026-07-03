@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 namespace JCarrillo.AOT.Core.Extensiones.SemaphoreSlim
 {
     /// <summary>
-    /// Proporciona métodos de extensión de alto rendimiento para <see cref="System.Threading.SemaphoreSlim"/>
+    /// Proporciona métodos de extensión de alto rendimiento para <see cref="SemaphoreSlim"/>
     /// que permiten adquirir bloqueos reutilizando structs inmutables para mitigar las asignaciones en el heap.
     /// </summary>
     public static class SemaphoreSlimExtensions
@@ -117,14 +117,9 @@ namespace JCarrillo.AOT.Core.Extensiones.SemaphoreSlim
         /// Si el semáforo está ocupado, la ejecución continúa por la ruta lenta asíncrona optimizada con pooling.
         /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static ValueTask<SemaphoreLock> EsperarAsync(this System.Threading.SemaphoreSlim semaphore, CancellationToken cancellationToken)
-        {
-            if (semaphore.Wait(0, cancellationToken))
-            {
-                return new ValueTask<SemaphoreLock>(new SemaphoreLock(semaphore));
-            }
-            return EsperarAsyncSlow(semaphore, cancellationToken);
-        }
+        public static ValueTask<SemaphoreLock> EsperarAsync(this System.Threading.SemaphoreSlim semaphore, CancellationToken cancellationToken) => semaphore.Wait(0, cancellationToken)
+                ? new ValueTask<SemaphoreLock>(new SemaphoreLock(semaphore))
+                : EsperarAsyncSlow(semaphore, cancellationToken);
 
         [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
         private static async ValueTask<SemaphoreLock> EsperarAsyncSlow(System.Threading.SemaphoreSlim semaphore, CancellationToken cancellationToken)
@@ -153,14 +148,9 @@ namespace JCarrillo.AOT.Core.Extensiones.SemaphoreSlim
         /// Si el semáforo está ocupado, la ejecución continúa por la ruta lenta asíncrona optimizada con pooling.
         /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static ValueTask<SemaphoreLock> EsperarAsync(this System.Threading.SemaphoreSlim semaphore, int millisecondsTimeout, CancellationToken cancellationToken)
-        {
-            if (semaphore.Wait(0, cancellationToken))
-            {
-                return new ValueTask<SemaphoreLock>(new SemaphoreLock(semaphore));
-            }
-            return EsperarAsyncSlow(semaphore, millisecondsTimeout, cancellationToken);
-        }
+        public static ValueTask<SemaphoreLock> EsperarAsync(this System.Threading.SemaphoreSlim semaphore, int millisecondsTimeout, CancellationToken cancellationToken) => semaphore.Wait(0, cancellationToken)
+                ? new ValueTask<SemaphoreLock>(new SemaphoreLock(semaphore))
+                : EsperarAsyncSlow(semaphore, millisecondsTimeout, cancellationToken);
 
         [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
         private static async ValueTask<SemaphoreLock> EsperarAsyncSlow(System.Threading.SemaphoreSlim semaphore, int millisecondsTimeout, CancellationToken cancellationToken)

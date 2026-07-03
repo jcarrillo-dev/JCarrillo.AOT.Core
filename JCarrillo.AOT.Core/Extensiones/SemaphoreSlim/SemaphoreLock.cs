@@ -5,22 +5,19 @@ namespace JCarrillo.AOT.Core.Extensiones.SemaphoreSlim
 {
     /// <summary>
     /// Representa un bloqueo de tipo <see langword="struct"/> inmutable que libera automáticamente
-    /// el recurso <see cref="System.Threading.SemaphoreSlim"/> asociado al ser desechado.
+    /// el recurso <see cref="SemaphoreSlim"/> asociado al ser desechado.
     /// Diseñado para optimizar el rendimiento mediante el patrón de cero asignaciones en el heap.
     /// </summary>
-    public readonly record struct SemaphoreLock : IDisposable
+    public readonly record struct SemaphoreLock : IDisposable, IAsyncDisposable
     {
-        private readonly System.Threading.SemaphoreSlim _semaphore;
+        private readonly System.Threading.SemaphoreSlim? _semaphore;
 
         /// <summary>
         /// Inicializa una nueva instancia de la estructura <see cref="SemaphoreLock"/> vinculada al semáforo especificado.
         /// </summary>
         /// <param name="semaphore">El semáforo subyacente que se desea bloquear y liberar.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public SemaphoreLock(System.Threading.SemaphoreSlim semaphore)
-        {
-            _semaphore = semaphore;
-        }
+        public SemaphoreLock(System.Threading.SemaphoreSlim semaphore) => _semaphore = semaphore;
 
         /// <summary>
         /// Libera el bloqueo de forma síncrona, incrementando en uno el contador de hilos permitidos en el semáforo subyacente.
@@ -33,7 +30,9 @@ namespace JCarrillo.AOT.Core.Extensiones.SemaphoreSlim
         public void Dispose()
         {
             this.ValidarNoBoxeado();
-            _semaphore.Release();
+            System.Threading.SemaphoreSlim? sem = Interlocked.Exchange(ref Unsafe.AsRef(in _semaphore), null);
+            if (sem != null)
+                _ = _ = sem.Release();
         }
 
         /// <summary>
@@ -50,7 +49,9 @@ namespace JCarrillo.AOT.Core.Extensiones.SemaphoreSlim
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ValueTask DisposeAsync()
         {
-            _semaphore.Release();
+            System.Threading.SemaphoreSlim? sem = Interlocked.Exchange(ref Unsafe.AsRef(in _semaphore), null);
+            if (sem != null)
+                _ = _ = sem.Release();
             return ValueTask.CompletedTask;
         }
     }
