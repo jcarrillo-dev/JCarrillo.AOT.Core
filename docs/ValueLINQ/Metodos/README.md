@@ -11,20 +11,38 @@ A diferencia de LINQ estándar, que depende del heap para albergar delegados, cl
 
 ## 1. Catálogo de Operadores (v1.1.0)
 
-A continuación se detallan los operadores implementados en la versión inicial. Cada enlace dirige a su especificación técnica, sobrecargas y métricas de rendimiento reales:
+A continuación se detallan los operadores implementados, divididos por su disponibilidad en los motores Eager y Delay:
+
+### Operadores Universales (Soportados en Eager y Delay)
 
 | Operador / Categoría | Documentación Técnica | Firma Conceptual | Propósito y Trade-offs |
 | :--- | :--- | :--- | :--- |
-| **Filtrado (`Where`)** | [Where.md](Where.md) | `query.Where(param, structPredicate)` | Filtra elementos usando predicados de tipo struct que implementan `IWhereDelegado<T, TParam>`. Permite el inlining completo por el JIT y evita el boxing de variables del contexto. |
-| **Proyección (`Select`)** | [Select.md](Select.md) | `query.Select(param, structSelector)` | Transforma elementos usando mapeadores de tipo struct que implementan `ISelectDelegado<T, TResult, TParam>`. Evita asignaciones de delegados intermedios en el heap. |
-| **Particionamiento (`Chunk`)** | [Chunk.md](Chunk.md) | `query.Chunk(tamaño).ProcessChunks(structProcessor)` | Divide colecciones en subconsultas `ValueLINQStruct<T>` de tamaño máximo $S$. El buffer del contenedor externo y de cada chunk se rentan del pool de forma limpia y se liberan mediante `ProcessChunks` bajo bloques `try-finally`. |
-| **Materialización / Caching** | [Materializacion.md](Materializacion.md) | `query.ToList()`, `query.ToArray()`, etc. | Copia en bloque los datos transitorios de la sesión a colecciones rápidas de ciclo de vida prolongado (`PooledList<T>`, `PooledArray<T>`) y libera inmediatamente la ranura del `ValueLINQStateManager<T>`. |
+| **Filtrado (`Where`)** | [Where.md](Where.md) | `query.Where(structPredicate)` o `query.Where(func)` | Filtra elementos basándose en un criterio. Permite el inlining completo por el JIT en su variante struct y la comodidad de lambdas en su variante Func. |
+| **Proyección (`Select`)** | [Select.md](Select.md) | `query.Select(structSelector)` o `query.Select(func)` | Transforma elementos a un nuevo tipo. Evita asignaciones en heap en la variante struct y simplifica la sintaxis en la variante Func. |
+
+### Operadores Exclusivos de Eager
+
+| Operador / Categoría | Documentación Técnica | Firma Conceptual | Propósito y Trade-offs |
+| :--- | :--- | :--- | :--- |
+| **Concatenación (`Concat`)** | (Ver [ValueLINQExtensions.cs](file:///F:/Github/JCarrillo.AOT.Core/JCarrillo.AOT.Core/Extensiones/ValueLINQ/ValueLINQExtensions.cs)) | `query.Concat(otraQuery)` | Une dos colecciones materializando los resultados en un buffer intermedio común de StateManager. |
+| **Particionamiento (`Chunk`)** | [Chunk.md](Chunk.md) | `query.Chunk(tamaño).ProcessChunks(structProcessor)` | Divide colecciones en subconsultas `ValueLINQStruct<T>`. El buffer del contenedor externo y de cada chunk se rentan del pool de forma limpia y se liberan mediante `ProcessChunks` bajo bloques `try-finally`. |
+| **Materialización / Caching** | [Materializacion.md](Materializacion.md) | `query.ToList()`, `query.ToArray()`, etc. | Copia en bloque los datos transitorios de la sesión a colecciones rápidas de ciclo de vida prolongado (`PooledList<T>`, `PooledArray<T>`) y libera inmediatamente la ranura del StateManager. |
 
 ---
 
-## 2. Abstracción Basada en Structs (Patrón de Delegación)
+## 2. Sobrecargas Ergonómicas y Advertencias de Compilación (JCA0001)
 
-Para lograr un rendimiento óptimo de cero asignaciones y permitir la optimización en tiempo de compilación por el JIT, ValueLINQ no acepta expresiones lambda convencionales (`Func<T, bool>` o `Func<T, TResult>`). En su lugar, el cliente debe definir estructuras que implementen interfaces dedicadas:
+Además de la API basada en structs genéricos para el máximo rendimiento, se implementan sobrecargas ergonómicas que aceptan expresiones lambda (`Func<T, bool>` y `Func<T, TResultado>`).
+
+### Mitigación y el Analizador JCA0001
+- **Advertencia JCA0001**: Al utilizar expresiones lambda genéricas de tipo `Func`, se emite una advertencia de compilación **JCA0001** (u obsoleta) para notificar al desarrollador que esta ruta no garantiza cero asignaciones (debido a la instanciación de delegados o clases de clausura generadas por el compilador).
+- **Mitigación con Lambdas Estáticas**: Para mitigar las asignaciones del delegado, se recomienda el uso del modificador `static` en la expresión lambda (por ejemplo, `static x => x % 2 == 0`). Esto evita la captura de variables de ámbito local, logrando **0 B (medido)** de asignaciones del delegado al ser cacheado por el runtime, a costa de no poder capturar variables locales externas.
+
+---
+
+## 3. Abstracción Basada en Structs (Patrón de Delegación)
+
+Para lograr un rendimiento óptimo de cero asignaciones y permitir la optimización en tiempo de compilación por el JIT, ValueLINQ utiliza el patrón de structs dedicados que implementan interfaces:
 
 *   **[IWhereDelegado.cs](../../../JCarrillo.AOT.Core/ValueLINQ/Interfaces/IWhereDelegado.cs)**: Utilizada en `Where` para evaluar un predicado con firma `bool Ejecutar(T objetoLista, TDato parametro)`.
 *   **[ISelectDelegado.cs](../../../JCarrillo.AOT.Core/ValueLINQ/Interfaces/ISelectDelegado.cs)**: Utilizada en `Select` para transformar tipos con firma `TResult Ejecutar(TOrigen objetoLista, TDato parametro)`.

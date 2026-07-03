@@ -31,37 +31,51 @@ Todas las mediciones empíricas fueron registradas bajo las siguientes condicion
 Prueba que simula un pipeline común de procesamiento de datos compuesto por un filtrado y una proyección en cadena.
 
 #### Escala $N = 1000$ (Medido)
-| Runtime / Engine | Método | Latencia Media (Mean) | Heap Allocated | Factor de Velocidad vs LINQ |
-| :--- | :--- | :---: | :---: | :---: |
-| **.NET 10.0 JIT** | `StandardLINQ_Where_Select` | 2,038.19 ns | 104 B | 1.00 (Baseline) |
-| **.NET 10.0 JIT** | `ValueLINQStruct_Where_Select` | 1,438.80 ns | **0 B** | **1.42x más rápido** |
-| **.NET 10.0 JIT** | `ValueLINQRefStruct_Where_Select` | 1,296.50 ns | **0 B** | **1.57x más rápido** |
-| **NativeAOT 10.0** | `StandardLINQ_Where_Select` | 14,314.08 ns | 144 B | 1.00 (Baseline) |
-| **NativeAOT 10.0** | `ValueLINQStruct_Where_Select` | 1,625.87 ns | **0 B** | **8.80x más rápido** |
-| **NativeAOT 10.0** | `ValueLINQRefStruct_Where_Select` | 1,551.11 ns | **0 B** | **9.23x más rápido** |
-| **NativeAOT 9.0** | `StandardLINQ_Where_Select` | 4,551.89 ns | 104 B | 1.00 (Baseline) |
-| **NativeAOT 9.0** | `ValueLINQStruct_Where_Select` | 1,312.92 ns | **0 B** | **3.47x más rápido** |
-| **NativeAOT 9.0** | `ValueLINQRefStruct_Where_Select` | 1,585.71 ns | **0 B** | **2.87x más rápido** |
-| **NativeAOT 8.0** | `StandardLINQ_Where_Select` | 4,378.67 ns | 104 B | 1.00 (Baseline) |
-| **NativeAOT 8.0** | `ValueLINQStruct_Where_Select` | 1,451.04 ns | **0 B** | **3.02x más rápido** |
-| **NativeAOT 8.0** | `ValueLINQRefStruct_Where_Select` | 1,433.26 ns | **0 B** | **3.05x más rápido** |
+
+| Runtime / Engine | Método | Latencia Media (Mean) | Heap Allocated | Notas |
+| :--- | :--- | :---: | :---: | :--- |
+| **.NET 10.0 JIT** | `StandardLINQWhereSelect` (Baseline Realista) | 2,047.17 ns | 104 B | LINQ estándar del runtime. |
+| **.NET 10.0 JIT** | `ValueLINQDelayWhereSelect` | 728.80 ns | 0 B | Motor Delay con structs puros. |
+| **.NET 10.0 JIT** | `ValueLINQDelayWhereSelectStaticLambda` | 858.15 ns | 0 B | Motor Delay con lambdas estáticas. |
+| **.NET 10.0 JIT** | `ValueLINQDelayWhereSelectNoStaticLambda` | 1,000.53 ns | 152 B | Motor Delay con clausura en lambda. |
+| **.NET 10.0 JIT** | `ValueLINQStructWhereSelectStaticLambda` | 1,746.49 ns | 0 B | Motor Eager con lambda estática. |
+| **.NET 10.0 JIT** | `ValueLINQStructWhereSelectNoStaticLambda` | 1,689.44 ns | 24 B | Motor Eager con optimización de escape RyuJIT 10. |
+| **.NET 9.0 JIT** | `StandardLINQWhereSelect` (Baseline Realista) | 2,092.05 ns | 104 B | LINQ estándar del runtime. |
+| **.NET 9.0 JIT** | `ValueLINQDelayWhereSelect` | 1,066.04 ns | 0 B | Motor Delay con structs puros. |
+| **.NET 9.0 JIT** | `ValueLINQDelayWhereSelectStaticLambda` | 1,313.88 ns | 0 B | Motor Delay con lambdas estáticas. |
+| **.NET 9.0 JIT** | `ValueLINQDelayWhereSelectNoStaticLambda` | 1,632.67 ns | 152 B | Motor Delay con clausura en lambda. |
+| **.NET 8.0 JIT** | `StandardLINQWhereSelect` (Baseline Realista) | 2,144.24 ns | 104 B | LINQ estándar del runtime. |
+| **.NET 8.0 JIT** | `ValueLINQDelayWhereSelect` | PNSE | N/A | Excepción PlatformNotSupportedException lanzada de forma limpia. |
+| **.NET 8.0 JIT** | `ValueLINQStructWhereSelectStaticLambda` | 1,581.47 ns | 0 B | Motor Eager con lambda estática. |
+| **.NET 8.0 JIT** | `ValueLINQStructWhereSelectNoStaticLambda` | 2,229.00 ns | 152 B | Motor Eager con clausura en lambda. |
+| **NativeAOT 10.0** | `StandardLINQWhereSelect` (Baseline Realista) | 14,379.39 ns | 144 B | LINQ estándar en compilación nativa. |
+| **NativeAOT 10.0** | `ValueLINQDelayWhereSelect` | 626.07 ns | 0 B | Motor Delay con structs puros. |
+| **NativeAOT 10.0** | `ValueLINQDelayWhereSelectStaticLambda` | 2,077.39 ns | 0 B | Motor Delay con lambdas estáticas. |
+| **NativeAOT 10.0** | `ValueLINQDelayWhereSelectNoStaticLambda` | 2,101.68 ns | 120 B | Motor Delay con clausura (Native AOT runtime). |
+| **NativeAOT 10.0** | `ValueLINQStructWhereSelectStaticLambda` | 2,871.53 ns | 0 B | Motor Eager con lambda estática. |
+| **NativeAOT 10.0** | `ValueLINQStructWhereSelectNoStaticLambda` | 3,145.85 ns | 120 B | Motor Eager con clausura (Native AOT runtime). |
+| **NativeAOT 9.0** | `StandardLINQWhereSelect` (Baseline Realista) | 4,693.87 ns | 104 B | LINQ estándar en compilación nativa. |
+| **NativeAOT 9.0** | `ValueLINQDelayWhereSelect` | 931.69 ns | 0 B | Motor Delay con structs puros. |
+| **NativeAOT 9.0** | `ValueLINQDelayWhereSelectStaticLambda` | 2,325.43 ns | 0 B | Motor Delay con lambdas estáticas. |
+| **NativeAOT 9.0** | `ValueLINQDelayWhereSelectNoStaticLambda` | 2,343.98 ns | 120 B | Motor Delay con clausura (Native AOT runtime). |
+| **NativeAOT 8.0** | `StandardLINQWhereSelect` (Baseline Realista) | 4,467.78 ns | 104 B | LINQ estándar en compilación nativa. |
+| **NativeAOT 8.0** | `ValueLINQDelayWhereSelect` | PNSE | N/A | Excepción PlatformNotSupportedException lanzada de forma limpia. |
+| **NativeAOT 8.0** | `ValueLINQStructWhereSelectStaticLambda` | 2,996.83 ns | 0 B | Motor Eager con lambda estática. |
+| **NativeAOT 8.0** | `ValueLINQStructWhereSelectNoStaticLambda` | 3,069.94 ns | 120 B | Motor Eager con clausura (Native AOT runtime). |
 
 > [!IMPORTANT]
-> **Comportamiento Crítico en Native AOT 10.0**:
-> Los resultados empíricos revelan un desmarque drástico de rendimiento en la plataforma .NET 10.0 bajo compilación nativa. 
-> Mientras que el LINQ estándar de .NET sufre una regresión de latencia masiva de **214.46% (medido)** al saltar de .NET 9.0 (**4,551.89 ns**) a .NET 10.0 (**14,314.08 ns**), las consultas fluent de ValueLINQ permanecen estables y predecibles, registrando **1,551.11 ns (medido)** en .NET 10.0 (apenas un aumento de latencia frente a los **1,433.26 ns** de .NET 8.0).
-> Esto hace que bajo Native AOT 10.0, ValueLINQ sea **9.23 veces más rápido (medido)** que el Standard LINQ del sistema, liberando además el heap del GC (**0 B (medido)** vs **144 B (medido)**).
-> Este salto de rendimiento se debe a que la compilación nativa de .NET 10.0 incrementa el coste de indirección para el despacho de interfaces virtuales genéricas dinámicas (`IEnumerable<T>`). Al estar estructurado con genéricos estáticos y restricciones de struct (`where TPredicate : struct`), ValueLINQ elude por completo las comprobaciones de metadatos dinámicos del runtime y permite que el compilador nativo realice el inlining directo a instrucciones de hardware, desmarcándose de la degradación general del sistema.
+> **Comportamiento en Native AOT 10.0**:
+> Los resultados empíricos revelan una diferencia sustancial en la plataforma .NET 10.0 bajo compilación nativa.
+> Mientras que el LINQ estándar de .NET sufre una regresión de latencia en Native AOT 10.0 en comparación con Native AOT 9.0 (alcanzando 14,379.39 ns **(medido)**), la variante `ValueLINQDelayWhereSelect` registra una latencia de 626.07 ns **(medido)** con **0 B (medido)** asignados en heap. Esto se debe a que ValueLINQ elude el despacho de interfaces virtuales genéricas dinámicas (`IEnumerable<T>`) mediante el uso de especialización estática de tipos struct genéricos, lo cual permite al compilador nativo inlinear la lógica del usuario directamente en el bucle físico de ejecución.
 
 #### Escala $N = 100$ (Medido)
-| Runtime / Engine | Método | Latencia Media (Mean) | Heap Allocated | Factor de Velocidad vs LINQ |
-| :--- | :--- | :---: | :---: | :---: |
-| **.NET 10.0 JIT** | `StandardLINQ_Where_Select` | 218.08 ns | 104 B | **1.00 (Baseline)** |
-| **.NET 10.0 JIT** | `ValueLINQStruct_Where_Select` | 342.77 ns | **0 B** | 0.64x (Regresión por setup) |
-| **.NET 10.0 JIT** | `ValueLINQRefStruct_Where_Select` | 337.11 ns | **0 B** | 0.65x (Regresión por setup) |
-| **NativeAOT 10.0** | `StandardLINQ_Where_Select` | 1,375.65 ns | 144 B | 1.00 (Baseline) |
-| **NativeAOT 10.0** | `ValueLINQStruct_Where_Select` | 420.94 ns | **0 B** | **3.27x más rápido** |
-| **NativeAOT 10.0** | `ValueLINQRefStruct_Where_Select` | 416.17 ns | **0 B** | **3.31x más rápido** |
+
+| Runtime / Engine | Método | Latencia Media (Mean) | Heap Allocated | Notas |
+| :--- | :--- | :---: | :---: | :--- |
+| **.NET 10.0 JIT** | `StandardLINQWhereSelect` (Baseline Realista) | 229.30 ns | 104 B | LINQ estándar del runtime. |
+| **.NET 10.0 JIT** | `ValueLINQDelayWhereSelect` | 69.06 ns | 0 B | Motor Delay con structs puros. |
+| **.NET 10.0 JIT** | `ValueLINQDelayWhereSelectStaticLambda` | 96.31 ns | 0 B | Motor Delay con lambdas estáticas. |
+| **.NET 10.0 JIT** | `ValueLINQDelayWhereSelectNoStaticLambda` | 125.51 ns | 152 B | Motor Delay con clausura en lambda. |
 
 ---
 
@@ -184,7 +198,7 @@ Las pruebas ejecutadas tienen un alcance restringido y no evalúan el comportami
 
 ## Conclusiones de Rendimiento
 
-1.  **Eficiencia del Heap**: En todas las pruebas y runtimes, las colecciones estructuradas de ValueLINQ registraron 0 B de allocations en el Heap de GC (medido). Esto elimina la frecuencia de recolección de basura (Gen 0/1/2) en las rutas calientes.
-2.  **Ventaja Crítica en Native AOT**: En Native AOT, la resolución dinámica de interfaces penaliza al LINQ estándar de .NET, degradando su rendimiento hasta en **9.23x (medido)** respecto a ValueLINQ ($N=1000$). ValueLINQ se beneficia del inlining a nivel de compilación estática, operando a velocidad de hardware.
+1.  **Eficiencia del Heap**: El uso de la API diferida (Delay) con structs predicados o lambdas estáticas logra **0 B (medido)** asignados en heap. En lambdas capturadoras se observa una penalización de 152 B **(medido)** en JIT y 120 B **(medido)** en Native AOT debido al objeto de clausura generado por el compilador. En .NET 10.0 JIT, el análisis de escape de RyuJIT reduce la asignación en heap del motor Eager con lambdas no estáticas a solo 24 B **(medido)**.
+2.  **Ventaja en Native AOT**: En Native AOT 10.0, la resolución dinámica de interfaces penaliza al LINQ estándar, elevando la latencia a 14,379.39 ns **(medido)**. El motor diferido `ValueLINQDelayWhereSelect` reduce la latencia a 626.07 ns **(medido)** (aproximadamente 23 veces más rápido) operando a velocidad de hardware por el inlining estático completo.
 3.  **Amortización de Sincronización**: La población en bloque (`Añadir(ReadOnlySpan<T>)`) reduce la latencia en un **99.52% (medido)** frente a la inserción iterativa al sustituir el coste de $O(N)$ bloqueos por un único bloqueo atómico $O(1)$.
-4.  **Amortización de Alquiler en Materialización**: Para escalas de colección reducidas ($N = 100$), los materializadores estándar son superiores en velocidad (14.7% a 31.5%, medido) debido a la sobrecarga nula de alquiler de buffers; no obstante, para volúmenes mayores ($N = 1000$), las variantes pooled reducen el tiempo de CPU en un 18.7% a 31.1% (medido) al suprimir el coste de alocación de memoria del GC, excepto en .NET 8.0 JIT que exhibe una regresión en ToList.
+4.  **Amortización de Alquiler en Materialización**: Para escalas de colección reducidas ($N = 100$), los materializadores estándar son superiores en velocidad (14.7% a 31.5% más rápidos, medido) debido a la sobrecarga nula de alquiler de buffers; no obstante, para volúmenes mayores ($N = 1000$), las variantes pooled reducen el tiempo de CPU en un 18.7% a 31.1% (medido) al suprimir el coste de alocación de memoria del GC.

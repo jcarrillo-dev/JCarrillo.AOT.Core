@@ -39,6 +39,30 @@ De acuerdo con el estándar de ingeniería honesta, se declaran los siguientes l
 2.  **Contención Menor del Asignador**: El stack estático de ranuras libres se gestiona bajo un bloqueo síncrono exclusivo global (`_stackRoot`). Aunque esta operación dura apenas nanosegundos (un simple ajuste de índice), representa un cuello de botella de contención teórico bajo cargas extremas de concurrencia en la fase de inicialización.
 3.  **Degradación Menor en Sistemas de 32 bits**: La atómica de 64 bits en sistemas x86, ARM32 o Wasm32 requiere operaciones de hardware más pesadas a través de `Interlocked.Read` e `Interlocked.Exchange` en `TokenHelper`, lo que introduce una penalización menor de latencia en comparación con el acceso directo a memoria disponible en sistemas de 64 bits.
 4.  **Dependencia Estricta del Dispose**: Para evadir asignaciones en el Heap y reciclar los búferes, ValueLINQ delega la responsabilidad de la liberación al código cliente. Si el desarrollador no invoca `Dispose()` (o no emplea bloques `using`), la devolución del búfer al `ArrayPool` se retrasará hasta que se active el limpiador periódico de fondo (**5 minutos (medido)** de inactividad), provocando un incremento temporal en el consumo de memoria física (Working Set) del proceso.
+5.  **Requisito de Plataforma para el Motor Delay**: El motor diferido (Delay) requiere estrictamente .NET 9.0 y C# 13 o superior, debido a la dependencia de la restricción de lenguaje `allows ref struct`. En ejecuciones bajo .NET 8.0 o NativeAOT 8.0, las llamadas a los operadores del motor Delay lanzarán de forma limpia una excepción `PlatformNotSupportedException` **(medido)**.
+
+---
+
+## 3. Guía de Recomendaciones y Selección de Motor
+
+### 3.1 Selección de Motor por Runtime (.NET 9+ vs .NET 8.0)
+- **Bajo .NET 9.0 o superior**: Se recomienda utilizar **`ValueLINQ Delay`** (`ToValueDelayQuery`). Dado que este motor realiza la canalización diferida síncrona en stack, ofrece la menor latencia media y opera con cero asignaciones persistentes en el heap.
+- **Bajo .NET 8.0**: El motor ansioso (**`ValueLINQ Eager`** - `ToValueQuery`) es el motor predeterminado y el único fallback operativo, ya que `Delay` no está disponible en este runtime debido a la ausencia de soporte de C# 13 para la restricción `allows ref struct`.
+
+### 3.2 Regla de Selección por Tamaño de Colección (en .NET 8.0)
+- **Colecciones con N <= 100 elementos**: Se recomienda usar **LINQ estándar del sistema**, excepto si la aplicación requiere de forma estricta una garantía de cero asignaciones en el heap de GC. A esta escala de elementos, el tiempo de inicialización (alquiler de slots en el `StateManager` y sincronización por bloqueos) puede superar la latencia de asignación del iterador de LINQ estándar.
+- **Colecciones con N > 100 elementos**: Se recomienda migrar a **`ValueLINQ Eager`** (`ToValueQuery` / `ToValueRefQuery`), donde las optimizaciones de inlining de structs y la copia vectorial consolidada amortizan el coste de inicialización, reduciendo la latencia frente a LINQ estándar y manteniendo un perfil de asignaciones de 0 B **(medido)**.
+
+### 3.3 Recomendación para Rutas No Calientes (Cold Paths) y Colecciones Pequeñas
+- **Para el motor Eager (ValueLINQ Eager)**: Se debe evitar su uso en rutas de ejecución frías de la aplicación (por ejemplo: carga de configuración inicial, constructores de servicios de ejecución única o inicializaciones de setup). El LINQ tradicional de la plataforma es preferible en estos escenarios para evitar el consumo de slots en la tabla fija de 4096 posiciones del StateManager y la sobrecarga de sincronización del pool.
+- **Para el motor Delay (ValueLINQ Delay)**: Su uso es seguro y recomendado tanto en rutas frías como en colecciones de tamaño reducido. Dado que no reserva slots en el StateManager, no adquiere bloqueos síncronos ni realiza asignaciones en el heap de GC, no presenta penalizaciones por inicialización y reduce la latencia frente a LINQ estándar a cualquier escala.
+
+### 3.4 Garantía de Alocación del Motor Delay
+- `ValueLINQ Delay` es **libre de asignaciones en heap por diseño (0 B)**. Dado que `ValueLINQDelayStruct` y sus enumeradores son estructuras de referencia (`ref struct`) asignadas en el stack, no interactúan con el StateManager ni alquilan buffers temporales de memoria durante su creación, resolviendo el flujo de datos en la pila de llamadas.
+
+### 3.5 Recomendación de Ergonomía en Desarrollo (.NET 9+)
+- Para el desarrollo diario en entornos `.NET 9.0` o superiores, se plantea la recomendación de desactivar las reglas de diagnóstico **`JCA0001`** (cierres y delegados Func) y **`JCA0002`** (materialización estándar con allocations) a nivel de archivo de proyecto (`.csproj`) o solución (`.editorconfig`).
+- Esta configuración permite a los desarrolladores escribir consultas utilizando la sintaxis lambda convencional y materializarlas a colecciones administradas estándar (como `ToArrayStandard()` o `ToListStandard()`) eludiendo las advertencias continuas en el compilador, mientras se conserva la menor latencia de ejecución provista por el motor `ValueLINQ Delay` frente al LINQ tradicional del sistema.
 
 ---
 
@@ -48,37 +72,34 @@ Esta sección separa de forma explícita **lo que la biblioteca hace hoy** (medi
 
 ### Estado Actual (Lanzamiento Inicial v1.1.0)
 
-*   **Cobertura de operadores deliberadamente mínima**: el motor expone `Where`, `Select`, `Concat`, `Chunk`/`ProcessChunks` y los materializadores (`ToList`, `ToArray`, `ToListRef`, `ToArrayRef`). **No** persigue paridad de operadores con LINQ estándar en esta fase (no hay `GroupBy`, `OrderBy`, `Distinct`, etc.).
-*   **Única ruta disponible**: el modelo **eager con delegados de tipo struct** (`IWhereDelegado`, `ISelectDelegado`). Materializa cada operador en un búfer rentado del `ArrayPool` y resuelve la lógica del usuario de forma estática (inlining completo, compatible con Native AOT).
-*   **Perfil de asignación**: esta ruta es **actualmente la única**, y opera con **0 B (medido)** en el Heap de GC.
+*   **Infraestructura del Núcleo y Operadores Iniciales**: El lanzamiento inicial v1.1.0 se enfocó estrictamente en establecer la infraestructura de núcleo de alto rendimiento, la sincronización y bloqueos de StateManager, la seguridad de tokens y los operadores fundacionales de filtrado (`Where`) y proyección (`Select`), en lugar de buscar la paridad completa de operadores de LINQ estándar.
+*   **Rutas Disponibles**: Se implementan tanto la ruta Eager (basada en buffers alquilados de `ArrayPool` y structs predicado) como la ruta Lazy/Diferida (Delay) que opera en pila sin asignaciones intermitentes. Adicionalmente, se ofrecen las sobrecargas ergonómicas que aceptan delegados de tipo `Func`.
+*   **Perfil de asignación**: La ruta con structs delegados y la ruta Lazy con structs operan con **0 B (medido)** en el Heap de GC. La ruta ergonómica basada en expresiones lambda puede alocar memoria en función de la captura de clausuras (152 B **(medido)** con capturas de variables locales vs 0 B **(medido)** con lambdas estáticas).
 
-### Taxonomía de Asignación (presente y futura)
-
-Conviene fijar la terminología para evitar afirmaciones que envejezcan mal: el perfil *zero-allocation* **no es exclusivo del modelo eager**. Las direcciones previstas se reparten así:
+### Taxonomía de Asignación
 
 | Ruta | ¿Zero-Allocation? | Estado |
 | :--- | :---: | :--- |
 | **Eager + delegado struct** | **Sí** (0 B) | Publicada (v1.1.0) |
-| **Lazy/Diferida + delegado struct** | **Sí** (incluso sin búferes intermedios) | Dirección de diseño |
-| **Delegados `Func`/`Action`** | **No** (asigna el delegado/clausura en el Heap) | Dirección de diseño |
+| **Lazy/Diferida + delegado struct** | **Sí** (0 B, sin buffers intermedios) | Publicada / Soportada (v1.1.0) |
+| **Delegados `Func`/`Action`** | **No** (depende del tipo de lambda / clausura) | Publicada / Soportada (v1.1.0) |
 
-Es decir, la futura ruta lazy mantendría el perfil zero-allocation —fusionando la cadena de operadores en una sola pasada sin rentar búferes intermedios—, mientras que la ruta de delegados `Func`/`Action` cambiaría conscientemente ese perfil por la ergonomía de las expresiones lambda y la captura de clausuras.
+### Hoja de Ruta de Desarrollo
 
-### Direcciones de Diseño Previstas
+Como planes de desarrollo futuros se plantean las siguientes propuestas de optimización y expansión:
 
-Por orden de secuenciación natural (no de calendario):
-
-1.  **Ampliación de operadores sobre la ruta eager**: incrementar la cobertura del modelo zero-allocation ya publicado.
-2.  **Ruta lazy/diferida (`net9.0+`)**: encadenamiento de enumeradores estructurados que permite al compilador fusionar el pipeline en un único bucle, con cortocircuito natural y sin asignaciones intermedias. Requiere características de lenguaje disponibles a partir de C# 13 (interfaces sobre `ref struct` y el anti-constraint `allows ref struct`), por lo que queda restringida a `net9.0` y superiores.
-3.  **Sobrecargas con `Func`/`Action`**: capa ergonómica para quien prioriza la sintaxis de lambda sobre el perfil zero-allocation, disponible en todos los TFM soportados.
+1.  **Ampliación de Cobertura de Operadores**: Se propone expandir la API para dar soporte a operadores adicionales como `GroupBy`, `OrderBy` y `Distinct` tanto en el motor Eager como en el motor Lazy/Diferida (Delay), incluyendo sus correspondientes sobrecargas ergonómicas con lambdas.
+    - *Trade-off*: Incrementaría la base de código a mantener y la complejidad del inlining genérico del compilador JIT/AOT.
+2.  **Optimización de Interceptores de Compilador**: Se plantea el desarrollo de un generador de código que reemplace automáticamente lambdas ergonómicas por structs dedicados en tiempo de compilación.
+    - *Trade-off*: Aumentaría los tiempos de compilación del proyecto y la complejidad del sistema de compilación.
 
 > [!WARNING]
-> **Intención de Diseño, no Compromiso de Entrega**:
-> Las direcciones descritas en esta sección son **intenciones de diseño sujetas a medición empírica y viabilidad técnica**. No constituyen un compromiso de release, ni una garantía de implementación, ni un calendario. Únicamente la sección «Estado Actual» describe capacidades realmente publicadas y medidas; cualquier funcionalidad futura solo se considerará disponible cuando aparezca documentada con sus métricas correspondientes.
+> **Intención de Desarrollo, no Compromiso de Entrega**:
+> Las direcciones descritas en esta sección son **propuestas de diseño sujetas a medición empírica y viabilidad técnica**. No constituyen un compromiso de release, ni una garantía de implementación, ni un calendario. Únicamente la sección «Estado Actual» describe capacidades realmente publicadas y medidas; cualquier funcionalidad futura se considera propuesta.
 
 ---
 
-## 3. Esquema de Arquitectura
+## 4. Esquema de Arquitectura
 
 El flujo de ejecución síncrono de ValueLINQ desacopla la API del usuario del almacenamiento físico de los datos mediante el siguiente esquema de comunicación:
 

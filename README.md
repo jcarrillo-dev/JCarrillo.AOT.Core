@@ -45,21 +45,6 @@ Utilidades de diagnóstico de bajo nivel y primitivas de exclusión mutua de alt
 *   **`SemaphoreLock`**: Estructura en pila que envuelve `SemaphoreSlim` permitiendo ámbitos `using var` seguros. Cuenta con una ruta rápida (Fast-Path) con `Wait(0)` que elude la asignación de la máquina de estados del compilador, y una ruta lenta optimizada con `PoolingAsyncValueTaskMethodBuilder` para reciclar tareas.
 *   **Detección de Boxing**: `BoxingExtensions.ValidarNoBoxeado` valida en tiempo de ejecución que el struct reside en los límites físicos de la pila de memoria del hilo actual (mediante P/Invoke a `GetCurrentThreadStackLimits` de `kernel32.dll` en Windows), lanzando una excepción si detecta que la estructura se encuentra en el heap.
 
----
-
-## Política de Deprecación y Advertencias de Rendimiento ([Obsolete])
-
-El proyecto utiliza de manera sistemática el atributo `[Obsolete]` como mecanismo de advertencia y comunicación técnica para los desarrolladores. El significado y las implicaciones de estas anotaciones se rigen por la siguiente política general:
-
-- **Advertencias de Rendimiento (`[Obsolete(..., error: false)]` o `[Obsolete("...", false)]`)**:
-  - Si el mensaje de advertencia **no** indica de forma expresa la remoción futura de la API, el método afectado es **completamente estable, funcional y permanecerá indefinidamente en el ensamblado**.
-  - Este atributo se emplea en estos casos de manera exclusiva para notificar al desarrollador sobre penalizaciones de rendimiento asociadas (por ejemplo, advertir que un método como `ToArrayStandard` o `ToListStandard` genera Heap Allocations dentro de un contexto de biblioteca zero-allocation, o señalar alternativas óptimas al cambiar de versión del framework, como en la concatenación mediante `params` en .NET 8).
-  - Los desarrolladores pueden emplear estos métodos con total seguridad sobre su permanencia si asumen y aceptan los costes de rendimiento asociados.
-- **Deprecación Crítica (`[Obsolete(..., error: true)]` o advertencia de remoción)**:
-  - Si el mensaje de la advertencia detalla explícitamente que la API será eliminada o si el atributo se configura con `error: true`, los desarrolladores **deben migrar su código**, dado que dicha API dejará de recibir soporte y será eliminada en versiones subsiguientes.
-  - Como regla general de ciclo de vida del software en el proyecto, es extremadamente excepcional que una API pase a considerarse crítica (`error: true`) o sea eliminada sin haber transitado antes por un periodo de gracia previo marcado con `error: false` para advertir de su remoción.
-
----
 
 ## Resultados de Benchmarks
 

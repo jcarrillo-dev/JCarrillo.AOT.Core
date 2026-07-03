@@ -7,6 +7,8 @@ Bienvenido al sitemap de documentación técnica del proyecto. A continuación s
 *   **[ValueLINQ: Consultas Fluent Cero Allocations](ValueLINQ/README.md)**: El motor de procesamiento síncrono compatible con Native AOT.
 *   **[Colecciones Rentadas (Pooled Collections)](Colecciones/README.md)**: Estructuras mutables e inmutables (`PooledList` y `PooledArray`) optimizadas para la pila.
 *   **[Extensiones de Alto Rendimiento](Extensiones/README.md)**: Primitivas de exclusión mutua asíncronas y validadores contra boxing.
+*   **[Diagnósticos y Advertencias de Rendimiento](Diagnostico/README.md)**: Reglas de análisis estático y advertencias de optimización en tiempo de compilación.
 
 ---
 [Volver al README del Repositorio](../README.md)
+

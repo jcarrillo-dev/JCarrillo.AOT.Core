@@ -81,6 +81,16 @@ using var query = datos.ToValueRefQuery();
 ```
 Este enfoque elimina la necesidad de despachos virtuales a través de la interfaz `IDisposable`, logrando una llamada directa y estática altamente eficiente que devuelve los recursos al StateManager de forma atómica.
 
+## 5. El Motor Lazy: ValueLINQDelayStruct<T, TEnumerator>
+
+El motor diferido de ValueLINQ introduce la estructura `ValueLINQDelayStruct<T, TEnumerator>`, la cual representa una consulta diferida (lazy) síncrona.
+
+### Características y Diferencias de Diseño
+- **Tipo C#**: Está declarada como un `ref struct`.
+- **Gestión en Pila**: A diferencia de `ValueLINQStruct<T>` y `ValueLINQRefStruct<T>`, esta estructura **no alquila buffers** del pool de memoria (`ArrayPool<T>`) ni se registra en el `ValueLINQStateManager<T>` durante su inicialización.
+- **Ciclo de Vida de Cero Asignaciones**: Todos los operadores intermedios (como `Where` y `Select`) se resuelven en la pila en tiempo de iteración. El procesamiento de datos se realiza elemento a elemento directamente sobre la colección original durante el recorrido del bucle `foreach`. Al no requerir almacenamiento temporal, su perfil de asignación en el heap es de **0 B (medido)** y no requiere invocar `Dispose()`.
+- **Requisitos del Compilador**: Depende de características de C# 13 y .NET 9.0 o superior, en particular de la restricción genérica `allows ref struct`, que permite que las interfaces genéricas y delegados manejen tipos por valor en la pila. En entornos .NET 8.0 o NativeAOT 8.0, las APIs correspondientes lanzan una excepción `PlatformNotSupportedException` **(medido)** de forma limpia.
+
 ---
 [Volver al Core de ValueLINQ](README.md)
 
