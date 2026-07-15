@@ -128,6 +128,8 @@ namespace JCarrillo.AOT.Core.Tests.E2E
             nuint origLow = (nuint)lowField!.GetValue(null)!;
             nuint origHigh = (nuint)highField!.GetValue(null)!;
 
+            Exception? excepcionCapturada = null;
+
             try
             {
                 // Simular un stack muy ajustado alrededor de la variable
@@ -138,9 +140,15 @@ namespace JCarrillo.AOT.Core.Tests.E2E
                     highField.SetValue(null, ptr + 100);
                 }
 
-                // Actuar y Aserción
-                Action act = () => val.ValidarNoBoxeado();
-                _ = act.Should().NotThrow();
+                // Actuar (sin lambda: una captura izaría 'val' al heap y el GC podría moverla fuera de la ventana)
+                try
+                {
+                    val.ValidarNoBoxeado();
+                }
+                catch (Exception ex)
+                {
+                    excepcionCapturada = ex;
+                }
             }
             finally
             {
@@ -148,6 +156,9 @@ namespace JCarrillo.AOT.Core.Tests.E2E
                 lowField.SetValue(null, origLow);
                 highField.SetValue(null, origHigh);
             }
+
+            // Aserción
+            _ = excepcionCapturada.Should().BeNull();
         }
 
         [Fact]

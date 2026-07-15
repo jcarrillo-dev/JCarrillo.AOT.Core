@@ -20,13 +20,7 @@ namespace JCarrillo.AOT.Core.Tests.E2E
         }
 
         private static int ObtenerSlotsActivos<TItem>()
-        {
-            FieldInfo? campo = typeof(ValueLINQStateManager<TItem>)
-                .GetField("_topStack", BindingFlags.Static | BindingFlags.NonPublic);
-            if (campo == null) return 0;
-            int topStack = (int)campo.GetValue(null)!;
-            return 4096 - topStack;
-        }
+            => ValueLINQConfig.TamañoTabla - ValueLINQStateManager<TItem>.SlotsLibres;
 
         [Fact]
         public void ValueLINQFugaRecursosCuandoCapacidadAgotadaEnWhere()
@@ -144,17 +138,23 @@ namespace JCarrillo.AOT.Core.Tests.E2E
             // 3. Desechar la consulta original a mitad de la enumeración
             query1.Dispose();
 
-            // 4. Continuar la enumeración - debe lanzar ValueLinqSesionExpiradaException
-            bool threw = false;
-            try
-            {
-                _ = enumerator.MoveNext();
-            }
-            catch (ValueLinqSesionExpiradaException)
-            {
-                threw = true;
-            }
-            _ = threw.Should().BeTrue("debió haber lanzado ValueLinqSesionExpiradaException al haber sido desechada la sesión");
+            // 4. Continuar la enumeración - debe retornar false de forma segura
+            _ = enumerator.MoveNext().Should().BeFalse("debe retornar false en lugar de lanzar una excepción al haber sido desechada la sesión");
+        }
+
+        [Fact]
+        public void ValueLINQDelayMoveNextDespuesDeDisponerRetornaFalseSinLanzarExcepcion()
+        {
+            // 1. Crear consulta origen y enumerador
+            using ValueLINQStruct<int> query1 = origen.ToValueQuery();
+            JCarrillo.AOT.Core.ValueLINQ.Delay.ValueLINQDelayStruct<int, JCarrillo.AOT.Core.ValueLINQ.Delay.ValueLINQSessionEnumerator<int>> pipeline = query1.Delay();
+            JCarrillo.AOT.Core.ValueLINQ.Delay.ValueLINQSessionEnumerator<int> enumerator = pipeline.GetEnumerator();
+
+            // 2. Disponer el enumerador de forma explícita
+            enumerator.Dispose();
+
+            // 3. Llamar a MoveNext() - debe retornar false de forma segura sin lanzar excepción
+            _ = enumerator.MoveNext().Should().BeFalse("el enumerador dispuesto debe retornar false en subsiguientes MoveNext()");
         }
 #endif
 

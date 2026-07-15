@@ -5,6 +5,7 @@ using JCarrillo.AOT.Core.ValueLINQ;
 using JCarrillo.AOT.Core.ValueLINQ.Delay;
 using JCarrillo.AOT.Core.ValueLINQ.Excepciones;
 using JCarrillo.AOT.Core.Extensiones.ValueLINQ;
+using JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay;
 using JCarrillo.AOT.Core.ValueLINQ.Interfaces;
 using JCarrillo.AOT.Core.Extensiones.SemaphoreSlim;
 
@@ -75,7 +76,7 @@ namespace JCarrillo.AOT.Core.Tests.E2E
             IntDoubleSelector selector = new() { State = new ExecutionState() };
 
             // Act: Chain delay and select
-            ValueLINQDelayStruct<int, ValueLINQSelectDelay<int, ValueLINQSessionEnumerator<int>, IntDoubleSelector, int>> lazyPipeline = query.Delay().Select<int, IntDoubleSelector, int>(ref selector);
+            ValueLINQDelayStruct<int, ValueLINQSelectDelay<int, ValueLINQSessionEnumerator<int>, IntDoubleSelector, int>> lazyPipeline = query.Delay().Select<IntDoubleSelector, int>(ref selector);
 
             // Assert: Selector not executed yet
             _ = selector.ExecutionCount.Should().Be(0);
@@ -102,7 +103,7 @@ namespace JCarrillo.AOT.Core.Tests.E2E
 
             ValueLINQDelayStruct<int, ValueLINQSelectDelay<int, ValueLINQWhereDelay<int, ValueLINQSessionEnumerator<int>, IntEqualsPredicate, int>, IntDoubleSelector, int>> lazyPipeline = query.Delay()
                                     .Where(3, ref predicate)
-                                    .Select<int, IntDoubleSelector, int>(ref selector);
+                                    .Select<IntDoubleSelector, int>(ref selector);
 
             int count = 0;
             int lastVal = 0;
@@ -179,7 +180,7 @@ namespace JCarrillo.AOT.Core.Tests.E2E
         }
 
         [Fact]
-        public void ValueLINQDelaySourceDisposedBeforeEnumerationThrowsException()
+        public void ValueLINQDelaySourceDisposedBeforeEnumerationReturnsFalse()
         {
             int[] array = [1, 2, 3];
             ValueLINQStruct<int> query = array.ToValueQuery();
@@ -188,18 +189,96 @@ namespace JCarrillo.AOT.Core.Tests.E2E
             // Act: Dispose source query before enumeration
             query.Dispose();
 
-            // Assert: Enumeration should throw session expired exception
+            // Assert: Enumeration should return false (does not produce elements)
+            int count = 0;
+            foreach (ref readonly int item in pipeline)
+            {
+                count++;
+            }
+            _ = count.Should().Be(0);
+        }
+
+        [Fact]
+        public void ValueLINQDelayAutoDisposesOnCompletion()
+        {
+            int[] elements = [1, 2, 3, 4, 5];
+            using var query = elements.ToValueQuery();
+            var pipeline = query.Delay().Chunk(2);
+            var enumerator = pipeline.GetEnumerator();
+
+            // Enumerate elements
+            _ = enumerator.MoveNext().Should().BeTrue();
+            _ = enumerator.Current.Length.Should().Be(2);
+
+            _ = enumerator.MoveNext().Should().BeTrue();
+            _ = enumerator.Current.Length.Should().Be(2);
+
+            _ = enumerator.MoveNext().Should().BeTrue();
+            _ = enumerator.Current.Length.Should().Be(1);
+
+            // MoveNext at completion should return false and trigger auto-disposal
+            _ = enumerator.MoveNext().Should().BeFalse();
+
+            // Subsequent MoveNext calls should continue to return false
+            _ = enumerator.MoveNext().Should().BeFalse();
+
+            // Explicit Dispose after auto-disposal should be safe and idempotent
             try
             {
-                foreach (ref readonly int item in pipeline)
-                {
-                }
-                Assert.Fail("Should have thrown ValueLinqSesionExpiradaException");
+                enumerator.Dispose();
             }
-            catch (ValueLinqSesionExpiradaException)
+            catch (Exception ex)
             {
-                // Expected
+                Assert.Fail($"Dispose should not throw, but threw: {ex.Message}");
             }
+
+            try
+            {
+                enumerator.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Assert.Fail($"Double Dispose should not throw, but threw: {ex.Message}");
+            }
+
+            // MoveNext after dispose should still return false
+            _ = enumerator.MoveNext().Should().BeFalse();
+        }
+
+        [Fact]
+        public void ValueLINQDelayExplicitDisposalIsIdempotent()
+        {
+            int[] elements = [1, 2, 3];
+            using var query = elements.ToValueQuery();
+            var pipeline = query.Delay();
+            var enumerator = pipeline.GetEnumerator();
+
+            // MoveNext once to start
+            _ = enumerator.MoveNext().Should().BeTrue();
+            _ = enumerator.Current.Should().Be(1);
+
+            // Explicit early Dispose
+            try
+            {
+                enumerator.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Assert.Fail($"Dispose should not throw, but threw: {ex.Message}");
+            }
+
+            // Double Dispose should not throw
+            try
+            {
+                enumerator.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Assert.Fail($"Double Dispose should not throw, but threw: {ex.Message}");
+            }
+
+            // Subsequent MoveNext returns false
+            _ = enumerator.MoveNext().Should().BeFalse();
         }
 
         [Fact]
@@ -246,7 +325,7 @@ namespace JCarrillo.AOT.Core.Tests.E2E
             }
 
             _ = sum1.Should().Be(6);
-            _ = sum2.Should().Be(6);
+            _ = sum2.Should().Be(0); // Under auto-disposal, the first enumeration auto-disposes the session.
         }
 
         [Fact]
@@ -384,7 +463,7 @@ namespace JCarrillo.AOT.Core.Tests.E2E
 
                 ValueLINQDelayStruct<CalibratedReading, ValueLINQSelectDelay<CalibratedReading, ValueLINQWhereDelay<SensorReading, ValueLINQSessionEnumerator<SensorReading>, SensorNoisePredicate, double>, Calibrator, SensorReading>> pipeline = query.Delay()
                                     .Where(100.0, ref predicate)
-                                    .Select<SensorReading, Calibrator, CalibratedReading>(ref calibrator);
+                                    .Select<Calibrator, CalibratedReading>(ref calibrator);
 
                 int index = 0;
                 foreach (ref readonly CalibratedReading item in pipeline)
@@ -411,7 +490,7 @@ namespace JCarrillo.AOT.Core.Tests.E2E
 
                 ValueLINQDelayStruct<CalibratedReading, ValueLINQSelectDelay<CalibratedReading, ValueLINQWhereDelay<SensorReading, ValueLINQSessionEnumerator<SensorReading>, SensorNoisePredicate, double>, Calibrator, SensorReading>> pipeline = query.Delay()
                                     .Where(100.0, ref predicate)
-                                    .Select<SensorReading, Calibrator, CalibratedReading>(ref calibrator);
+                                    .Select<Calibrator, CalibratedReading>(ref calibrator);
 
                 int index = 0;
                 foreach (ref readonly CalibratedReading item in pipeline)
@@ -419,6 +498,182 @@ namespace JCarrillo.AOT.Core.Tests.E2E
                     buffer[index++] = item;
                 }
             });
+        }
+
+        public struct SumProcessorMutable : IProcesarChunkRefDelegado<int>
+        {
+            public int Sum { get; set; }
+            public void Ejecutar(ReadOnlySpan<int> listaChunk)
+            {
+                for (int i = 0; i < listaChunk.Length; i++)
+                {
+                    Sum += listaChunk[i];
+                }
+            }
+        }
+
+        public struct SumProcessorByValue : IProcesarChunkRefDelegado<int>
+        {
+            private readonly int[] _result;
+
+            public SumProcessorByValue(int[] result)
+            {
+                _result = result;
+            }
+
+            public void Ejecutar(ReadOnlySpan<int> listaChunk)
+            {
+                for (int i = 0; i < listaChunk.Length; i++)
+                {
+                    _result[0] += listaChunk[i];
+                }
+            }
+        }
+
+        [Fact]
+        public void ScenarioChunkExactDivision()
+        {
+            int[] elements = [1, 2, 3, 4, 5, 6];
+            using var query = elements.ToValueQuery();
+            var pipeline = query.Delay().Chunk(3);
+
+            int chunkCount = 0;
+            System.Collections.Generic.List<int[]> result = [];
+            foreach (ReadOnlySpan<int> chunk in pipeline)
+            {
+                chunkCount++;
+                result.Add(chunk.ToArray());
+            }
+
+            _ = chunkCount.Should().Be(2);
+            _ = result[0].Should().Equal([1, 2, 3]);
+            _ = result[1].Should().Equal([4, 5, 6]);
+        }
+
+        [Fact]
+        public void ScenarioChunkDivisionWithRemainder()
+        {
+            int[] elements = [1, 2, 3, 4, 5];
+            using var query = elements.ToValueQuery();
+            var pipeline = query.Delay().Chunk(2);
+
+            int chunkCount = 0;
+            System.Collections.Generic.List<int[]> result = [];
+            foreach (ReadOnlySpan<int> chunk in pipeline)
+            {
+                chunkCount++;
+                result.Add(chunk.ToArray());
+            }
+
+            _ = chunkCount.Should().Be(3);
+            _ = result[0].Should().Equal([1, 2]);
+            _ = result[1].Should().Equal([3, 4]);
+            _ = result[2].Should().Equal([5]);
+        }
+
+        [Fact]
+        public void ScenarioChunkFewerElementsThanSize()
+        {
+            int[] elements = [1, 2, 3];
+            using var query = elements.ToValueQuery();
+            var pipeline = query.Delay().Chunk(5);
+
+            int chunkCount = 0;
+            System.Collections.Generic.List<int[]> result = [];
+            foreach (ReadOnlySpan<int> chunk in pipeline)
+            {
+                chunkCount++;
+                result.Add(chunk.ToArray());
+            }
+
+            _ = chunkCount.Should().Be(1);
+            _ = result[0].Should().Equal([1, 2, 3]);
+        }
+
+        [Fact]
+        public void ScenarioChunkEmptyFlow()
+        {
+            int[] elements = [];
+            using var query = elements.ToValueQuery();
+            var pipeline = query.Delay().Chunk(3);
+
+            int chunkCount = 0;
+            foreach (ReadOnlySpan<int> chunk in pipeline)
+            {
+                chunkCount++;
+            }
+
+            _ = chunkCount.Should().Be(0);
+        }
+
+        [Fact]
+        public void ScenarioChunkInvalidSizeThrows()
+        {
+            int[] elements = [1, 2, 3];
+            using var query = elements.ToValueQuery();
+            
+            Action act0 = () => query.Delay().Chunk(0);
+            _ = act0.Should().Throw<ArgumentOutOfRangeException>();
+
+            Action actNeg = () => query.Delay().Chunk(-1);
+            _ = actNeg.Should().Throw<ArgumentOutOfRangeException>();
+        }
+
+        [Fact]
+        public void ScenarioChunkProcesarErgonomicLambda()
+        {
+            int[] elements = [1, 2, 3, 4, 5];
+            using var query = elements.ToValueQuery();
+            int sum = 0;
+            query.Delay().Chunk(2).ProcesarChunk((scoped ref ReadOnlySpan<int> chunk) =>
+            {
+                for (int i = 0; i < chunk.Length; i++)
+                {
+                    sum += chunk[i];
+                }
+            });
+            _ = sum.Should().Be(15);
+        }
+
+        [Fact]
+        public void ScenarioChunkProcesarStructMutableByRef()
+        {
+            int[] elements = [1, 2, 3, 4, 5];
+            using var query = elements.ToValueQuery();
+            SumProcessorMutable processor = new();
+            query.Delay().Chunk(2).ProcesarChunk(ref processor);
+            _ = processor.Sum.Should().Be(15);
+        }
+
+        [Fact]
+        public void ScenarioChunkProcesarStructByValue()
+        {
+            int[] elements = [1, 2, 3, 4, 5];
+            using var query = elements.ToValueQuery();
+            int[] result = new int[1];
+            SumProcessorByValue processor = new(result);
+            query.Delay().Chunk(2).ProcesarChunkRef(processor);
+            _ = result[0].Should().Be(15);
+        }
+
+        [Fact]
+        public void ScenarioChunkZeroAllocations()
+        {
+            int[] elements = [1, 2, 3, 4, 5];
+            int sum = 0;
+            AllocationAssert.AssertZeroAllocations(() =>
+            {
+                sum = 0;
+                using var query = elements.AsSpan().ToValueQuery();
+                query.Delay().Chunk(2).ProcesarChunk((scoped ref ReadOnlySpan<int> chunk) =>
+                {
+                    for (int i = 0; i < chunk.Length; i++)
+                    {
+                        sum += chunk[i];
+                    }
+                });
+            });
+            _ = sum.Should().Be(15);
         }
     }
 }

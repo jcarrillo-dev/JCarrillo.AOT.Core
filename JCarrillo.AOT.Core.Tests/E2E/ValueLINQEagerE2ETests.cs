@@ -65,12 +65,7 @@ namespace JCarrillo.AOT.Core.Tests.E2E
         }
 
         private static int GetActiveSlotsCount<TItem>()
-        {
-            int topStack = (int)typeof(ValueLINQStateManager<TItem>)
-                .GetField("_topStack", BindingFlags.Static | BindingFlags.NonPublic)!
-                .GetValue(null)!;
-            return 4096 - topStack;
-        }
+            => ValueLINQConfig.TamañoTabla - ValueLINQStateManager<TItem>.SlotsLibres;
 
         #endregion
 
