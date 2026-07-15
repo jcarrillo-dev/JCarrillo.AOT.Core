@@ -427,3 +427,9 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# AI & Agent Metadata
+.agents/
+.claude/
+/ORIGINAL_REQUEST.md
+
