@@ -154,7 +154,7 @@ namespace JCarrillo.AOT.Core.Benchmarks.Extensiones
 
             var lazyPipeline = _array.ToValueDelayQuery()
                                      .Where(0, ref filter)
-                                     .Select<int, MultiplyByTwoSelector, int>(ref selector);
+                                     .Select<MultiplyByTwoSelector, int>(ref selector);
 
             foreach (ref readonly int x in lazyPipeline)
             {
