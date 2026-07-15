@@ -1,8 +1,8 @@
 #if NET9_0_OR_GREATER
-using System.Runtime.CompilerServices;
 using JCarrillo.AOT.Core.Diagnostico;
 using JCarrillo.AOT.Core.ValueLINQ.Delay;
 using JCarrillo.AOT.Core.ValueLINQ.Delegados;
+using System.Runtime.CompilerServices;
 
 namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
 {
@@ -11,6 +11,8 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
     /// </summary>
     public static class ValueLINQDelayErgonomicExtensions
     {
+        #region Where
+
         /// <summary>
         /// Filtra un flujo de datos perezoso basándose en un predicado ergonómico (delegado <see cref="Func{T, TResult}"/>).
         /// </summary>
@@ -30,6 +32,10 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
             return pipeline.Where(predicate, ref adapter);
         }
 
+        #endregion
+
+        #region Select
+
         /// <summary>
         /// Proyecta cada elemento de un flujo de datos perezoso en un nuevo formulario utilizando un selector ergonómico (delegado <see cref="Func{T, TResult}"/>).
         /// </summary>
@@ -47,8 +53,35 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
             where TEnumerator : IValueLINQEnumerator<T>, allows ref struct
         {
             ValueLINQFuncSelectSelector<T, TResultado> adapter = new(selector);
-            return pipeline.Select<T, ValueLINQFuncSelectSelector<T, TResultado>, TResultado>(ref adapter);
+            return pipeline.Select<ValueLINQFuncSelectSelector<T, TResultado>, TResultado>(ref adapter);
         }
+
+        #endregion
+
+        #region Chunk
+
+        /// <summary>
+        /// Define un delegado ergonómico diseñado para ejecutar procesamiento arbitrario sobre un fragmento por referencia scoped.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos contenidos en el fragmento.</typeparam>
+        /// <param name="chunk">La referencia al fragmento expuesto como <see cref="ReadOnlySpan{T}"/>.</param>
+        public delegate void ProcesarChunkDelegado<T>(scoped ref ReadOnlySpan<T> chunk);
+
+        /// <summary>
+        /// Consume de forma terminal la canalización de fragmentos de forma ergonómica mediante una expresión lambda o delegado tradicional.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos contenidos en los fragmentos.</typeparam>
+        /// <typeparam name="TEnumerator">El tipo del enumerador de origen. Admite estructuras de referencia (allows ref struct).</typeparam>
+        /// <param name="pipeline">La canalización perezosa que genera los fragmentos.</param>
+        /// <param name="procesar">La lambda o delegado ergonómico que procesará cada fragmento de forma síncrona.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void ProcesarChunk<T, TEnumerator>(
+            this ValueLINQDelayStruct<ReadOnlySpan<T>, TEnumerator> pipeline,
+            ProcesarChunkDelegado<T> procesar)
+            where TEnumerator : IValueLINQEnumerator<ReadOnlySpan<T>>, allows ref struct
+            => ValueLINQDelayExtensions.ProcesarChunkRef(pipeline, new ValueLINQFuncProcesarChunk<T>(procesar));
+
+        #endregion
     }
 }
 #endif

@@ -19,7 +19,12 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
         /// Inicializa una nueva instancia de la estructura <see cref="PooledListRef{TItem}"/> con una capacidad predeterminada de 64 elementos.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public PooledListRef() : this(64) { }
+        public PooledListRef()
+        {
+            _items = null;
+            _indiceInsercion = 0;
+            EstaDisposed = false;
+        }
 
         /// <summary>
         /// Inicializa una nueva instancia de la estructura <see cref="PooledListRef{TItem}"/> con la capacidad inicial especificada.
@@ -112,7 +117,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
             get
             {
                 if (EstaDisposed) ThrowObjectDisposed();
-                return _items.AsSpan(0, _indiceInsercion);
+                return _items is null ? Span<TItem>.Empty : _items.AsSpan(0, _indiceInsercion);
             }
         }
 
@@ -208,7 +213,12 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
         public bool IntentarAmpliar(int nuevoTamaño)
         {
             if (EstaDisposed) return false;
-            if (_items!.Length >= nuevoTamaño) return true;
+            if (_items is null)
+            {
+                _items = ArrayPool<TItem>.Shared.Rent(Math.Max(nuevoTamaño, PooledCollectionsConfig.DefaultCapacity));
+                return true;
+            }
+            if (_items.Length >= nuevoTamaño) return true;
 
             int nuevaCapacidad = Math.Max(nuevoTamaño, _items.Length * 2);
 

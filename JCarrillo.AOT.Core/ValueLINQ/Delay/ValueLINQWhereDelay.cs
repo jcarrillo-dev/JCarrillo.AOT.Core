@@ -46,11 +46,16 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool MoveNext()
         {
+            if (_enumerator is null)
+                return false;
+
             while (_enumerator.MoveNext())
             {
                 if (_predicate.Ejecutar(_enumerator.Current, _state))
                     return true;
             }
+
+            Dispose();
             return false;
         }
 
@@ -60,8 +65,11 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Dispose()
         {
-            _enumerator.Dispose();
-            _enumerator = default!;
+            if (_enumerator is not null)
+            {
+                _enumerator.Dispose();
+                _enumerator = default!;
+            }
         }
     }
 }

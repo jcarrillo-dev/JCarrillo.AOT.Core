@@ -132,8 +132,8 @@ namespace JCarrillo.AOT.Core.Extensiones.Boxing
             byte stackVar = 0;
             nuint currentStack = (nuint)Unsafe.AsPointer(ref stackVar);
 
-            _stackLow = currentStack - (1024 * 1024);
-            _stackHigh = currentStack + (16 * 1024 * 1024);
+            _stackLow = currentStack - BoxingConfig.StackLowOffset;
+            _stackHigh = currentStack + BoxingConfig.StackHighOffset;
         }
 
         [LibraryImport("kernel32.dll")]

@@ -1,5 +1,7 @@
 #if NET9_0_OR_GREATER
 using System.Runtime.CompilerServices;
+using System.Threading;
+using JCarrillo.AOT.Core.ValueLINQ.Excepciones;
 
 namespace JCarrillo.AOT.Core.ValueLINQ.Delay
 {
@@ -9,16 +11,28 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
     /// <typeparam name="T">El tipo de los elementos en la sesión.</typeparam>
     public ref struct ValueLINQSessionEnumerator<T> : IValueLINQEnumerator<T>
     {
-        private readonly long _token;
         private ReadOnlySpan<T> _span;
         private int _index;
+        private long _tokenEsperado;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal ValueLINQSessionEnumerator(long token)
         {
-            _token = token;
-            _span = default;
+            ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
+            T[]? arregloLocal = Volatile.Read(ref metadatos.Array);
+            int tamañoLocal = Volatile.Read(ref metadatos.TamañoActual);
+
+            if (arregloLocal != null && tamañoLocal > 0 && tamañoLocal <= arregloLocal.Length)
+            {
+                _span = arregloLocal.AsSpan(0, tamañoLocal);
+            }
+            else
+            {
+                _span = default;
+            }
+
             _index = -1;
+            _tokenEsperado = token;
         }
 
         /// <summary>
@@ -38,22 +52,34 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool MoveNext()
         {
-            ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(_token);
-            _span = metadatos.Array.AsSpan(0, metadatos.TamañoActual);
+            if (_tokenEsperado == 0L || !ValueLINQStateManager<T>.IsMetadatoValido(_tokenEsperado))
+                return false;
 
-            int next = _index + 1;
-            bool hasNext = next < _span.Length;
-            if (hasNext)
-                _index = next;
-            return hasNext;
+            int siguiente = _index + 1;
+            _index = siguiente;
+            bool hasSiguiente = (uint)siguiente < (uint)_span.Length;
+
+            if (!hasSiguiente)
+            {
+                Dispose();
+                return false;
+            }
+
+            return true;
         }
 
         /// <summary>
         /// Libera los recursos de sesión asociados a esta consulta en el administrador de estados.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly void Dispose()
+        public void Dispose()
         {
+            if (_tokenEsperado == 0L)
+                return;
+
+            long token = _tokenEsperado;
+            _tokenEsperado = 0L;
+            ValueLINQStateManager<T>.LiberarMetadatos(token);
         }
     }
 }

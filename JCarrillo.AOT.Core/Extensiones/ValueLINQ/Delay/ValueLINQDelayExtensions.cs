@@ -2,6 +2,7 @@
 using System.Runtime.CompilerServices;
 using JCarrillo.AOT.Core.ValueLINQ;
 using JCarrillo.AOT.Core.ValueLINQ.Delay;
+using JCarrillo.AOT.Core.ValueLINQ.Interfaces;
 
 namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
 {
@@ -10,6 +11,8 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
     /// </summary>
     public static class ValueLINQDelayExtensions
     {
+        #region ToValueDelayQuery
+
         /// <summary>
         /// Convierte una consulta <see cref="ValueLINQStruct{T}"/> en un flujo de datos de evaluación perezosa (lazy).
         /// </summary>
@@ -74,6 +77,86 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
             ValueLINQSourceEnumerator<T> sourceEnumerator = new(span);
             return new ValueLINQDelayStruct<T, ValueLINQSourceEnumerator<T>>(sourceEnumerator);
         }
+
+        #endregion
+
+        #region Chunk
+
+        /// <summary>
+        /// Agrupa los elementos de la canalización perezosa actual en bloques (chunks) de un tamaño máximo especificado.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos en el flujo de datos de origen.</typeparam>
+        /// <typeparam name="TEnumerator">El tipo del enumerador de origen. Admite estructuras de referencia (allows ref struct).</typeparam>
+        /// <param name="pipeline">La canalización perezosa de origen.</param>
+        /// <param name="chunkSize">El tamaño máximo de cada fragmento.</param>
+        /// <returns>Una estructura <see cref="ValueLINQDelayStruct{TResultado, TEnumerator}"/> que expone de forma perezosa los fragmentos como <see cref="ReadOnlySpan{T}"/>.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQDelayStruct<ReadOnlySpan<T>, ValueLINQChunkDelay<T, TEnumerator>> Chunk<T, TEnumerator>(this ValueLINQDelayStruct<T, TEnumerator> pipeline, int chunkSize)
+            where TEnumerator : IValueLINQEnumerator<T>, allows ref struct
+        {
+            ValueLINQChunkDelay<T, TEnumerator> chunkEnumerator = new(ref pipeline._enumerator, chunkSize);
+            return new ValueLINQDelayStruct<ReadOnlySpan<T>, ValueLINQChunkDelay<T, TEnumerator>>(chunkEnumerator);
+        }
+
+        /// <summary>
+        /// Consume de forma terminal la canalización de fragmentos y los procesa de manera síncrona mediante un procesador estructural mutable pasado por referencia.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos contenidos en los fragmentos.</typeparam>
+        /// <typeparam name="TEnumerator">El tipo del enumerador de origen. Admite estructuras de referencia (allows ref struct).</typeparam>
+        /// <typeparam name="TProcesador">El tipo de la estructura del procesador que implementa <see cref="IProcesarChunkRefDelegado{T}"/>.</typeparam>
+        /// <param name="pipeline">La canalización perezosa que genera los fragmentos.</param>
+        /// <param name="procesar">Una referencia al procesador mutador que ejecutará el procesamiento de cada fragmento.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void ProcesarChunk<T, TEnumerator, TProcesador>(this ValueLINQDelayStruct<ReadOnlySpan<T>, TEnumerator> pipeline, ref TProcesador procesar)
+            where TEnumerator : IValueLINQEnumerator<ReadOnlySpan<T>>, allows ref struct
+            where TProcesador : struct, IProcesarChunkRefDelegado<T>
+        {
+            TEnumerator enumerator = pipeline._enumerator;
+
+            try
+            {
+                while (enumerator.MoveNext())
+                {
+                    procesar.Ejecutar(enumerator.Current);
+                }
+            }
+            finally
+            {
+                enumerator.Dispose();
+            }
+
+        }
+
+        /// <summary>
+        /// Consume de forma terminal la canalización de fragmentos y los procesa de manera síncrona mediante un procesador estructural que puede ser un ref struct pasado por valor.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos contenidos en los fragmentos.</typeparam>
+        /// <typeparam name="TEnumerator">El tipo del enumerador de origen. Admite estructuras de referencia (allows ref struct).</typeparam>
+        /// <typeparam name="TProcesador">El tipo del procesador que implementa <see cref="IProcesarChunkRefDelegado{T}"/> y admite estructuras de referencia (allows ref struct).</typeparam>
+        /// <param name="pipeline">La canalización perezosa que genera los fragmentos.</param>
+        /// <param name="procesar">El procesador que ejecutará el procesamiento de cada fragmento (puede ser un ref struct temporario).</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void ProcesarChunkRef<T, TEnumerator, TProcesador>(this ValueLINQDelayStruct<ReadOnlySpan<T>, TEnumerator> pipeline, TProcesador procesar)
+            where TEnumerator : IValueLINQEnumerator<ReadOnlySpan<T>>, allows ref struct
+            where TProcesador : IProcesarChunkRefDelegado<T>, allows ref struct
+        {
+            TEnumerator enumerator = pipeline._enumerator;
+
+            try
+            {
+                while (enumerator.MoveNext())
+                {
+                    procesar.Ejecutar(enumerator.Current);
+                }
+            }
+            finally
+            {
+                enumerator.Dispose();
+            }
+
+        }
+
+        #endregion
     }
 }
 #endif

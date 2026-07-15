@@ -84,7 +84,6 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         #region Datos
 
         private TItem[]? _items;
-        private Memory<TItem>? _memory;
 
         /// <summary>
         /// Obtiene una vista de acceso directo en memoria en forma de <see cref="Span{TItem}"/> sobre el arreglo alquilado.
@@ -94,10 +93,14 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         /// <exception cref="ObjectDisposedException">
         /// Se lanza si el arreglo subyacente ya ha sido retornado al pool.
         /// </exception>
-        public Span<TItem> Span
+        public readonly Span<TItem> Span
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => Memory.Span;
+            get
+            {
+                if (EstaDisposed) ThrowObjectDisposed();
+                return _items is null ? Span<TItem>.Empty : new Span<TItem>(_items, 0, _tamaño);
+            }
         }
 
         /// <summary>
@@ -108,13 +111,13 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         /// <exception cref="ObjectDisposedException">
         /// Se lanza si el arreglo subyacente ya ha sido retornado al pool.
         /// </exception>
-        public Memory<TItem> Memory
+        public readonly Memory<TItem> Memory
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                if (EstaDisposed || _items is null) ThrowObjectDisposed();
-                return _memory ??= new Memory<TItem>(_items, 0, _tamaño);
+                if (EstaDisposed) ThrowObjectDisposed();
+                return _items is null ? Memory<TItem>.Empty : new Memory<TItem>(_items, 0, _tamaño);
             }
         }
 

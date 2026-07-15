@@ -11,7 +11,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
         where T : allows ref struct
         where TEnumerator : IValueLINQEnumerator<T>, allows ref struct
     {
-        private TEnumerator _enumerator;
+        internal TEnumerator _enumerator;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal ValueLINQDelayStruct(TEnumerator enumerator) => _enumerator = enumerator;
@@ -25,10 +25,19 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
         /// <param name="predicate">Una referencia al predicado de filtro.</param>
         /// <returns>Una estructura <see cref="ValueLINQDelayStruct{T, TEnumerator}"/> con el enumerador de filtro aplicado.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ValueLINQDelayStruct<T, ValueLINQWhereDelay<T, TEnumerator, TPredicate, TState>> Where<TState, TPredicate>(TState state, scoped ref TPredicate predicate)
+        public ValueLINQDelayStruct<T, ValueLINQWhereDelay<T, TEnumerator, TPredicate, TState>> Where<TPredicate, TState>(TState state, scoped ref TPredicate predicate)
             where TPredicate : struct, IWhereDelegado<T, TState>, allows ref struct
             where TState : allows ref struct
         {
+            ValueLINQWhereDelay<T, TEnumerator, TPredicate, TState> whereEnumerator = new(ref _enumerator, ref predicate, state);
+            return new ValueLINQDelayStruct<T, ValueLINQWhereDelay<T, TEnumerator, TPredicate, TState>>(whereEnumerator);
+        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ValueLINQDelayStruct<T, ValueLINQWhereDelay<T, TEnumerator, TPredicate, TState>> Where<TPredicate, TState>(TState state)
+            where TPredicate : struct, IWhereDelegado<T, TState>, allows ref struct
+            where TState : allows ref struct
+        {
+            TPredicate predicate = default;
             ValueLINQWhereDelay<T, TEnumerator, TPredicate, TState> whereEnumerator = new(ref _enumerator, ref predicate, state);
             return new ValueLINQDelayStruct<T, ValueLINQWhereDelay<T, TEnumerator, TPredicate, TState>>(whereEnumerator);
         }
@@ -43,15 +52,23 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
         /// <param name="selector">Una referencia al selector de proyección.</param>
         /// <returns>Una estructura <see cref="ValueLINQDelayStruct{TResultado, TEnumerator}"/> con el enumerador de proyección aplicado.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ValueLINQDelayStruct<TResultado, ValueLINQSelectDelay<TResultado, TEnumerator, TSelector, T>> Select<TOrigen, TSelector, TResultado>(scoped ref TSelector selector)
+        public ValueLINQDelayStruct<TResultado, ValueLINQSelectDelay<TResultado, TEnumerator, TSelector, T>> Select<TSelector, TResultado>(scoped ref TSelector selector)
             where TSelector : struct, ISelectDelegado<T, TResultado>, allows ref struct
             where TResultado : allows ref struct
-            where TOrigen : allows ref struct
         {
             ValueLINQSelectDelay<TResultado, TEnumerator, TSelector, T> selectEnumerator = new(ref _enumerator, ref selector);
             return new ValueLINQDelayStruct<TResultado, ValueLINQSelectDelay<TResultado, TEnumerator, TSelector, T>>(selectEnumerator);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ValueLINQDelayStruct<TResultado, ValueLINQSelectDelay<TResultado, TEnumerator, TSelector, T>> Select<TSelector, TResultado>()
+            where TSelector : struct, ISelectDelegado<T, TResultado>, allows ref struct
+            where TResultado : allows ref struct
+        {
+            TSelector newSelect = default;
+            ValueLINQSelectDelay<TResultado, TEnumerator, TSelector, T> selectEnumerator = new(ref _enumerator, ref newSelect);
+            return new ValueLINQDelayStruct<TResultado, ValueLINQSelectDelay<TResultado, TEnumerator, TSelector, T>>(selectEnumerator);
+        }
 
         /// <summary>
         /// Obtiene el enumerador subyacente para recorrer los elementos del flujo de datos perezoso.

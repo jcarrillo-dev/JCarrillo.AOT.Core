@@ -28,13 +28,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueLINQRefStruct<T> Where<T>(this ValueLINQRefStruct<T> origen, Func<T, bool> predicate)
         {
-            ValueLINQFuncWherePredicate<T> adapter = new();
-            unsafe
-            {
-                void* ptr = Unsafe.AsPointer(ref adapter);
-                ref ValueLINQFuncWherePredicate<T> refAdapter = ref Unsafe.AsRef<ValueLINQFuncWherePredicate<T>>(ptr);
-                return origen.Where(predicate, in refAdapter);
-            }
+            return origen.Where(predicate, default(ValueLINQFuncWherePredicate<T>));
         }
 
         /// <summary>
@@ -55,13 +49,8 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueLINQRefStruct<TResultado> Select<T, TResultado>(this ValueLINQRefStruct<T> origen, Func<T, TResultado> selector)
         {
-            ValueLINQFuncSelectSelector<T, TResultado> adapter = new(selector);
-            unsafe
-            {
-                void* ptr = Unsafe.AsPointer(ref adapter);
-                ref ValueLINQFuncSelectSelector<T, TResultado> refAdapter = ref Unsafe.AsRef<ValueLINQFuncSelectSelector<T, TResultado>>(ptr);
-                return origen.Select<T, ValueLINQFuncSelectSelector<T, TResultado>, TResultado>(in refAdapter);
-            }
+            var adapter = new ValueLINQFuncSelectSelector<T, TResultado>(selector);
+            return origen.Select<T, ValueLINQFuncSelectSelector<T, TResultado>, TResultado>(in adapter);
         }
     }
 }

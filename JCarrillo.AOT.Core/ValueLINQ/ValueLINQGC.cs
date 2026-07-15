@@ -12,7 +12,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ
 
         static ValueLINQGC()
         {
-            _timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
+            _timer = new PeriodicTimer(ValueLINQConfig.IntervaloGC);
             _cts = new CancellationTokenSource();
             _backgroundTask = Task.Run(RunLoopAsync);
         }

@@ -1,8 +1,5 @@
-using System.Runtime.InteropServices;
-
 namespace JCarrillo.AOT.Core.ValueLINQ
 {
-    [StructLayout(LayoutKind.Auto)]
     internal struct MetadatosSesion<T>
     {
         public long Token;
@@ -10,5 +7,9 @@ namespace JCarrillo.AOT.Core.ValueLINQ
         public int TamañoActual;
         public bool IsDisposed;
         public long UltimoAcceso;
+        public long Version;
+        public long Relleno1;
+        public long Relleno2;
+        public long Relleno3;
     }
 }
