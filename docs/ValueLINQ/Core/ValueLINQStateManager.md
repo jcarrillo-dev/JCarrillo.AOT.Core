@@ -2,7 +2,7 @@
 
 # Gestor de Estados: ValueLINQStateManager y Sincronización Core
 
-`ValueLINQStateManager<T>` (ver [ValueLINQStateManager.cs](../../../JCarrillo.AOT.Core/ValueLINQ/ValueLINQStateManager.cs)) es el motor interno centralizado de ValueLINQ. Actúa como un gestor de estados estático y síncrono que administra un pool fijo de **4096 ranuras (slots)** de sesión activa por cada tipo de dato `T`, evitando la asignación dinámica de memoria y controlando el ciclo de vida de los buffers rentados del `ArrayPool<T>.Shared`.
+`ValueLINQStateManager<T>` (ver [ValueLINQStateManager.cs](../../../JCarrillo.AOT.Core/ValueLINQ/ValueLINQStateManager.cs)) es el motor interno centralizado de ValueLINQ. Actúa como un gestor de estados estático y síncrono que administra un pool fijo de **4096 ranuras (slots)** de sesión activa por cada par (tipo `T`, arena), alojadas en tablas de sesión (`TablaSesiones<T>`) materializadas de forma perezosa. El gestor direcciona hasta 4096 arenas (véase [Arenas](Arenas.md)), evitando la asignación dinámica de memoria y controlando el ciclo de vida de los buffers rentados del `ArrayPool<T>.Shared`.
 
 ---
 
@@ -12,8 +12,8 @@ El gestor de estados se compone de cuatro pilares de ingeniería de bajo nivel:
 
 ### A. Token de 64 bits y Prevención de Torn Reads
 Cada sesión activa se identifica unívocamente mediante un token `long` de 64 bits generado por el helper de bits [TokenHelper.cs](../../../JCarrillo.AOT.Core/ValueLINQ/TokenHelper.cs):
-*   **Bits 0-11 (12 bits)**: Almacenan el `slotIndex` (índice físico de la ranura, de 0 a 4095). Esto permite un acceso directo $O(1)$ a la ranura en la tabla estática sin realizar búsquedas o hashings.
-*   **Bits 12-63 (52 bits)**: Almacenan la `version` de la ranura (un contador secuencial que se incrementa cada vez que la ranura es reutilizada).
+*   **Bits 0-11 (12 bits)**: Almacenan el `slotIndex` (índice físico de la ranura, de 0 a 4095), que se descompone en (partición, offset) para un acceso directo $O(1)$ dentro de la tabla de sesión particionada, sin búsquedas ni hashing.
+*   **Bits 12-23 (12 bits)**: `arena_id`, identificador de la arena propietaria de la sesión. **Bits 24-35 (12 bits)**: `arena_gen`, generación de la arena (desambigua distintas encarnaciones de un mismo id de arena). **Bits 36-63 (28 bits)**: `version` de la ranura (contador secuencial que se incrementa en cada reutilización).
 
 Para evitar **torn reads** (lecturas corruptas de 64 bits que ocurren cuando un hilo lee la mitad superior del token y otro escribe la mitad inferior en arquitecturas de 32 bits), el acceso al token está protegido con operaciones atómicas de hardware:
 ```csharp
@@ -35,17 +35,17 @@ public static void EscribirToken(ref long ubicacion, long valor)
 Esto garantiza la consistencia del token a nivel de CPU sin penalizaciones de bloqueo de software.
 
 ### B. Asignador de Ranuras Determinista $O(1)$
-El reciclaje de ranuras libres se gestiona mediante un stack estático pre-asignado (`_indicesLibresStack`) de 4096 enteros y un puntero de pila (`_topStack`).
-*   **Reserva (Pop)**: Al inicializar una consulta, se extrae un índice libre de la pila en tiempo constante $O(1)$ bajo un bloqueo global muy rápido (`_stackRoot`).
+El reciclaje de ranuras libres se gestiona mediante un stack pre-asignado por tabla (`_indicesLibresStack`) de 4096 enteros y un puntero de pila (`_topStack`), propio de cada par (tipo `T`, arena).
+*   **Reserva (Pop)**: Al inicializar una consulta, se extrae un índice libre de la pila en tiempo constante $O(1)$ bajo un `SpinLock` por tabla muy rápido (`_spinLockStack`).
 *   **Devolución (Push)**: Al liberar la consulta, el índice se empuja de vuelta a la pila en $O(1)$.
 Este diseño elimina la fragmentación de memoria y evita cualquier asignación de punteros o colecciones dinámicas en el Heap de GC.
 
-### C. Modelo de Bloqueos Segmentados (Lock Striping)
-Para prevenir la contención de hilos en aplicaciones altamente concurrentes, el StateManager implementa **Lock Striping de 1 a 1 por slot**.
-En lugar de bloquear toda la tabla de estados durante operaciones de lectura/escritura, cada ranura posee su propio objeto de bloqueo dedicado (`_slotLocks[indice]`).
-Cuando un hilo interactúa con una sesión (por ejemplo, añadiendo datos o redimensionando el buffer), únicamente adquiere el lock de esa ranura específica:
+### C. Modelo de Bloqueos Segmentados (SpinLock por slot)
+Para prevenir la contención de hilos en aplicaciones altamente concurrentes, el StateManager implementa un **`SpinLock` dedicado de 1 a 1 por slot**.
+En lugar de bloquear toda la tabla de estados, cada ranura posee su propio `SpinLock`, encapsulado en el struct `SpinLockSlot` (con `[StructLayout(LayoutKind.Sequential, Size = 64)]` para ocupar una línea de caché y evitar el false sharing) y alojado en tablas particionadas (`_spinLocks[particion][index]`).
+Cuando un hilo interactúa con una sesión (por ejemplo, añadiendo datos o redimensionando el buffer), únicamente adquiere el lock de esa ranura específica, mediante el ref struct `ValueLINQSpinLock`:
 ```csharp
-lock (_slotLocks[indice])
+using (new ValueLINQSpinLock(ref _spinLocks[particion][index].Lock))
 {
     // Operación aislada en la ranura
 }
@@ -53,8 +53,8 @@ lock (_slotLocks[indice])
 Esto permite que hasta 4096 hilos operen de forma simultánea en diferentes consultas de forma completamente paralela y con cero contención de locks.
 
 ### D. Temporizador de Limpieza de Fondo (LimpiezaPeriodicTimer)
-Para evitar fugas de memoria por consultas huérfanas que no invocaron a `Dispose()`, el gestor inicia un temporizador periódico asíncrono en segundo plano (`LimpiezaPeriodicTimer`) que despierta **cada 1 minuto (medido)**.
-El limpiador recorre las ranuras y evalúa si una sesión activa no ha registrado accesos en un intervalo mayor a `TiempoLimpieza` (por defecto, **5 minutos (medido)**). Si expira, adquiere de forma segura el lock de la ranura, invalida el token, devuelve el buffer físico al `ArrayPool<T>` y retorna el índice al stack de libres.
+Para evitar fugas de memoria por consultas huérfanas que no invocaron a `Dispose()`, el gestor delega en `ValueLINQGC`, que ejecuta un `PeriodicTimer` asíncrono en segundo plano que despierta **cada 10 segundos** (`ValueLINQConfig.IntervaloGC`).
+El limpiador recorre las tablas de sesión de todas las arenas materializadas y evalúa si una sesión activa no ha registrado accesos en un intervalo mayor a `TiempoLimpieza` (por defecto, **5 minutos**, configurable). Si expira, adquiere de forma segura el `SpinLock` de la ranura, invalida el token, devuelve el buffer físico al `ArrayPool<T>` y retorna el índice al stack de libres.
 
 ---
 
@@ -87,7 +87,7 @@ La versión 1.1.0 introduce la población en bloque para mitigar la sobrecarga d
 ## 3. Diagnóstico Técnico de la Población Unitaria vs Bloque
 
 ### El Coste de la Población Unitaria ($O(N)$ Locks)
-En la población unitaria (`ValueLINQStruct_Int_Fixed`), el cliente ejecuta un bucle `for` llamando a `Añadir(i)` para cada elemento. Cada llamada individual a `Añadir` invoca a `AsegurarEspacio`, el cual adquiere un bloqueo `lock (_slotLocks[indice])`.
+En la población unitaria (`ValueLINQStruct_Int_Fixed`), el cliente ejecuta un bucle `for` llamando a `Añadir(i)` para cada elemento. Cada llamada individual a `Añadir` invoca a `AsegurarEspacio`, el cual adquiere el `SpinLock` del slot mediante `new ValueLINQSpinLock(ref _spinLocks[particion][index].Lock)`.
 *   Para $N = 1000$, el procesador debe ejecutar **1000 adquisiciones y 1000 liberaciones de lock** de forma secuencial.
 *   Incluso en ausencia de contención entre hilos, cada par lock/unlock consume tiempo en la CPU debido a las comprobaciones de exclusión mutua y barreras de memoria del runtime de .NET.
 *   Esto genera una penalización sistemática de **~32,000 ns (medido)** dedicada exclusivamente a la sincronización de hilos, relegando la latencia útil de copia a un segundo plano y provocando que la operación sea 14.7 veces más lenta que una lista ordinaria.

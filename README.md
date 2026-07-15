@@ -68,3 +68,14 @@ Comparativa entre la población iterativa (que adquiere $O(N)$ locks) y la pobla
 > [!NOTE]
 > **Información Adicional**:
 > Para ver todas las comparativas detalladas de iteración, concatenación y sobrecarga de `params` en múltiples runtimes, consulte el [Reporte de Benchmarks Completo](docs/ValueLINQ/BENCHMARK.md).
+
+---
+
+## Metodología de Desarrollo
+
+Este proyecto se desarrolla en pareja humano-IA con roles definidos y verificación cruzada:
+
+*   **Diseño y arquitectura**: humanos. Cada decisión estructural (sistema de tokens generacionales, particionado de tablas, modelo de concurrencia, contratos de API) se origina y aprueba por el mantenedor.
+*   **Implementación**: mixta. El código de producción se escribe principalmente a mano; la IA implementa piezas concretas bajo especificación y revisión del mantenedor.
+*   **Verificación adversarial**: los tests, las revisiones de concurrencia y la documentación se elaboran con asistencia de IA instruida para *refutar* el código, no para confirmarlo.
+*   **Regla invariante**: ninguna contribución — humana o asistida — se integra sin pasar la suite completa en los tres target frameworks (net8.0/net9.0/net10.0). Las cifras de rendimiento publicadas se miden con BenchmarkDotNet; nunca se estiman.

@@ -7,4 +7,5 @@ Esta sección cubre el funcionamiento interno y la administración física de es
 ## Componentes del Núcleo
 
 *   **[ValueLINQStructs: Modelos de Sesión](ValueLINQStructs.md)**: Diferencias, ciclo de vida y reglas de pila de `ValueLINQStruct` y `ValueLINQRefStruct`.
-*   **[ValueLINQStateManager: Gestor y Sincronización](ValueLINQStateManager.md)**: Análisis del gestor estático de 4096 slots, lock striping y el timer de limpieza de fondo.
+*   **[ValueLINQStateManager: Gestor y Sincronización](ValueLINQStateManager.md)**: Análisis del gestor con tablas de sesión particionadas por (tipo, arena) (64 particiones × 64 slots = 4096 slots por tabla, materializadas de forma perezosa), bloqueo por SpinLock por slot (sin lock striping de objetos) y el timer de limpieza de fondo.
+*   **[Arenas de Memoria](Arenas.md)**: Ámbitos de memoria explícitos (`ValueLINQArena`), la arena ambiente y persistente (arena 0), propagación por operadores y contrato de vida útil.

@@ -189,6 +189,30 @@ Compara el coste de materialización en colecciones tradicionales alojadas en el
 
 ---
 
+## 4. Arenas de Memoria (Sobrecoste y Amortización)
+
+Mide el coste de la nueva capa de [arenas de memoria](Core/Arenas.md): el alquiler/liberación de una arena, y una cadena `Where + Select` (materializada con `ToArray`) sobre la arena ambiente (0), sobre una arena explícita **reutilizada** y sobre una arena **nueva por cada consulta**.
+
+> [!NOTE]
+> **Alcance de esta pasada (medido)**: BenchmarkDotNet v0.15.8, `MemoryDiagnoser`, mismo hardware que el resto del reporte (AMD Ryzen 9 3950X). Ejecutado en **JIT para .NET 8.0 / 9.0 / 10.0**; las variantes **NativeAOT** de esta tabla quedan pendientes de la sesión de benchmarks completa. El resto de tablas de este documento sí incluyen NativeAOT.
+
+### .NET 10.0 JIT (Medido)
+
+| Método | $N=100$ | $N=1000$ | Heap Allocated | Notas |
+| :--- | :---: | :---: | :---: | :--- |
+| `CrearYDisponerArena` | **56.3 ns (medido)** | **56.4 ns (medido)** | **0 B (medido)** | Alquilar + liberar una arena vacía (sin sesiones). |
+| `WhereSelect_Ambiente` (baseline) | 421 ns (medido) | 1,144 ns (medido) | **0 B (medido)** | Cadena en la arena ambiente (0), cuya tabla se crea al arranque. |
+| `WhereSelect_ArenaReutilizada` | **430 ns (medido)** | **1,130 ns (medido)** | **0 B (medido)** | Misma cadena en una arena explícita ya materializada y reutilizada. |
+| `WhereSelect_ArenaExplicita` | 3,640 ns (medido) | 3,858 ns (medido) | **25,848 B (medido)** | Una arena **nueva** creada y dispuesta por cada consulta. |
+
+> [!IMPORTANT]
+> **El coste de una arena es de creación de tabla, no de consulta.**
+> 1. **Reutilizar una arena no cuesta nada medible**: `WhereSelect_ArenaReutilizada` iguala a la arena ambiente (430 vs 421 ns a $N=100$; 1,130 vs 1,144 ns a $N=1000$; **0 B** en ambos, medido). El enrutado por `arena_id` (tres cargas dependientes frente a una) queda dentro del ruido de medición. Usar arenas explícitas en estado estacionario es, en la práctica, **gratis**.
+> 2. **El sobrecoste de `WhereSelect_ArenaExplicita` (los 25,848 B y el ×3–9 de latencia, medido) es enteramente la materialización de la tabla de sesiones del tipo en una arena nueva** (~25 KB: stack de índices + primera partición). Es el coste "se paga una vez por (tipo, arena)" que se estimaba por fórmula, ahora **medido**. En uso real, una arena se reutiliza para muchas consultas y ese coste se amortiza hasta las cifras de `ArenaReutilizada`.
+> 3. **Crear/disponer una arena vacía cuesta ~56 ns y 0 B (medido) en .NET 10.0** (en .NET 8.0/9.0 JIT se observan **40 B (medido)** por la asignación del enumerador del `ConcurrentBag` de liberadores en el camino de `Dispose`, que RyuJIT elimina en .NET 10.0). Es un camino frío (una vez por ámbito), no la ruta caliente de consulta.
+
+---
+
 ## Lo que este benchmark NO mide
 
 Las pruebas ejecutadas tienen un alcance restringido y no evalúan el comportamiento del sistema bajo las siguientes condiciones de producción:
@@ -202,3 +226,4 @@ Las pruebas ejecutadas tienen un alcance restringido y no evalúan el comportami
 2.  **Ventaja en Native AOT**: En Native AOT 10.0, la resolución dinámica de interfaces penaliza al LINQ estándar, elevando la latencia a 14,379.39 ns **(medido)**. El motor diferido `ValueLINQDelayWhereSelect` reduce la latencia a 626.07 ns **(medido)** (aproximadamente 23 veces más rápido) operando a velocidad de hardware por el inlining estático completo.
 3.  **Amortización de Sincronización**: La población en bloque (`Añadir(ReadOnlySpan<T>)`) reduce la latencia en un **99.52% (medido)** frente a la inserción iterativa al sustituir el coste de $O(N)$ bloqueos por un único bloqueo atómico $O(1)$.
 4.  **Amortización de Alquiler en Materialización**: Para escalas de colección reducidas ($N = 100$), los materializadores estándar son superiores en velocidad (14.7% a 31.5% más rápidos, medido) debido a la sobrecarga nula de alquiler de buffers; no obstante, para volúmenes mayores ($N = 1000$), las variantes pooled reducen el tiempo de CPU en un 18.7% a 31.1% (medido) al suprimir el coste de alocación de memoria del GC.
+5.  **Coste Nulo de las Arenas Reutilizadas**: En .NET 10.0 JIT, una cadena `Where + Select` sobre una arena explícita reutilizada iguala a la arena ambiente (**430 ns vs 421 ns a $N=100$; 0 B en ambos, medido**), confirmando que el enrutado por `arena_id` no introduce sobrecoste medible. El coste de una arena nueva por consulta (**25,848 B, medido**) corresponde íntegramente a la materialización única de la tabla de sesiones por (tipo, arena), amortizable a cero con la reutilización.
