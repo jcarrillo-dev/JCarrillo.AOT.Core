@@ -160,7 +160,11 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
             using ValueLINQSpinLock spinLock = new(ref _spinLocks[particion][index].Lock);
 
             ref MetadatosSesion<T> metadato = ref _datos[particion][index];
-            long token = TokenHelper.CrearToken(indice, _arenaId, _arenaGen, ++metadato.Version);
+            long token;
+            do
+            {
+                token = TokenHelper.CrearToken(indice, _arenaId, _arenaGen, ++metadato.Version);
+            } while (token == 0L);
 
             InicializarMetadatos(ref metadato, token, tamañoMinimo);
 
