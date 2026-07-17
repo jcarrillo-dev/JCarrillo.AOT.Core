@@ -168,6 +168,8 @@ flowchart TD
 
 ### Componentes Clave:
 *   **[Núcleo y Arquitectura (Core)](Core/README.md)**: Estructura interna, modelos de sesión y gestor de estados centralizado.
+    *   **[Arquitectura Física](Core/Architecture.md)**: Diseño interno, memoria LIFO/FIFO y gestión de metadatos de sesión.
+    *   **[Rendimiento y Concurrencia](Core/Performance.md)**: Análisis avanzado de rendimiento, contención de `SpinLock` y seguridad en punteros con `Volatile`.
     *   **[ValueLINQStructs: Modelos de Sesión](Core/ValueLINQStructs.md)**: Diferencias, ciclo de vida y reglas de pila de `ValueLINQStruct` y `ValueLINQRefStruct`.
     *   **[ValueLINQStateManager: Gestor y Sincronización](Core/ValueLINQStateManager.md)**: Análisis del gestor de tablas particionadas por (tipo `T`, arena) (4096 slots cada una), los SpinLocks por slot y el timer de limpieza de fondo.
     *   **[Arenas de Memoria](Core/Arenas.md)**: Ámbitos de memoria explícitos (`ValueLINQArena`) y la arena ambiente/persistente (arena 0) para liberar sesiones en bloque.
