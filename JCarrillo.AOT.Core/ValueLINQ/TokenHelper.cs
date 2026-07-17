@@ -8,6 +8,8 @@ namespace JCarrillo.AOT.Core.ValueLINQ
     /// </summary>
     public static class TokenHelper
     {
+        private static readonly bool Is64BitOMas = IntPtr.Size >= 8;
+
         private const int ArenaShift = ValueLINQConfig.SlotBits;
         private const int ArenaGenShift = ValueLINQConfig.SlotBits + ValueLINQConfig.ArenaBits;
         private const int VersionShift = ValueLINQConfig.SlotBits + ValueLINQConfig.ArenaBits + ValueLINQConfig.ArenaGenBits;
@@ -130,7 +132,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ
         /// <returns>El valor del token leído.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static long LeerToken(ref long ubicacion)
-            => Environment.Is64BitProcess
+            => Is64BitOMas
                 ? Volatile.Read(ref ubicacion)
                 : Interlocked.Read(ref ubicacion);
 
@@ -142,7 +144,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void EscribirToken(ref long ubicacion, long valor)
         {
-            if (Environment.Is64BitProcess)
+            if (Is64BitOMas)
                 Volatile.Write(ref ubicacion, valor);
             else
                 _ = Interlocked.Exchange(ref ubicacion, valor);
