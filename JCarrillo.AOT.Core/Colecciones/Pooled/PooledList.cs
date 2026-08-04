@@ -24,7 +24,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         {
             _items = null;
             _indiceInsercion = 0;
-            EstaDisposed = false;
+            IsDisposed = false;
         }
 
         /// <summary>
@@ -57,7 +57,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
 
             _items = items;
             _indiceInsercion = tamaño;
-            EstaDisposed = false;
+            IsDisposed = false;
         }
 
         #endregion
@@ -78,21 +78,21 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                if (EstaDisposed) ThrowObjectDisposed();
+                if (IsDisposed) ThrowObjectDisposed();
                 return _indiceInsercion;
             }
         }
 
         #endregion
 
-        #region EsAmpliable
+        #region IsAmpliable
 
 
         /// <summary>
         /// Obtiene un valor que indica si la estructura puede crecer dinámicamente.
         /// En <see cref="PooledList{TItem}"/>, esta propiedad siempre es <see langword="true"/>.
         /// </summary>
-        public readonly bool EsAmpliable
+        public readonly bool IsAmpliable
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get;
@@ -117,7 +117,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                if (EstaDisposed) ThrowObjectDisposed();
+                if (IsDisposed) ThrowObjectDisposed();
                 return _items is null ? Span<TItem>.Empty : _items.AsSpan(0, _indiceInsercion);
             }
         }
@@ -135,7 +135,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                if (EstaDisposed) ThrowObjectDisposed();
+                if (IsDisposed) ThrowObjectDisposed();
                 return _items is null ? Memory<TItem>.Empty : _items.AsMemory(0, _indiceInsercion);
             }
         }
@@ -152,16 +152,15 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         /// <exception cref="ObjectDisposedException">
         /// Se lanza si la lista ha sido dispuesta previamente.
         /// </exception>
-        /// <exception cref="IndexOutOfRangeException">
+        /// <exception cref="ArgumentOutOfRangeException">
         /// Se lanza si el <paramref name="indice"/> está fuera de los límites de la lista.
-        /// Se opta por la excepción nativa para permitir al compilador JIT omitir las comprobaciones redundantes de límites de array.
         /// </exception>
         public readonly ref TItem this[int indice]
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                if (EstaDisposed) ThrowObjectDisposed();
+                if (IsDisposed) ThrowObjectDisposed();
                 TItem[]? items = _items;
                 if (items is null || (uint)indice >= (uint)_indiceInsercion) ThrowIndexOutOfRange(indice);
                 return ref items[indice];
@@ -189,7 +188,13 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         /// <summary>
         /// Obtiene un valor que indica si la lista ha sido devuelta al pool.
         /// </summary>
-        public bool EstaDisposed { get; private set; }
+        public bool IsDisposed
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get;
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private set;
+        }
 
         /// <summary>
         /// Libera los recursos de la estructura de forma síncrona y devuelve el búfer de memoria alquilado
@@ -207,10 +212,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
             }
             finally
             {
-                if (!EstaDisposed)
-                {
-                    DisposePrivate();
-                }
+                if (!IsDisposed) DisposePrivate();
             }
         }
 
@@ -225,16 +227,18 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         /// derivados de la máquina de estados generada por el compilador en llamadas asíncronas, optimizando también
         /// el rendimiento en entornos Native AOT.
         /// </remarks>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ValueTask DisposeAsync()
         {
-            if (EstaDisposed) return ValueTask.CompletedTask;
+            if (IsDisposed) return ValueTask.CompletedTask;
             DisposePrivate();
             return ValueTask.CompletedTask;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void DisposePrivate()
         {
-            EstaDisposed = true;
+            IsDisposed = true;
             if (_items != null)
             {
                 _indiceInsercion = 0;
@@ -258,7 +262,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IntentarAmpliar(int nuevoTamaño)
         {
-            if (EstaDisposed) return false;
+            if (IsDisposed) return false;
             if (_items is null)
             {
                 _items = ArrayPool<TItem>.Shared.Rent(Math.Max(nuevoTamaño, PooledCollectionsConfig.DefaultCapacity));
@@ -285,14 +289,17 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         private const string NombreClase = "PooledList<" + nameof(TItem) + ">";
 
         [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowObjectDisposed()
             => throw new ObjectDisposedException(NombreClase);
 
         [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowIndexOutOfRange(int indice)
             => throw new ArgumentOutOfRangeException(nameof(indice), indice, "El índice está fuera del rango válido.");
 
         [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowArgumentOutOfRange(int capacidad)
             => throw new ArgumentOutOfRangeException(nameof(capacidad), $"La capacidad inicial ({capacidad}) debe ser mayor que cero.");
 
@@ -310,7 +317,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Add(TItem item)
         {
-            if (EstaDisposed) ThrowObjectDisposed();
+            if (IsDisposed) ThrowObjectDisposed();
             _ = IntentarAmpliar(_indiceInsercion + 1);
             // IntentarAmpliar asegura que hay espacio suficiente, así que podemos añadir el elemento, tambien aumenta la variable _tamaño internamente.
             _items![_indiceInsercion++] = item;
@@ -323,7 +330,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddRange(ReadOnlySpan<TItem> items)
         {
-            if (EstaDisposed) ThrowObjectDisposed();
+            if (IsDisposed) ThrowObjectDisposed();
             _ = IntentarAmpliar(_indiceInsercion + items.Length);
             items.CopyTo(_items.AsSpan(_indiceInsercion));
             _indiceInsercion += items.Length;
@@ -341,9 +348,10 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         /// <exception cref="ObjectDisposedException">
         /// Se lanza si la lista ya ha sido liberada.
         /// </exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear()
         {
-            if (EstaDisposed) ThrowObjectDisposed();
+            if (IsDisposed) ThrowObjectDisposed();
             if (RuntimeHelpers.IsReferenceOrContainsReferences<TItem>())
                 Span.Clear();
             _indiceInsercion = 0;

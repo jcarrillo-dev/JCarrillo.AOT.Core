@@ -59,21 +59,21 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                if (EstaDisposed) ThrowObjectDisposed();
+                if (IsDisposed) ThrowObjectDisposed();
                 return _tamaño;
             }
         }
 
         #endregion
 
-        #region EsAmpliable
+        #region IsAmpliable
 
 
         /// <summary>
         /// Obtiene un valor que indica si la estructura puede crecer dinámicamente.
         /// En <see cref="PooledArray{TItem}"/>, esta propiedad siempre es <see langword="false"/>.
         /// </summary>
-        public readonly bool EsAmpliable
+        public readonly bool IsAmpliable
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get;
@@ -98,7 +98,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                if (EstaDisposed) ThrowObjectDisposed();
+                if (IsDisposed) ThrowObjectDisposed();
                 return _items is null ? Span<TItem>.Empty : new Span<TItem>(_items, 0, _tamaño);
             }
         }
@@ -116,7 +116,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                if (EstaDisposed) ThrowObjectDisposed();
+                if (IsDisposed) ThrowObjectDisposed();
                 return _items is null ? Memory<TItem>.Empty : new Memory<TItem>(_items, 0, _tamaño);
             }
         }
@@ -133,17 +133,15 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         /// <exception cref="ObjectDisposedException">
         /// Se lanza si el arreglo subyacente ya ha sido liberado y retornado al pool.
         /// </exception>
-        /// <exception cref="IndexOutOfRangeException">
+        /// <exception cref="ArgumentOutOfRangeException">
         /// Se lanza si el <paramref name="indice"/> está fuera de los límites definidos por el tamaño de la estructura.
-        /// Utilizar la excepción nativa en lugar de validaciones complejas permite al compilador JIT optimizar el código
-        /// eliminando comprobaciones redundantes de límites (array bounds check elimination).
         /// </exception>
         public readonly ref TItem this[int indice]
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                if (EstaDisposed) ThrowObjectDisposed();
+                if (IsDisposed) ThrowObjectDisposed();
                 TItem[]? items = _items;
                 if (items is null || (uint)indice >= (uint)_tamaño) ThrowIndexOutOfRange(indice);
                 return ref items[indice];
@@ -171,10 +169,11 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         /// <summary>
         /// Obtiene un valor que indica si los recursos y el búfer subyacente ya han sido devueltos al pool.
         /// </summary>
-        public bool EstaDisposed
+        public bool IsDisposed
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get;
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             private set;
         } = false;
 
@@ -194,10 +193,7 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
             }
             finally
             {
-                if (!EstaDisposed)
-                {
-                    DisposePrivate();
-                }
+                if (!IsDisposed) DisposePrivate();
             }
         }
 
@@ -213,16 +209,18 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         /// al heap de forma legítima, lo que causaría falsos positivos en la detección de boxing.
         /// Además, omitir esta validación en la ruta asíncrona optimiza el rendimiento y la compatibilidad con compilación Native AOT.
         /// </remarks>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ValueTask DisposeAsync()
         {
-            if (EstaDisposed) return ValueTask.CompletedTask;
+            if (IsDisposed) return ValueTask.CompletedTask;
             DisposePrivate();
             return ValueTask.CompletedTask;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void DisposePrivate()
         {
-            EstaDisposed = true;
+            IsDisposed = true;
             if (_items != null)
             {
                 _tamaño = 0;
@@ -252,14 +250,17 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         private const string NombreClase = "PooledArray<" + nameof(TItem) + ">";
 
         [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowObjectDisposed()
             => throw new ObjectDisposedException(NombreClase);
 
         [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowIndexOutOfRange(int indice)
             => throw new ArgumentOutOfRangeException(nameof(indice), indice, "El índice está fuera del rango válido.");
 
         [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowArgumentOutOfRange(int capacidad)
             => throw new ArgumentOutOfRangeException(nameof(capacidad), $"La capacidad inicial ({capacidad}) debe ser mayor que cero.");
 
@@ -273,9 +274,10 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         /// <exception cref="ObjectDisposedException">
         /// Se lanza si el arreglo subyacente ya ha sido liberado y retornado al pool.
         /// </exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear()
         {
-            if (EstaDisposed || _items is null) ThrowObjectDisposed();
+            if (IsDisposed || _items is null) ThrowObjectDisposed();
             Span.Clear();
         }
 

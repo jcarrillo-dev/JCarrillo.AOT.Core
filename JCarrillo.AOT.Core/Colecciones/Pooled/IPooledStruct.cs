@@ -15,21 +15,20 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled
         /// <summary>
         /// Obtiene un valor que indica si la estructura puede redimensionarse dinámicamente para ampliar su capacidad.
         /// </summary>
-        bool EsAmpliable { get; }
+        bool IsAmpliable { get; }
 
         /// <summary>
         /// Obtiene un valor que indica si la estructura ha sido liberada y sus recursos subyacentes devueltos al pool.
         /// </summary>
-        bool EstaDisposed { get; }
+        bool IsDisposed { get; }
 
         /// <summary>
         /// Obtiene una referencia directa al elemento ubicado en el índice especificado.
         /// </summary>
         /// <param name="indice">El índice de base cero del elemento que se desea obtener por referencia.</param>
         /// <value>Una referencia directa (ref) al elemento en la posición solicitada, evitando copias de structs grandes en el stack.</value>
-        /// <exception cref="IndexOutOfRangeException">
+        /// <exception cref="ArgumentOutOfRangeException">
         /// Se lanza cuando el <paramref name="indice"/> está fuera de los límites válidos de la colección.
-        /// Se utiliza esta excepción nativa para permitir la optimización del JIT eliminando validaciones redundantes de límites.
         /// </exception>
         ref TItem this[int indice] { get; }
 
