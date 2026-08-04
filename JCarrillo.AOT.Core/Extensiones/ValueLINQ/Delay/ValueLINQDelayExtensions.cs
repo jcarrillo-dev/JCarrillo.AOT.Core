@@ -1,4 +1,5 @@
 #if NET9_0_OR_GREATER
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using JCarrillo.AOT.Core.ValueLINQ;
 using JCarrillo.AOT.Core.ValueLINQ.Delay;
@@ -45,9 +46,15 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
         /// <typeparam name="T">El tipo de los elementos en el arreglo.</typeparam>
         /// <param name="origen">El arreglo de origen.</param>
         /// <returns>Una estructura <see cref="ValueLINQDelayStruct{T, TEnumerator}"/> configurada con un enumerador de origen.</returns>
+        /// <exception cref="ArgumentNullException">
+        /// Se lanza cuando <paramref name="origen"/> es <see langword="null"/>.
+        /// </exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueLINQDelayStruct<T, ValueLINQSourceEnumerator<T>> ToValueDelayQuery<T>(this T[] origen)
         {
+            if (origen == null)
+                ThrowArgumentNullException(nameof(origen));
+
             ValueLINQSourceEnumerator<T> sourceEnumerator = new(origen);
             return new ValueLINQDelayStruct<T, ValueLINQSourceEnumerator<T>>(sourceEnumerator);
         }
@@ -80,6 +87,15 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
 
         #endregion
 
+        #region Helpers de Excepciones (Evitan contaminación del JIT)
+
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void ThrowArgumentNullException(string paramName)
+            => throw new ArgumentNullException(paramName);
+
+        #endregion
+
         #region Chunk
 
         /// <summary>
@@ -107,7 +123,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
         /// <param name="pipeline">La canalización perezosa que genera los fragmentos.</param>
         /// <param name="procesar">Una referencia al procesador mutador que ejecutará el procesamiento de cada fragmento.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void ProcesarChunk<T, TEnumerator, TProcesador>(this ValueLINQDelayStruct<ReadOnlySpan<T>, TEnumerator> pipeline, ref TProcesador procesar)
+        public static void ProcesarChunk<T, TEnumerator, TProcesador>(this scoped in ValueLINQDelayStruct<ReadOnlySpan<T>, TEnumerator> pipeline, ref TProcesador procesar)
             where TEnumerator : IValueLINQEnumerator<ReadOnlySpan<T>>, allows ref struct
             where TProcesador : struct, IProcesarChunkRefDelegado<T>
         {
@@ -115,10 +131,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
 
             try
             {
-                while (enumerator.MoveNext())
-                {
-                    procesar.Ejecutar(enumerator.Current);
-                }
+                while (enumerator.MoveNext()) procesar.Ejecutar(enumerator.Current);
             }
             finally
             {
@@ -136,7 +149,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
         /// <param name="pipeline">La canalización perezosa que genera los fragmentos.</param>
         /// <param name="procesar">El procesador que ejecutará el procesamiento de cada fragmento (puede ser un ref struct temporario).</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void ProcesarChunkRef<T, TEnumerator, TProcesador>(this ValueLINQDelayStruct<ReadOnlySpan<T>, TEnumerator> pipeline, TProcesador procesar)
+        public static void ProcesarChunkRef<T, TEnumerator, TProcesador>(this scoped in ValueLINQDelayStruct<ReadOnlySpan<T>, TEnumerator> pipeline, TProcesador procesar)
             where TEnumerator : IValueLINQEnumerator<ReadOnlySpan<T>>, allows ref struct
             where TProcesador : IProcesarChunkRefDelegado<T>, allows ref struct
         {
@@ -144,10 +157,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
 
             try
             {
-                while (enumerator.MoveNext())
-                {
-                    procesar.Ejecutar(enumerator.Current);
-                }
+                while (enumerator.MoveNext()) procesar.Ejecutar(enumerator.Current);
             }
             finally
             {

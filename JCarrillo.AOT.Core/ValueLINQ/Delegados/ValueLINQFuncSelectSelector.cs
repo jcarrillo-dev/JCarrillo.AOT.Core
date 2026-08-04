@@ -6,6 +6,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delegados
     /// <summary>
     /// Adaptador para selectores basados en delegados Func.
     /// </summary>
+    [method: MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly struct ValueLINQFuncSelectSelector<TOrigen, TResultado>(Func<TOrigen, TResultado> selector) : ISelectDelegado<TOrigen, TResultado>
 #if NET9_0_OR_GREATER
         where TOrigen : allows ref struct

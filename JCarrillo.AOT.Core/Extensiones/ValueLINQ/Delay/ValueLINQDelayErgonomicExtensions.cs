@@ -74,6 +74,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
         /// <typeparam name="TEnumerator">El tipo del enumerador de origen. Admite estructuras de referencia (allows ref struct).</typeparam>
         /// <param name="pipeline">La canalización perezosa que genera los fragmentos.</param>
         /// <param name="procesar">La lambda o delegado ergonómico que procesará cada fragmento de forma síncrona.</param>
+        [Obsolete(JCADiagnostico.JCA0001.Mensaje, DiagnosticId = JCADiagnostico.JCA0001.Id, UrlFormat = JCADiagnostico.JCA0001.Url)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void ProcesarChunk<T, TEnumerator>(
             this ValueLINQDelayStruct<ReadOnlySpan<T>, TEnumerator> pipeline,

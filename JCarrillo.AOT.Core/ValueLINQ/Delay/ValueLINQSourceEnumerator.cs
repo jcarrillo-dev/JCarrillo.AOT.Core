@@ -39,13 +39,9 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
             int next = _index + 1;
             bool hasNext = next < _span.Length;
             if (hasNext)
-            {
                 _index = next;
-            }
             else
-            {
                 Dispose();
-            }
             return hasNext;
         }
 

@@ -32,6 +32,13 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
             ValueLINQWhereDelay<T, TEnumerator, TPredicate, TState> whereEnumerator = new(ref _enumerator, ref predicate, state);
             return new ValueLINQDelayStruct<T, ValueLINQWhereDelay<T, TEnumerator, TPredicate, TState>>(whereEnumerator);
         }
+        /// <summary>
+        /// Filtra los elementos del flujo de datos perezoso instanciando un predicado <typeparamref name="TPredicate"/> por defecto (<see langword="default"/>).
+        /// </summary>
+        /// <typeparam name="TPredicate">El tipo del predicado que implementa <see cref="IWhereDelegado{T, TState}"/>. Debe ser una estructura y admite estructuras de referencia (allows ref struct).</typeparam>
+        /// <typeparam name="TState">El tipo del estado adicional a pasar al predicado. Admite estructuras de referencia (allows ref struct).</typeparam>
+        /// <param name="state">El estado adicional a pasar al predicado.</param>
+        /// <returns>Una estructura <see cref="ValueLINQDelayStruct{T, TEnumerator}"/> con el enumerador de filtro aplicado.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ValueLINQDelayStruct<T, ValueLINQWhereDelay<T, TEnumerator, TPredicate, TState>> Where<TPredicate, TState>(TState state)
             where TPredicate : struct, IWhereDelegado<T, TState>, allows ref struct
@@ -46,7 +53,6 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
         /// <summary>
         /// Proyecta cada elemento de un flujo de datos perezoso en un nuevo formulario utilizando un selector eficiente.
         /// </summary>
-        /// <typeparam name="TOrigen">El tipo de origen de los elementos (debe coincidir con <typeparamref name="T"/>). Admite estructuras de referencia (allows ref struct).</typeparam>
         /// <typeparam name="TSelector">El tipo del selector que implementa <see cref="ISelectDelegado{T, TResultado}"/>. Debe ser una estructura y admite estructuras de referencia (allows ref struct).</typeparam>
         /// <typeparam name="TResultado">El tipo del elemento proyectado resultante. Admite estructuras de referencia (allows ref struct).</typeparam>
         /// <param name="selector">Una referencia al selector de proyección.</param>
@@ -60,6 +66,12 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
             return new ValueLINQDelayStruct<TResultado, ValueLINQSelectDelay<TResultado, TEnumerator, TSelector, T>>(selectEnumerator);
         }
 
+        /// <summary>
+        /// Proyecta cada elemento de un flujo de datos perezoso en un nuevo formulario instanciando un selector <typeparamref name="TSelector"/> por defecto (<see langword="default"/>).
+        /// </summary>
+        /// <typeparam name="TSelector">El tipo del selector que implementa <see cref="ISelectDelegado{T, TResultado}"/>. Debe ser una estructura y admite estructuras de referencia (allows ref struct).</typeparam>
+        /// <typeparam name="TResultado">El tipo del elemento proyectado resultante. Admite estructuras de referencia (allows ref struct).</typeparam>
+        /// <returns>Una estructura <see cref="ValueLINQDelayStruct{TResultado, TEnumerator}"/> con el enumerador de proyección aplicado.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ValueLINQDelayStruct<TResultado, ValueLINQSelectDelay<TResultado, TEnumerator, TSelector, T>> Select<TSelector, TResultado>()
             where TSelector : struct, ISelectDelegado<T, TResultado>, allows ref struct

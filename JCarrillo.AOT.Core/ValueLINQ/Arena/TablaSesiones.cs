@@ -23,10 +23,19 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
         private readonly int[] _indicesLibresStack = new int[ValueLINQConfig.Slots];
         private int _topStack;
 
-        internal int IndicesLibres => _topStack;
+        internal int IndicesLibres
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => _topStack;
+        }
 
-        internal bool TieneSesionesVivas => Volatile.Read(ref _topStack) < _capacidadMaxima;
+        internal bool HasSesionesVivas
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => Volatile.Read(ref _topStack) < _capacidadMaxima;
+        }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal bool IsParticionMaterializada(int particion) => _datos[particion] is not null;
 
         private (int indice, int partition, int index) PopIndice()
@@ -72,6 +81,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
         }
 
         [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowInvalidOperationSinCapacidad()
             => throw new InvalidOperationException(
                     $"Capacidad máxima de ValueLINQ alcanzada ({ValueLINQConfig.Slots} buffers simultáneos para el tipo {typeof(T).Name})."
@@ -96,9 +106,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
             _capacidadMaxima = capacidadMaxima;
 
             for (int i = capacidadMaxima - 1; i >= 0; i--)
-            {
                 _indicesLibresStack[i] = i;
-            }
 
             _topStack = capacidadMaxima;
         }
@@ -108,14 +116,17 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
         #region Throw
 
         [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowSesionExpirada(long idEsperado, long idObtenido, int indice)
             => throw new ValueLinqSesionExpiradaException(idEsperado, idObtenido, indice);
 
         [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowTokenInvalido(long idObtenido, int indice)
             => throw new ValueLinqTokenInvalidoException(idObtenido, indice);
 
         [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowSesionNoEncontrada(long token)
             => throw new ValueLinqSesionExpiradaException(0L, token, TokenHelper.ObtenerSlotIndex(token));
 
@@ -131,6 +142,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
             return (partition, index);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int ObtenerIndiceParticion(int partition, int index)
             => (partition << ValueLINQConfig.SlotsParticionBits) | index;
 
@@ -139,7 +151,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
         #region Inicializar Metadatos
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void InicializarMetadatos(ref MetadatosSesion<T> metadato, long token, int tamañoMinimo)
+        private static void InicializarMetadatos(ref MetadatosSesion<T> metadato, long token, int tamañoMinimo)
         {
             TokenHelper.EscribirToken(ref metadato.Token, token);
 
@@ -157,6 +169,19 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
         {
             (int indice, int particion, int index) = PopIndice();
 
+            try
+            {
+                return ref InicializarSlot(particion, index, indice, tamañoMinimo);
+            }
+            catch
+            {
+                PushIndice(indice);
+                throw;
+            }
+        }
+
+        private ref MetadatosSesion<T> InicializarSlot(int particion, int index, int indice, int tamañoMinimo)
+        {
             using ValueLINQSpinLock spinLock = new(ref _spinLocks[particion][index].Lock);
 
             ref MetadatosSesion<T> metadato = ref _datos[particion][index];
@@ -256,6 +281,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
 
         #region Es Metadato Valido
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal bool IsMetadatoValido(long token)
         {
             if (token == 0L)
@@ -351,6 +377,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
 
         #region Limpiar Sesiones Expiradas
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool IsLimpiezaRequerida(ref MetadatosSesion<T> metadato, long ahora, TimeSpan tiempoExpiracion)
             => metadato.UltimoAcceso != -1 && TokenHelper.LeerToken(ref metadato.Token) != 0L && !metadato.IsDisposed && Stopwatch.GetElapsedTime(Volatile.Read(ref metadato.UltimoAcceso), ahora) >= tiempoExpiracion;
 
@@ -412,25 +439,31 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
 
             T[]? arrayADevolver = null;
 
-            using (new ValueLINQSpinLock(ref _spinLocks[particion][index].Lock))
+            try
             {
-                ref MetadatosSesion<T> datos = ref ObtenerMetadatos(token);
-
-                if (datos.Array!.Length < tamañoMinimo)
+                using (new ValueLINQSpinLock(ref _spinLocks[particion][index].Lock))
                 {
-                    int nuevoTamaño = Math.Max(tamañoMinimo, datos.Array!.Length * 2);
-                    T[] nuevoArray = ArrayPool<T>.Shared.Rent(nuevoTamaño);
-                    arrayADevolver = datos.Array;
+                    ref MetadatosSesion<T> datos = ref ObtenerMetadatos(token);
 
-                    arrayADevolver.AsSpan(0, datos.TamañoActual).CopyTo(nuevoArray);
-                    Volatile.Write(ref datos.Array, nuevoArray);
+                    if (datos.Array!.Length < tamañoMinimo)
+                    {
+                        int nuevoTamaño = Math.Max(tamañoMinimo, datos.Array!.Length * 2);
+                        T[] nuevoArray = ArrayPool<T>.Shared.Rent(nuevoTamaño);
+                        T[] arrayAnterior = datos.Array;
+
+                        arrayAnterior.AsSpan(0, datos.TamañoActual).CopyTo(nuevoArray);
+                        Volatile.Write(ref datos.Array, nuevoArray);
+                        arrayADevolver = arrayAnterior;
+                    }
+
+                    Volatile.Write(ref datos.UltimoAcceso, Stopwatch.GetTimestamp());
                 }
-
-                Volatile.Write(ref datos.UltimoAcceso, Stopwatch.GetTimestamp());
             }
-
-            if (arrayADevolver != null)
-                ArrayPool<T>.Shared.Return(arrayADevolver, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+            finally
+            {
+                if (arrayADevolver != null)
+                    ArrayPool<T>.Shared.Return(arrayADevolver, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+            }
         }
 
         #endregion
@@ -452,27 +485,33 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
 
             T[]? arrayADevolver = null;
 
-            using (new ValueLINQSpinLock(ref spinlocks[index].Lock))
+            try
             {
-                ref MetadatosSesion<T> metadatos = ref ObtenerMetadatos(token);
-                int nuevoTamaño = metadatos.TamañoActual + 1;
-
-                if (nuevoTamaño > metadatos.Array!.Length)
+                using (new ValueLINQSpinLock(ref spinlocks[index].Lock))
                 {
-                    nuevoTamaño = Math.Max(nuevoTamaño, metadatos.Array.Length * 2);
-                    T[] nuevoArray = ArrayPool<T>.Shared.Rent(nuevoTamaño);
-                    arrayADevolver = metadatos.Array;
+                    ref MetadatosSesion<T> metadatos = ref ObtenerMetadatos(token);
+                    int nuevoTamaño = metadatos.TamañoActual + 1;
 
-                    arrayADevolver.AsSpan(0, metadatos.TamañoActual).CopyTo(nuevoArray);
-                    Volatile.Write(ref metadatos.Array, nuevoArray);
+                    if (nuevoTamaño > metadatos.Array!.Length)
+                    {
+                        nuevoTamaño = Math.Max(nuevoTamaño, metadatos.Array.Length * 2);
+                        T[] nuevoArray = ArrayPool<T>.Shared.Rent(nuevoTamaño);
+                        T[] arrayAnterior = metadatos.Array;
+
+                        arrayAnterior.AsSpan(0, metadatos.TamañoActual).CopyTo(nuevoArray);
+                        Volatile.Write(ref metadatos.Array, nuevoArray);
+                        arrayADevolver = arrayAnterior;
+                    }
+
+                    metadatos.Array[metadatos.TamañoActual++] = valor;
+                    metadatos.UltimoAcceso = Stopwatch.GetTimestamp();
                 }
-
-                metadatos.Array[metadatos.TamañoActual++] = valor;
-                metadatos.UltimoAcceso = Stopwatch.GetTimestamp();
             }
-
-            if (arrayADevolver != null)
-                ArrayPool<T>.Shared.Return(arrayADevolver, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+            finally
+            {
+                if (arrayADevolver != null)
+                    ArrayPool<T>.Shared.Return(arrayADevolver, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+            }
         }
 
         internal void Añadir(long token, ReadOnlySpan<T> span)
@@ -490,28 +529,34 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
 
             T[]? arrayADevolver = null;
 
-            using (new ValueLINQSpinLock(ref spinlocks[index].Lock))
+            try
             {
-                ref MetadatosSesion<T> metadatos = ref ObtenerMetadatos(token);
-                int nuevoTamaño = metadatos.TamañoActual + span.Length;
-
-                if (nuevoTamaño > metadatos.Array!.Length)
+                using (new ValueLINQSpinLock(ref spinlocks[index].Lock))
                 {
-                    nuevoTamaño = Math.Max(nuevoTamaño, metadatos.Array.Length * 2);
-                    T[] nuevoArray = ArrayPool<T>.Shared.Rent(nuevoTamaño);
-                    arrayADevolver = metadatos.Array;
+                    ref MetadatosSesion<T> metadatos = ref ObtenerMetadatos(token);
+                    int nuevoTamaño = metadatos.TamañoActual + span.Length;
 
-                    arrayADevolver.AsSpan(0, metadatos.TamañoActual).CopyTo(nuevoArray);
-                    Volatile.Write(ref metadatos.Array, nuevoArray);
+                    if (nuevoTamaño > metadatos.Array!.Length)
+                    {
+                        nuevoTamaño = Math.Max(nuevoTamaño, metadatos.Array.Length * 2);
+                        T[] nuevoArray = ArrayPool<T>.Shared.Rent(nuevoTamaño);
+                        T[] arrayAnterior = metadatos.Array;
+
+                        arrayAnterior.AsSpan(0, metadatos.TamañoActual).CopyTo(nuevoArray);
+                        Volatile.Write(ref metadatos.Array, nuevoArray);
+                        arrayADevolver = arrayAnterior;
+                    }
+
+                    span.CopyTo(metadatos.Array.AsSpan(metadatos.TamañoActual));
+                    metadatos.TamañoActual += span.Length;
+                    metadatos.UltimoAcceso = Stopwatch.GetTimestamp();
                 }
-
-                span.CopyTo(metadatos.Array.AsSpan(metadatos.TamañoActual));
-                metadatos.TamañoActual += span.Length;
-                metadatos.UltimoAcceso = Stopwatch.GetTimestamp();
             }
-
-            if (arrayADevolver != null)
-                ArrayPool<T>.Shared.Return(arrayADevolver, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+            finally
+            {
+                if (arrayADevolver != null)
+                    ArrayPool<T>.Shared.Return(arrayADevolver, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+            }
         }
         internal void Añadir(long token, long otroToken)
         {
@@ -545,16 +590,21 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
                 minSL = ref ObtenerSpinLock(Math.Min(indice, otroIndice)),
                 maxSL = ref ObtenerSpinLock(Math.Max(indice, otroIndice));
 
-            if (indice == otroIndice)
-                using (new ValueLINQSpinLock(ref minSL))
-                    AñadirInterno(token, otroToken, ref arrayADevolver);
-            else
-                using (new ValueLINQSpinLock(ref minSL))
-                using (new ValueLINQSpinLock(ref maxSL))
-                    AñadirInterno(token, otroToken, ref arrayADevolver);
-
-            if (arrayADevolver != null)
-                ArrayPool<T>.Shared.Return(arrayADevolver, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+            try
+            {
+                if (indice == otroIndice)
+                    using (new ValueLINQSpinLock(ref minSL))
+                        AñadirInterno(token, otroToken, ref arrayADevolver);
+                else
+                    using (new ValueLINQSpinLock(ref minSL))
+                    using (new ValueLINQSpinLock(ref maxSL))
+                        AñadirInterno(token, otroToken, ref arrayADevolver);
+            }
+            finally
+            {
+                if (arrayADevolver != null)
+                    ArrayPool<T>.Shared.Return(arrayADevolver, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -571,10 +621,11 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
             {
                 int nuevoTamaño = Math.Max(nuevoTamañoRequerido, metadatos.Array.Length * 2);
                 T[] nuevoArray = ArrayPool<T>.Shared.Rent(nuevoTamaño);
-                arrayADevolver = metadatos.Array;
+                T[] arrayAnterior = metadatos.Array;
 
-                arrayADevolver.AsSpan(0, metadatos.TamañoActual).CopyTo(nuevoArray);
+                arrayAnterior.AsSpan(0, metadatos.TamañoActual).CopyTo(nuevoArray);
                 Volatile.Write(ref metadatos.Array, nuevoArray);
+                arrayADevolver = arrayAnterior;
             }
 
             metadatosOtro.Array.AsSpan(0, metadatosOtro.TamañoActual).CopyTo(metadatos.Array.AsSpan(metadatos.TamañoActual));

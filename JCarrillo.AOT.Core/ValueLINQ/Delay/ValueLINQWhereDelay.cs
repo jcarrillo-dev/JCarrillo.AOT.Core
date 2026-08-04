@@ -50,10 +50,8 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
                 return false;
 
             while (_enumerator.MoveNext())
-            {
                 if (_predicate.Ejecutar(_enumerator.Current, _state))
                     return true;
-            }
 
             Dispose();
             return false;

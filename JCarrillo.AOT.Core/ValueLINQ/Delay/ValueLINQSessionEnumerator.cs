@@ -23,13 +23,9 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
             int tamañoLocal = Volatile.Read(ref metadatos.TamañoActual);
 
             if (arregloLocal != null && tamañoLocal > 0 && tamañoLocal <= arregloLocal.Length)
-            {
                 _span = arregloLocal.AsSpan(0, tamañoLocal);
-            }
             else
-            {
                 _span = default;
-            }
 
             _index = -1;
             _tokenEsperado = token;

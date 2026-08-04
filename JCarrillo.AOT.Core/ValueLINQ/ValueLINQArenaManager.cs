@@ -40,6 +40,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ
         }
 
         [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowSinCapacidadArenas()
             => throw new InvalidOperationException(
                     $"Capacidad máxima de arenas de ValueLINQ alcanzada ({ValueLINQConfig.Arenas - 1} arenas simultáneas)."
@@ -93,7 +94,6 @@ namespace JCarrillo.AOT.Core.ValueLINQ
             try
             {
                 foreach (Action<int> liberador in _liberadores)
-                {
                     try
                     {
                         liberador(id);
@@ -102,7 +102,6 @@ namespace JCarrillo.AOT.Core.ValueLINQ
                     {
                         Debug.WriteLine($"Error liberando las tablas de la arena {id} en ValueLINQArenaManager: {ex}");
                     }
-                }
             }
             finally
             {
@@ -121,6 +120,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ
         internal static bool IsArenaViva(long tokenArena)
             => TokenHelper.LeerToken(ref _arenas[TokenHelper.ObtenerIdTokenArena(tokenArena)].Token) == tokenArena;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool IsArenaViva(int idArena)
             => TokenHelper.LeerToken(ref _arenas[idArena].Token) != 0L;
 

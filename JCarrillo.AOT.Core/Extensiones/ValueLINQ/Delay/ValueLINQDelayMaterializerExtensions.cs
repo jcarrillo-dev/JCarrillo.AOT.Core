@@ -21,17 +21,14 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
         /// <param name="pipeline">El flujo de datos perezoso a materializar.</param>
         /// <returns>Una instancia de <see cref="PooledList{T}"/> que contiene los elementos del flujo.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static PooledList<T> ToList<T, TEnumerator>(this ValueLINQDelayStruct<T, TEnumerator> pipeline)
+        internal static PooledList<T> ToList<T, TEnumerator>(this scoped in ValueLINQDelayStruct<T, TEnumerator> pipeline)
             where TEnumerator : IValueLINQEnumerator<T>, allows ref struct
         {
             TEnumerator enumerator = pipeline.GetEnumerator();
             try
             {
                 PooledList<T> lista = new();
-                while (enumerator.MoveNext())
-                {
-                    lista.Add(enumerator.Current);
-                }
+                while (enumerator.MoveNext()) lista.Add(enumerator.Current);
                 return lista;
             }
             finally
@@ -48,17 +45,14 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
         /// <param name="pipeline">El flujo de datos perezoso a materializar.</param>
         /// <returns>Una instancia de <see cref="PooledArray{T}"/> que contiene los elementos del flujo.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static PooledArray<T> ToArray<T, TEnumerator>(this ValueLINQDelayStruct<T, TEnumerator> pipeline)
+        internal static PooledArray<T> ToArray<T, TEnumerator>(this scoped in ValueLINQDelayStruct<T, TEnumerator> pipeline)
             where TEnumerator : IValueLINQEnumerator<T>, allows ref struct
         {
             TEnumerator enumerator = pipeline.GetEnumerator();
             try
             {
                 using PooledList<T> lista = new();
-                while (enumerator.MoveNext())
-                {
-                    lista.Add(enumerator.Current);
-                }
+                while (enumerator.MoveNext()) lista.Add(enumerator.Current);
                 PooledArray<T> arreglo = ArrayPool<T>.Shared.ObtenerArreglo(lista.Tamaño);
                 lista.Span.CopyTo(arreglo.Span);
                 return arreglo;
@@ -77,17 +71,14 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
         /// <param name="pipeline">El flujo de datos perezoso a materializar.</param>
         /// <returns>Una lista estándar <see cref="List{T}"/> que contiene los elementos del flujo.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static List<T> ToListStandard<T, TEnumerator>(this ValueLINQDelayStruct<T, TEnumerator> pipeline)
+        internal static List<T> ToListStandard<T, TEnumerator>(this scoped in ValueLINQDelayStruct<T, TEnumerator> pipeline)
             where TEnumerator : IValueLINQEnumerator<T>, allows ref struct
         {
             TEnumerator enumerator = pipeline.GetEnumerator();
             try
             {
                 using PooledList<T> temp = new();
-                while (enumerator.MoveNext())
-                {
-                    temp.Add(enumerator.Current);
-                }
+                while (enumerator.MoveNext()) temp.Add(enumerator.Current);
 
                 if (temp.Tamaño == 0)
                     return [];
@@ -111,17 +102,14 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
         /// <param name="pipeline">El flujo de datos perezoso a materializar.</param>
         /// <returns>Un arreglo estándar de tipo <typeparamref name="T"/>[] que contiene los elementos del flujo.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static T[] ToArrayStandard<T, TEnumerator>(this ValueLINQDelayStruct<T, TEnumerator> pipeline)
+        internal static T[] ToArrayStandard<T, TEnumerator>(this scoped in ValueLINQDelayStruct<T, TEnumerator> pipeline)
             where TEnumerator : IValueLINQEnumerator<T>, allows ref struct
         {
             TEnumerator enumerator = pipeline.GetEnumerator();
             try
             {
                 using PooledList<T> lista = new();
-                while (enumerator.MoveNext())
-                {
-                    lista.Add(enumerator.Current);
-                }
+                while (enumerator.MoveNext()) lista.Add(enumerator.Current);
                 return lista.Span.ToArray();
             }
             finally

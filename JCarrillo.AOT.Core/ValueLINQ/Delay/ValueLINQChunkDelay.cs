@@ -99,6 +99,15 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
             if (_token == 0L)
                 return;
 
+            DisposeSlow();
+        }
+
+        /// <summary>
+        /// Concentra el camino con manejo de excepciones (try/finally) para no bloquear el inlining del wrapper <see cref="Dispose"/> en net9.0 (el JIT ignora AggressiveInlining con EH) y net10.0 (inline de EH posible pero no garantizado).
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void DisposeSlow()
+        {
             long token = _token;
             _token = 0L;
             _currentSpan = default;

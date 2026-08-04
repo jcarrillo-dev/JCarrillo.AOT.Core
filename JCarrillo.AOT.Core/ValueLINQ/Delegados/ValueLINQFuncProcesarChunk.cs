@@ -5,6 +5,7 @@ using static JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay.ValueLINQDelayErgono
 
 namespace JCarrillo.AOT.Core.ValueLINQ.Delegados
 {
+    [method: MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal ref struct ValueLINQFuncProcesarChunk<T>(ProcesarChunkDelegado<T> delegado) : IProcesarChunkRefDelegado<T>
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

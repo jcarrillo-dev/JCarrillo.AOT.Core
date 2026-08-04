@@ -19,7 +19,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ
             _tablas[0] = new(0, ValueLINQArenaManager.ObtenerGeneracion(0));
 
             ValueLINQGC.Registrar(LimpiarExpirados);
-            ValueLINQArenaManager.Registrar(LiberarTablasDeArena, TieneSesionesVivasEnArena);
+            ValueLINQArenaManager.Registrar(LiberarTablasDeArena, HasSesionesVivasEnArena);
         }
 
         #region Limpieza
@@ -27,6 +27,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ
         private static readonly TimeSpan _tiempoLimpiezaMinimo = ValueLINQConfig.TiempoLimpiezaMinimo;
 
         [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowTiempoEntreLimpiezaInsuficiente(TimeSpan tiempoLimpieza, string paramName)
             => throw new ArgumentOutOfRangeException(
                 paramName,
@@ -91,6 +92,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ
             => ValueLINQArenaManager.IsArenaViva(TokenHelper.ObtenerArenaId(token)) ? _tablas[TokenHelper.ObtenerArenaId(token)] : null;
 
         [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowSesionNoEncontrada(long token)
             => throw new ValueLinqSesionExpiradaException(0L, token, TokenHelper.ObtenerSlotIndex(token));
 
@@ -137,9 +139,10 @@ namespace JCarrillo.AOT.Core.ValueLINQ
         internal static void LiberarTablasDeArena(int id)
             => Interlocked.Exchange(ref _tablas[id], null)?.LiberarTodo();
 
-        internal static bool TieneSesionesVivasEnArena(int id)
-            => _tablas[id]?.TieneSesionesVivas ?? false;
+        internal static bool HasSesionesVivasEnArena(int id)
+            => _tablas[id]?.HasSesionesVivas ?? false;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool IsTablaMaterializada(int idArena)
             => Volatile.Read(ref _tablas[idArena]) is not null;
 
@@ -151,6 +154,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ
         internal static ref MetadatosSesion<T> ObtenerMetadatos(int tamañoMinimo)
             => ref ObtenerMetadatos(0, tamañoMinimo);
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static ref MetadatosSesion<T> ObtenerMetadatos(long token)
             => ref ObtenerTabla(token).ObtenerMetadatos(token);
 
