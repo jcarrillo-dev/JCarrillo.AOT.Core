@@ -163,6 +163,7 @@ namespace JCarrillo.AOT.Core.Extensiones.SemaphoreSlim
         #endregion
 
         [System.Diagnostics.CodeAnalysis.DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowTimeout(int timeout)
             => throw new TimeoutException($"No se pudo obtener el semáforo en {timeout} milisegundos.");
     }

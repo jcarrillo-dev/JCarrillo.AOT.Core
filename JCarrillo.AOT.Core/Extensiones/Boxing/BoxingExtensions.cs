@@ -41,9 +41,7 @@ namespace JCarrillo.AOT.Core.Extensiones.Boxing
             {
                 InitializeStackLimits();
                 if (thisPtr < _stackLow || thisPtr > _stackHigh)
-                {
                     ThrowBoxingDetected(typeof(T).Name);
-                }
             }
         }
 
@@ -67,9 +65,7 @@ namespace JCarrillo.AOT.Core.Extensiones.Boxing
             {
                 InitializeStackLimits();
                 if (thisPtr < _stackLow || thisPtr > _stackHigh)
-                {
                     ThrowBoxingDetected(nameof(SemaphoreLock));
-                }
             }
         }
 

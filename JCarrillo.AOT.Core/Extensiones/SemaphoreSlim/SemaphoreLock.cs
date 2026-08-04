@@ -32,7 +32,7 @@ namespace JCarrillo.AOT.Core.Extensiones.SemaphoreSlim
             this.ValidarNoBoxeado();
             System.Threading.SemaphoreSlim? sem = Interlocked.Exchange(ref _semaphore, null);
             if (sem != null)
-                _ = _ = sem.Release();
+                _ = sem.Release();
         }
 
         /// <summary>
@@ -51,7 +51,7 @@ namespace JCarrillo.AOT.Core.Extensiones.SemaphoreSlim
         {
             System.Threading.SemaphoreSlim? sem = Interlocked.Exchange(ref _semaphore, null);
             if (sem != null)
-                _ = _ = sem.Release();
+                _ = sem.Release();
             return ValueTask.CompletedTask;
         }
     }
