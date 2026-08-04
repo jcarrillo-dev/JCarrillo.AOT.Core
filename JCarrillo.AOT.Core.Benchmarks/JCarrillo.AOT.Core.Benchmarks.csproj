@@ -9,7 +9,8 @@
     <TieredCompilation>false</TieredCompilation>
     <OptimizationPreference>Speed</OptimizationPreference>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <NoWarn>$(NoWarn);1591;JCA0001;JCA0002;JCA0003</NoWarn>
+    <!-- CA1707/CA1822: BenchmarkDotNet exige métodos [Benchmark] de instancia y los nombres con guion bajo son su convención de reporte -->
+    <NoWarn>$(NoWarn);1591;JCA0001;JCA0002;JCA0003;CA1707;CA1822</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />

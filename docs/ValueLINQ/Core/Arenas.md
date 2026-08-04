@@ -89,6 +89,9 @@ El token de sesión de 64 bits reparte sus bits así:
 
 El reciclado de identificadores de arena es **FIFO**: un id liberado no se reutiliza hasta haber ciclado por los demás, lo que refuerza el margen de la generación de arena.
 
+> [!NOTE]
+> **El valor `0L` está reservado como token nulo** y nunca identifica una sesión válida: es el token de una consulta *default* (la que §2 omite en la comprobación de arenas de `Concat`) y la marca interna de slot vacío en las tablas de sesión. El generador de tokens lo garantiza activamente: al crear una sesión, si la combinación de slot, arena, generación y versión produjera `0L` —posible cuando la versión de 28 bits desborda y sus bits altos quedan a cero coincidiendo con slot, id y generación de arena congruentes con cero—, el token se descarta y se regenera incrementando la versión hasta obtener un valor distinto de `0L` (`TablaSesiones<T>.ObtenerMetadatos`, bucle `do/while`). Así, la semántica de centinela de `0L` usada en §2 y en la validación de §4 queda garantizada: ninguna sesión válida recibe jamás el token cero.
+
 ---
 
 ## 4. Contrato de Vida Útil

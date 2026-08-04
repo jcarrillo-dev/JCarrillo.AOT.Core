@@ -80,18 +80,18 @@ Prueba que simula un pipeline común de procesamiento de datos compuesto por un 
 ---
 
 ### 2. Iteración y Recorrido de Colecciones ($N = 1000$)
-Evalúa el costo puro de recorrer secuencialmente los elementos de la consulta mediante el enumerador estructurado `ValueLINQEnumerator<T>` frente a bucles nativos y baselines del sistema.
+Evalúa el costo puro de recorrer secuencialmente los elementos de la consulta mediante `foreach` sobre el `Span<T>` transitorio obtenido del `StateManager` (los métodos `GetEnumerator()` de `ValueLINQStruct<T>` y `ValueLINQRefStruct<T>` devuelven el enumerador estándar `Span<T>.Enumerator`, que entrega los elementos por referencia y sin asignaciones), frente a bucles nativos y baselines del sistema. El tipo público `ValueLINQEnumerator<T>` existe en la biblioteca, pero no participa en la ruta de iteración medida por estos benchmarks.
 
 | Runtime / Engine | Método | Latencia Media (Mean) | Heap Allocated | Descripción / Comportamiento |
 | :--- | :--- | :---: | :---: | :--- |
-| **.NET 10.0 JIT** | `Array_Iteration` | 275.66 ns | 0 B | Recorrido directo de array indexado (Naive Baseline). |
-| **.NET 10.0 JIT** | `List_Iteration` | 502.79 ns | 0 B | Bucle `foreach` nativo sobre `List<T>`. |
-| **.NET 10.0 JIT** | `ValueLINQStruct_Iteration_Only` | 583.34 ns | 0 B | Iteración pura del Span transitorio obtenido del StateManager. |
-| **.NET 10.0 JIT** | `ValueLINQRefStruct_Iteration_WithCreation` | 704.64 ns | **0 B** | Pipeline completo: Renta de slot + Bucle `foreach` + Liberación (`Dispose()`). |
-| **NativeAOT 10.0** | `Array_Iteration` | 273.68 ns | 0 B | Recorrido de array indexado en Native AOT. |
-| **NativeAOT 10.0** | `List_Iteration` | 511.92 ns | 0 B | Bucle `foreach` sobre lista nativa en Native AOT. |
-| **NativeAOT 10.0** | `ValueLINQStruct_Iteration_Only` | 523.93 ns | 0 B | Recorrido de Span transitorio en Native AOT. |
-| **NativeAOT 10.0** | `ValueLINQRefStruct_Iteration_WithCreation` | 644.80 ns | **0 B** | Ciclo completo síncrono en Native AOT. |
+| **.NET 10.0 JIT** | `ArrayIteration` | 275.66 ns | 0 B | Recorrido directo de array indexado (Naive Baseline). |
+| **.NET 10.0 JIT** | `ListIteration` | 502.79 ns | 0 B | Bucle `foreach` nativo sobre `List<T>`. |
+| **.NET 10.0 JIT** | `ValueLINQStructIterationOnly` | 583.34 ns | 0 B | Iteración pura del Span transitorio obtenido del StateManager. |
+| **.NET 10.0 JIT** | `ValueLINQRefStructIterationWithCreation` | 704.64 ns | **0 B** | Pipeline completo: Renta de slot + Bucle `foreach` + Liberación (`Dispose()`). |
+| **NativeAOT 10.0** | `ArrayIteration` | 273.68 ns | 0 B | Recorrido de array indexado en Native AOT. |
+| **NativeAOT 10.0** | `ListIteration` | 511.92 ns | 0 B | Bucle `foreach` sobre lista nativa en Native AOT. |
+| **NativeAOT 10.0** | `ValueLINQStructIterationOnly` | 523.93 ns | 0 B | Recorrido de Span transitorio en Native AOT. |
+| **NativeAOT 10.0** | `ValueLINQRefStructIterationWithCreation` | 644.80 ns | **0 B** | Ciclo completo síncrono en Native AOT. |
 
 ---
 
@@ -100,12 +100,12 @@ Mide la alocación silenciosa inducida por el compilador al resolver el paso de 
 
 | Runtime / Engine | Método | Latencia Media (Mean) | Heap Allocated | Estado de Asignaciones |
 | :--- | :--- | :---: | :---: | :--- |
-| **.NET 8.0 JIT** | `ValueLINQStruct_Concat_Static_4Elements` | 691.40 ns | **0 B** | Llamada con argumentos fistas estáticos. |
-| **.NET 8.0 JIT** | `ValueLINQStruct_Concat_Params_5Elements` | 933.74 ns | **56 B** | **Alocación heap detectada** (creación del array temporal). |
-| **.NET 9.0 JIT** | `ValueLINQStruct_Concat_Static_4Elements` | 720.41 ns | **0 B** | Llamada con argumentos fistas estáticos. |
-| **.NET 9.0 JIT** | `ValueLINQStruct_Concat_Params_5Elements` | 940.65 ns | **0 B** | **0 Allocations** (JIT inline de `ReadOnlySpan<T>`). |
-| **.NET 10.0 JIT** | `ValueLINQStruct_Concat_Static_4Elements` | 715.78 ns | **0 B** | Sin params. |
-| **.NET 10.0 JIT** | `ValueLINQStruct_Concat_Params_5Elements` | 862.42 ns | **0 B** | **0 Allocations** (JIT inline de `ReadOnlySpan<T>`). |
+| **.NET 8.0 JIT** | `ValueLINQStructConcatStatic4Elements` | 691.40 ns | **0 B** | Llamada con argumentos fistas estáticos. |
+| **.NET 8.0 JIT** | `ValueLINQStructConcatParams5Elements` | 933.74 ns | **56 B** | **Alocación heap detectada** (creación del array temporal). |
+| **.NET 9.0 JIT** | `ValueLINQStructConcatStatic4Elements` | 720.41 ns | **0 B** | Llamada con argumentos fistas estáticos. |
+| **.NET 9.0 JIT** | `ValueLINQStructConcatParams5Elements` | 940.65 ns | **0 B** | **0 Allocations** (JIT inline de `ReadOnlySpan<T>`). |
+| **.NET 10.0 JIT** | `ValueLINQStructConcatStatic4Elements` | 715.78 ns | **0 B** | Sin params. |
+| **.NET 10.0 JIT** | `ValueLINQStructConcatParams5Elements` | 862.42 ns | **0 B** | **0 Allocations** (JIT inline de `ReadOnlySpan<T>`). |
 
 ---
 
@@ -114,12 +114,15 @@ Mide la sobrecarga del modelo síncrono al alimentar la colección. Compara la i
 
 | Runtime / Engine | Método | Latencia Media (Mean) | Heap Allocated | Sincronización y Complejidad |
 | :--- | :--- | :---: | :---: | :--- |
-| **.NET 10.0 JIT** | `List_Int_Block` (`AddRange`) | 166.57 ns | 4,056 B | Copia masiva sin locks. |
-| **.NET 10.0 JIT** | `ValueLINQRefStruct_Int_Block` (`Bulk`) | 142.60 ns | **0 B** | **$O(1)$ Lock** (Transferencia vectorial a velocidad de hardware). |
-| **.NET 10.0 JIT** | `ValueLINQStruct_Int_Fixed` (`Unit`) | 29,797.46 ns | **0 B** | $O(N)$ Locks (1000 bloqueos síncronos redundantes). |
-| **NativeAOT 10.0** | `List_Int_Block` (`AddRange`) | 156.30 ns | 4,056 B | Copia masiva nativa. |
-| **NativeAOT 10.0** | `ValueLINQStruct_Int_Block` (`Bulk`) | 154.87 ns | **0 B** | **$O(1)$ Lock** (Optimización en compilación estática). |
-| **NativeAOT 10.0** | `ValueLINQStruct_Int_Fixed` (`Unit`) | 31,979.34 ns | **0 B** | $O(N)$ Locks (1000 bloqueos síncronos redundantes). |
+| **.NET 10.0 JIT** | `ListIntBlock` (`AddRange`) | 166.57 ns | 4,056 B | Copia masiva sin locks. |
+| **.NET 10.0 JIT** | `ValueLINQRefStructIntBlock` (`Bulk`) | 142.60 ns | **0 B** | **$O(1)$ Lock** (Transferencia vectorial a velocidad de hardware). |
+| **.NET 10.0 JIT** | `ValueLINQStructIntFixed` (`Unit`) | 29,797.46 ns | **0 B** | $O(N)$ Locks (1000 bloqueos síncronos redundantes). |
+| **NativeAOT 10.0** | `ListIntBlock` (`AddRange`) | 156.30 ns | 4,056 B | Copia masiva nativa. |
+| **NativeAOT 10.0** | `ValueLINQStructIntBlock` (`Bulk`) | 154.87 ns | **0 B** | **$O(1)$ Lock** (Optimización en compilación estática). |
+| **NativeAOT 10.0** | `ValueLINQStructIntFixed` (`Unit`) | 31,979.34 ns | **0 B** | $O(N)$ Locks (1000 bloqueos síncronos redundantes). |
+
+> [!NOTE]
+> Las filas `Bulk` corresponden a dos benchmarks distintos del harness: `ValueLINQRefStructIntBlock` (variante `RefStruct`) en .NET 10.0 JIT y `ValueLINQStructIntBlock` (variante `Struct`) en NativeAOT 10.0.
 
 ---
 
@@ -129,63 +132,63 @@ Compara el coste de materialización en colecciones tradicionales alojadas en el
 #### Escala N = 100 (Medido)
 | Runtime / Engine | Método | Latencia Media (Mean) | Heap Allocated | Notas |
 | :--- | :--- | :---: | :---: | :--- |
-| **.NET 10.0 JIT** | `ValueLINQStruct_ToArray_Pooled` | 120.22 ns | 0 B | Buffer reciclado desde el pool (medido) |
-| **.NET 10.0 JIT** | `ValueLINQStruct_ToArrayStandard_Heap` | 102.56 ns | 424 B | Asignación en Heap administrado (medido) |
-| **.NET 10.0 JIT** | `ValueLINQStruct_ToList_Pooled` | 127.42 ns | 0 B | Buffer reciclado desde el pool (medido) |
-| **.NET 10.0 JIT** | `ValueLINQStruct_ToListStandard_Heap` | 107.07 ns | 456 B | Asignación en Heap administrado (medido) |
-| **.NET 9.0 JIT** | `ValueLINQStruct_ToArray_Pooled` | 125.26 ns | 0 B | Buffer reciclado desde el pool (medido) |
-| **.NET 9.0 JIT** | `ValueLINQStruct_ToArrayStandard_Heap` | 98.08 ns | 424 B | Asignación en Heap administrado (medido) |
-| **.NET 9.0 JIT** | `ValueLINQStruct_ToList_Pooled` | 127.32 ns | 0 B | Buffer reciclado desde el pool (medido) |
-| **.NET 9.0 JIT** | `ValueLINQStruct_ToListStandard_Heap` | 168.14 ns | 456 B | Asignación en Heap administrado (medido) |
-| **.NET 8.0 JIT** | `ValueLINQStruct_ToArray_Pooled` | 151.86 ns | 0 B | Buffer reciclado desde el pool (medido) |
-| **.NET 8.0 JIT** | `ValueLINQStruct_ToArrayStandard_Heap` | 112.83 ns | 424 B | Asignación en Heap administrado (medido) |
-| **.NET 8.0 JIT** | `ValueLINQStruct_ToList_Pooled` | 134.19 ns | 0 B | Buffer reciclado desde el pool (medido) |
-| **.NET 8.0 JIT** | `ValueLINQStruct_ToListStandard_Heap` | 113.64 ns | 456 B | Asignación en Heap administrado (medido) |
-| **NativeAOT 10.0** | `ValueLINQStruct_ToArray_Pooled` | 211.68 ns | 0 B | Buffer reciclado en compilación nativa (medido) |
-| **NativeAOT 10.0** | `ValueLINQStruct_ToArrayStandard_Heap` | 163.40 ns | 424 B | Asignación en Heap (compilación nativa) (medido) |
-| **NativeAOT 10.0** | `ValueLINQStruct_ToList_Pooled` | 209.89 ns | 0 B | Buffer reciclado en compilación nativa (medido) |
-| **NativeAOT 10.0** | `ValueLINQStruct_ToListStandard_Heap` | 176.74 ns | 456 B | Asignación en Heap (compilación nativa) (medido) |
-| **NativeAOT 9.0** | `ValueLINQStruct_ToArray_Pooled` | 203.73 ns | 0 B | Buffer reciclado en compilación nativa (medido) |
-| **NativeAOT 9.0** | `ValueLINQStruct_ToArrayStandard_Heap` | 158.90 ns | 424 B | Asignación en Heap (compilación nativa) (medido) |
-| **NativeAOT 9.0** | `ValueLINQStruct_ToList_Pooled` | 204.04 ns | 0 B | Buffer reciclado en compilación nativa (medido) |
-| **NativeAOT 9.0** | `ValueLINQStruct_ToListStandard_Heap` | 171.88 ns | 456 B | Asignación en Heap (compilación nativa) (medido) |
-| **NativeAOT 8.0** | `ValueLINQStruct_ToArray_Pooled` | 247.38 ns | 0 B | Buffer reciclado en compilación nativa (medido) |
-| **NativeAOT 8.0** | `ValueLINQStruct_ToArrayStandard_Heap` | 169.34 ns | 424 B | Asignación en Heap (compilación nativa) (medido) |
-| **NativeAOT 8.0** | `ValueLINQStruct_ToList_Pooled` | 232.62 ns | 0 B | Buffer reciclado en compilación nativa (medido) |
-| **NativeAOT 8.0** | `ValueLINQStruct_ToListStandard_Heap` | 182.98 ns | 456 B | Asignación en Heap (compilación nativa) (medido) |
+| **.NET 10.0 JIT** | `ValueLINQStructToArrayPooled` | 120.22 ns | 0 B | Buffer reciclado desde el pool (medido) |
+| **.NET 10.0 JIT** | `ValueLINQStructToArrayStandardHeap` | 102.56 ns | 424 B | Asignación en Heap administrado (medido) |
+| **.NET 10.0 JIT** | `ValueLINQStructToListPooled` | 127.42 ns | 0 B | Buffer reciclado desde el pool (medido) |
+| **.NET 10.0 JIT** | `ValueLINQStructToListStandardHeap` | 107.07 ns | 456 B | Asignación en Heap administrado (medido) |
+| **.NET 9.0 JIT** | `ValueLINQStructToArrayPooled` | 125.26 ns | 0 B | Buffer reciclado desde el pool (medido) |
+| **.NET 9.0 JIT** | `ValueLINQStructToArrayStandardHeap` | 98.08 ns | 424 B | Asignación en Heap administrado (medido) |
+| **.NET 9.0 JIT** | `ValueLINQStructToListPooled` | 127.32 ns | 0 B | Buffer reciclado desde el pool (medido) |
+| **.NET 9.0 JIT** | `ValueLINQStructToListStandardHeap` | 168.14 ns | 456 B | Asignación en Heap administrado (medido) |
+| **.NET 8.0 JIT** | `ValueLINQStructToArrayPooled` | 151.86 ns | 0 B | Buffer reciclado desde el pool (medido) |
+| **.NET 8.0 JIT** | `ValueLINQStructToArrayStandardHeap` | 112.83 ns | 424 B | Asignación en Heap administrado (medido) |
+| **.NET 8.0 JIT** | `ValueLINQStructToListPooled` | 134.19 ns | 0 B | Buffer reciclado desde el pool (medido) |
+| **.NET 8.0 JIT** | `ValueLINQStructToListStandardHeap` | 113.64 ns | 456 B | Asignación en Heap administrado (medido) |
+| **NativeAOT 10.0** | `ValueLINQStructToArrayPooled` | 211.68 ns | 0 B | Buffer reciclado en compilación nativa (medido) |
+| **NativeAOT 10.0** | `ValueLINQStructToArrayStandardHeap` | 163.40 ns | 424 B | Asignación en Heap (compilación nativa) (medido) |
+| **NativeAOT 10.0** | `ValueLINQStructToListPooled` | 209.89 ns | 0 B | Buffer reciclado en compilación nativa (medido) |
+| **NativeAOT 10.0** | `ValueLINQStructToListStandardHeap` | 176.74 ns | 456 B | Asignación en Heap (compilación nativa) (medido) |
+| **NativeAOT 9.0** | `ValueLINQStructToArrayPooled` | 203.73 ns | 0 B | Buffer reciclado en compilación nativa (medido) |
+| **NativeAOT 9.0** | `ValueLINQStructToArrayStandardHeap` | 158.90 ns | 424 B | Asignación en Heap (compilación nativa) (medido) |
+| **NativeAOT 9.0** | `ValueLINQStructToListPooled` | 204.04 ns | 0 B | Buffer reciclado en compilación nativa (medido) |
+| **NativeAOT 9.0** | `ValueLINQStructToListStandardHeap` | 171.88 ns | 456 B | Asignación en Heap (compilación nativa) (medido) |
+| **NativeAOT 8.0** | `ValueLINQStructToArrayPooled` | 247.38 ns | 0 B | Buffer reciclado en compilación nativa (medido) |
+| **NativeAOT 8.0** | `ValueLINQStructToArrayStandardHeap` | 169.34 ns | 424 B | Asignación en Heap (compilación nativa) (medido) |
+| **NativeAOT 8.0** | `ValueLINQStructToListPooled` | 232.62 ns | 0 B | Buffer reciclado en compilación nativa (medido) |
+| **NativeAOT 8.0** | `ValueLINQStructToListStandardHeap` | 182.98 ns | 456 B | Asignación en Heap (compilación nativa) (medido) |
 
 #### Escala N = 1000 (Medido)
 | Runtime / Engine | Método | Latencia Media (Mean) | Heap Allocated | Notas |
 | :--- | :--- | :---: | :---: | :--- |
-| **.NET 10.0 JIT** | `ValueLINQStruct_ToArray_Pooled` | 328.42 ns | 0 B | Buffer reciclado desde el pool (medido) |
-| **.NET 10.0 JIT** | `ValueLINQStruct_ToArrayStandard_Heap` | 467.07 ns | 4,024 B | Asignación en Heap administrado (medido) |
-| **.NET 10.0 JIT** | `ValueLINQStruct_ToList_Pooled` | 353.51 ns | 0 B | Buffer reciclado desde el pool (medido) |
-| **.NET 10.0 JIT** | `ValueLINQStruct_ToListStandard_Heap` | 461.80 ns | 4,056 B | Asignación en Heap administrado (medido) |
-| **.NET 9.0 JIT** | `ValueLINQStruct_ToArray_Pooled` | 203.42 ns | 0 B | Buffer reciclado desde el pool (medido) |
-| **.NET 9.0 JIT** | `ValueLINQStruct_ToArrayStandard_Heap` | 291.96 ns | 4,024 B | Asignación en Heap administrado (medido) |
-| **.NET 9.0 JIT** | `ValueLINQStruct_ToList_Pooled` | 206.01 ns | 0 B | Buffer reciclado desde el pool (medido) |
-| **.NET 9.0 JIT** | `ValueLINQStruct_ToListStandard_Heap` | 299.07 ns | 4,056 B | Asignación en Heap administrado (medido) |
-| **.NET 8.0 JIT** | `ValueLINQStruct_ToArray_Pooled` | 409.09 ns | 0 B | Buffer reciclado desde el pool (medido) |
-| **.NET 8.0 JIT** | `ValueLINQStruct_ToArrayStandard_Heap` | 513.52 ns | 4,024 B | Asignación en Heap administrado (medido) |
-| **.NET 8.0 JIT** | `ValueLINQStruct_ToList_Pooled` | 402.30 ns | 0 B | Buffer reciclado desde el pool (medido) |
-| **.NET 8.0 JIT** | `ValueLINQStruct_ToListStandard_Heap` | 310.55 ns | 4,056 B | Regresión de CPU frente a Heap administrado (medido) |
-| **NativeAOT 10.0** | `ValueLINQStruct_ToArray_Pooled` | 207.54 ns | 0 B | Buffer reciclado en compilación nativa (medido) |
-| **NativeAOT 10.0** | `ValueLINQStruct_ToArrayStandard_Heap` | 279.72 ns | 4,024 B | Asignación en Heap (compilación nativa) (medido) |
-| **NativeAOT 10.0** | `ValueLINQStruct_ToList_Pooled` | 230.63 ns | 0 B | Buffer reciclado en compilación nativa (medido) |
-| **NativeAOT 10.0** | `ValueLINQStruct_ToListStandard_Heap` | 284.67 ns | 4,056 B | Asignación en Heap (compilación nativa) (medido) |
-| **NativeAOT 9.0** | `ValueLINQStruct_ToArray_Pooled` | 218.06 ns | 0 B | Buffer reciclado en compilación nativa (medido) |
-| **NativeAOT 9.0** | `ValueLINQStruct_ToArrayStandard_Heap` | 268.22 ns | 4,024 B | Asignación en Heap (compilación nativa) (medido) |
-| **NativeAOT 9.0** | `ValueLINQStruct_ToList_Pooled` | 212.36 ns | 0 B | Buffer reciclado en compilación nativa (medido) |
-| **NativeAOT 9.0** | `ValueLINQStruct_ToListStandard_Heap` | 289.00 ns | 4,056 B | Asignación en Heap (compilación nativa) (medido) |
-| **NativeAOT 8.0** | `ValueLINQStruct_ToArray_Pooled` | 224.18 ns | 0 B | Buffer reciclado en compilación nativa (medido) |
-| **NativeAOT 8.0** | `ValueLINQStruct_ToArrayStandard_Heap` | 284.56 ns | 4,024 B | Asignación en Heap (compilación nativa) (medido) |
-| **NativeAOT 8.0** | `ValueLINQStruct_ToList_Pooled` | 220.80 ns | 0 B | Buffer reciclado en compilación nativa (medido) |
-| **NativeAOT 8.0** | `ValueLINQStruct_ToListStandard_Heap` | 296.37 ns | 4,056 B | Asignación en Heap (compilación nativa) (medido) |
+| **.NET 10.0 JIT** | `ValueLINQStructToArrayPooled` | 328.42 ns | 0 B | Buffer reciclado desde el pool (medido) |
+| **.NET 10.0 JIT** | `ValueLINQStructToArrayStandardHeap` | 467.07 ns | 4,024 B | Asignación en Heap administrado (medido) |
+| **.NET 10.0 JIT** | `ValueLINQStructToListPooled` | 353.51 ns | 0 B | Buffer reciclado desde el pool (medido) |
+| **.NET 10.0 JIT** | `ValueLINQStructToListStandardHeap` | 461.80 ns | 4,056 B | Asignación en Heap administrado (medido) |
+| **.NET 9.0 JIT** | `ValueLINQStructToArrayPooled` | 203.42 ns | 0 B | Buffer reciclado desde el pool (medido) |
+| **.NET 9.0 JIT** | `ValueLINQStructToArrayStandardHeap` | 291.96 ns | 4,024 B | Asignación en Heap administrado (medido) |
+| **.NET 9.0 JIT** | `ValueLINQStructToListPooled` | 206.01 ns | 0 B | Buffer reciclado desde el pool (medido) |
+| **.NET 9.0 JIT** | `ValueLINQStructToListStandardHeap` | 299.07 ns | 4,056 B | Asignación en Heap administrado (medido) |
+| **.NET 8.0 JIT** | `ValueLINQStructToArrayPooled` | 409.09 ns | 0 B | Buffer reciclado desde el pool (medido) |
+| **.NET 8.0 JIT** | `ValueLINQStructToArrayStandardHeap` | 513.52 ns | 4,024 B | Asignación en Heap administrado (medido) |
+| **.NET 8.0 JIT** | `ValueLINQStructToListPooled` | 402.30 ns | 0 B | Buffer reciclado desde el pool (medido) |
+| **.NET 8.0 JIT** | `ValueLINQStructToListStandardHeap` | 310.55 ns | 4,056 B | Regresión de CPU frente a Heap administrado (medido) |
+| **NativeAOT 10.0** | `ValueLINQStructToArrayPooled` | 207.54 ns | 0 B | Buffer reciclado en compilación nativa (medido) |
+| **NativeAOT 10.0** | `ValueLINQStructToArrayStandardHeap` | 279.72 ns | 4,024 B | Asignación en Heap (compilación nativa) (medido) |
+| **NativeAOT 10.0** | `ValueLINQStructToListPooled` | 230.63 ns | 0 B | Buffer reciclado en compilación nativa (medido) |
+| **NativeAOT 10.0** | `ValueLINQStructToListStandardHeap` | 284.67 ns | 4,056 B | Asignación en Heap (compilación nativa) (medido) |
+| **NativeAOT 9.0** | `ValueLINQStructToArrayPooled` | 218.06 ns | 0 B | Buffer reciclado en compilación nativa (medido) |
+| **NativeAOT 9.0** | `ValueLINQStructToArrayStandardHeap` | 268.22 ns | 4,024 B | Asignación en Heap (compilación nativa) (medido) |
+| **NativeAOT 9.0** | `ValueLINQStructToListPooled` | 212.36 ns | 0 B | Buffer reciclado en compilación nativa (medido) |
+| **NativeAOT 9.0** | `ValueLINQStructToListStandardHeap` | 289.00 ns | 4,056 B | Asignación en Heap (compilación nativa) (medido) |
+| **NativeAOT 8.0** | `ValueLINQStructToArrayPooled` | 224.18 ns | 0 B | Buffer reciclado en compilación nativa (medido) |
+| **NativeAOT 8.0** | `ValueLINQStructToArrayStandardHeap` | 284.56 ns | 4,024 B | Asignación en Heap (compilación nativa) (medido) |
+| **NativeAOT 8.0** | `ValueLINQStructToListPooled` | 220.80 ns | 0 B | Buffer reciclado en compilación nativa (medido) |
+| **NativeAOT 8.0** | `ValueLINQStructToListStandardHeap` | 296.37 ns | 4,056 B | Asignación en Heap (compilación nativa) (medido) |
 
 > [!NOTE]
 > **Análisis del Coste de Alquiler**:
 > En tamaños de colección pequeños ($N = 100$), los materializadores estándar muestran una latencia menor (entre un 14.7% y un 31.5% más rápidos, medido), debido a que no incurren en la sobrecarga de alquiler y devolución de buffers en el pool de memoria (`ArrayPool<T>.Shared`), con la única excepción de `ToListStandard` en .NET 9.0 JIT, donde la versión Pooled fue un 24.3% más rápida (medido).
-> A mayor escala ($N = 1000$), las asignaciones repetitivas en el Heap penalizan a los materializadores estándar, permitiendo que las versiones pooled superen su rendimiento en un rango del 18.7% al 31.1% en la mayoría de los entornos (medido), manteniendo un consumo nulo de asignaciones de memoria heap (0 B, medido). La única regresión observada en esta escala ocurre en `.NET 8.0 JIT`, donde `ToListStandard_Heap` (310.55 ns, medido) supera a `ToList_Pooled` (402.30 ns, medido) en un 29.5% debido a sobrecargas del pool.
+> A mayor escala ($N = 1000$), las asignaciones repetitivas en el Heap penalizan a los materializadores estándar, permitiendo que las versiones pooled superen su rendimiento en un rango del 18.7% al 31.1% en la mayoría de los entornos (medido), manteniendo un consumo nulo de asignaciones de memoria heap (0 B, medido). La única regresión observada en esta escala ocurre en `.NET 8.0 JIT`, donde `ValueLINQStructToListStandardHeap` (310.55 ns, medido) supera a `ValueLINQStructToListPooled` (402.30 ns, medido) en un 29.5% debido a sobrecargas del pool.
 
 ---
 
