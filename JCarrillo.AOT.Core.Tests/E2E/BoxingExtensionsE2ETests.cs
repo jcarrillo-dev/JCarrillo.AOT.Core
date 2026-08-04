@@ -95,8 +95,11 @@ namespace JCarrillo.AOT.Core.Tests.E2E
             TestStruct val = new();
 
             // Actuar y Aserción
-            Action act = () => val.ValidarNoBoxeado();
-            _ = act.Should().NotThrow();
+            // No se envuelve la llamada en una lambda: Roslyn generaría una clase de clausura en el
+            // heap para capturar `val`, de modo que `ref value` apuntaría a un campo de ese objeto y
+            // ValidarNoBoxeado detectaría —correctamente— que la variable salió de la pila. Si la
+            // validación falla, la excepción hace fallar la prueba igualmente.
+            val.ValidarNoBoxeado();
         }
 
         [Fact]

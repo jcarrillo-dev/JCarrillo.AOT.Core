@@ -89,7 +89,7 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
         }
 
         [Fact]
-        public void CrearTablaConcurrenteConLiberacionDeArenaNoDejaTablaHuerfana()
+        public async Task CrearTablaConcurrenteConLiberacionDeArenaNoDejaTablaHuerfana()
         {
             const int iteraciones = 60;
             const int creadores = 6;
@@ -124,7 +124,7 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
                     ValueLINQArenaManager.Liberar(tokenArena);
                 });
 
-                Task.WaitAll(tareas);
+                await Task.WhenAll(tareas);
 
                 _ = ValueLINQArenaManager.IsArenaViva(tokenArena).Should().BeFalse();
                 _ = ValueLINQStateManager<TipoRaceCas>.IsTablaMaterializada(id).Should().BeFalse(
@@ -133,7 +133,7 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
         }
 
         [Fact]
-        public void CreacionConcurrenteDeUnaArenaSoloMaterializaUnaTabla()
+        public async Task CreacionConcurrenteDeUnaArenaSoloMaterializaUnaTabla()
         {
             long tokenArenaManager = ValueLINQArenaManager.Alquilar();
             int idArena = TokenHelper.ObtenerIdTokenArena(tokenArenaManager);
@@ -154,7 +154,7 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
                     });
                 }
 
-                Task.WaitAll(tareas);
+                await Task.WhenAll(tareas);
 
                 _ = tokens.Should().OnlyContain(token => ValueLINQStateManager<TipoCas>.IsMetadatoValido(token));
                 _ = tokens.Should().OnlyContain(token => TokenHelper.ObtenerArenaId(token) == idArena);

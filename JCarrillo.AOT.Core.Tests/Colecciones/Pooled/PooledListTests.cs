@@ -50,7 +50,7 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
 
             // Actuar y Verificar
             list.Dispose();
-            _ = list.EstaDisposed.Should().BeTrue();
+            _ = list.IsDisposed.Should().BeTrue();
 
             // Llamar a Dispose de nuevo no debería lanzar una excepción
             list.Dispose();
@@ -65,7 +65,7 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
 
             // Actuar y Verificar
             await list.DisposeAsync();
-            _ = list.EstaDisposed.Should().BeTrue();
+            _ = list.IsDisposed.Should().BeTrue();
 
             // Llamar a DisposeAsync de nuevo no debería lanzar una excepción
             await list.DisposeAsync();

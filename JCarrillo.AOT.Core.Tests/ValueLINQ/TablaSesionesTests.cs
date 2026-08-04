@@ -52,7 +52,7 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
         }
 
         [Fact]
-        public void ContencionCruzandoLaFronteraDeParticionProduceSesionesUnicas()
+        public async Task ContencionCruzandoLaFronteraDeParticionProduceSesionesUnicas()
         {
             TablaSesiones<int> tabla = new(1);
             const int hilos = 16;
@@ -71,7 +71,7 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
                 });
             }
 
-            Task.WaitAll(tareas);
+            await Task.WhenAll(tareas);
 
             int totalEsperado = hilos * sesionesPorHilo;
             _ = tokens.Should().HaveCount(totalEsperado);
@@ -82,7 +82,7 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
         }
 
         [Fact]
-        public void ContencionSoloEnLaFronteraExactaDeParticion()
+        public async Task ContencionSoloEnLaFronteraExactaDeParticion()
         {
             TablaSesiones<int> tabla = new(0);
             for (int i = 0; i < ValueLINQConfig.SlotsEnParticion - 8; i++)
@@ -102,7 +102,7 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
                 });
             }
 
-            Task.WaitAll(tareas);
+            await Task.WhenAll(tareas);
 
             _ = tokens.Should().HaveCount(hilos);
             _ = tokens.Select(TokenHelper.ObtenerSlotIndex).Distinct().Should().HaveCount(hilos);
@@ -184,7 +184,7 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
         }
 
         [Fact]
-        public void LiberacionConcurrenteDelMismoTokenSoloGanaUnHilo()
+        public async Task LiberacionConcurrenteDelMismoTokenSoloGanaUnHilo()
         {
             TablaSesiones<int> tabla = new(0);
             long token = tabla.ObtenerMetadatos(4).Token;
@@ -201,7 +201,7 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
                 });
             }
 
-            Task.WaitAll(tareas);
+            await Task.WhenAll(tareas);
 
             long tokenA = tabla.ObtenerMetadatos(4).Token;
             long tokenB = tabla.ObtenerMetadatos(4).Token;
@@ -281,13 +281,12 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
         }
 
         [Fact]
-        public void AsegurarEspacioConcurrenteSobreElMismoTokenPreservaLosDatos()
+        public async Task AsegurarEspacioConcurrenteSobreElMismoTokenPreservaLosDatos()
         {
             TablaSesiones<int> tabla = new(0);
-            ref MetadatosSesion<int> metadatos = ref tabla.ObtenerMetadatos(4);
-            long token = metadatos.Token;
-            metadatos.Array![0] = 77;
-            metadatos.TamañoActual = 1;
+            // El acceso por ref se aísla en funciones locales síncronas: C# 12 (net8.0) prohíbe
+            // ref locals dentro de un método async, y esta prueba multitarget hasta net8.0.
+            long token = PrepararSesion(tabla);
 
             const int hilos = 16;
             using Barrier barrera = new(hilos);
@@ -302,13 +301,26 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
                 });
             }
 
-            Task.WaitAll(tareas);
+            await Task.WhenAll(tareas);
 
-            ref MetadatosSesion<int> despues = ref tabla.ObtenerMetadatos(token);
-            _ = despues.Array!.Length.Should().BeGreaterThanOrEqualTo(hilos * 500);
-            _ = despues.Array[0].Should().Be(77);
-            _ = despues.TamañoActual.Should().Be(1);
+            VerificarSesion(tabla, token, hilos);
             _ = tabla.IsMetadatoValido(token).Should().BeTrue();
+
+            static long PrepararSesion(TablaSesiones<int> tabla)
+            {
+                ref MetadatosSesion<int> metadatos = ref tabla.ObtenerMetadatos(4);
+                metadatos.Array![0] = 77;
+                metadatos.TamañoActual = 1;
+                return metadatos.Token;
+            }
+
+            static void VerificarSesion(TablaSesiones<int> tabla, long token, int hilos)
+            {
+                ref MetadatosSesion<int> despues = ref tabla.ObtenerMetadatos(token);
+                _ = despues.Array!.Length.Should().BeGreaterThanOrEqualTo(hilos * 500);
+                _ = despues.Array[0].Should().Be(77);
+                _ = despues.TamañoActual.Should().Be(1);
+            }
         }
 
         [Fact]
@@ -490,7 +502,7 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
         }
 
         [Fact]
-        public void CruceInversoDeConcatNoInterbloquea()
+        public async Task CruceInversoDeConcatNoInterbloquea()
         {
             TablaSesiones<int> tabla = new(0);
             const int iteraciones = 200;
@@ -526,9 +538,11 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
                 }),
             ];
 
-            bool completado = Task.WaitAll(tareas, TimeSpan.FromSeconds(30));
+            Task todas = Task.WhenAll(tareas);
+            bool completado = await Task.WhenAny(todas, Task.Delay(TimeSpan.FromSeconds(30))) == todas;
 
             _ = completado.Should().BeTrue("el orden global de adquisición debe impedir el interbloqueo del cruce inverso");
+            await todas; // Propaga cualquier excepción de las tareas, como hacía Task.WaitAll
 
             foreach ((long a, long b) in pares)
             {
@@ -578,11 +592,11 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
             for (int i = 0; i < tokens.Length; i++)
                 tokens[i] = tabla.ObtenerMetadatos(4).Token;
 
-            tabla.TieneSesionesVivas.Should().BeTrue();
+            tabla.HasSesionesVivas.Should().BeTrue();
 
             tabla.LiberarTodo();
 
-            tabla.TieneSesionesVivas.Should().BeFalse();
+            tabla.HasSesionesVivas.Should().BeFalse();
             tabla.IndicesLibres.Should().Be(ValueLINQConfig.Slots);
             foreach (long token in tokens)
                 tabla.IsMetadatoValido(token).Should().BeFalse();
@@ -601,16 +615,44 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
         }
 
         [Fact]
-        public void TieneSesionesVivasReflejaElEstadoDeLaTabla()
+        public void FalloAlAlquilarElBufferDevuelveElIndiceALaPila()
         {
             TablaSesiones<int> tabla = new(0);
-            tabla.TieneSesionesVivas.Should().BeFalse();
+            int libresAntes = tabla.IndicesLibres;
+
+            Action obtenerConTamañoInvalido = () => tabla.ObtenerMetadatos(-1);
+
+            obtenerConTamañoInvalido.Should().Throw<ArgumentOutOfRangeException>();
+            tabla.IndicesLibres.Should().Be(libresAntes);
+            tabla.HasSesionesVivas.Should().BeFalse();
+        }
+
+        [Fact]
+        public void FalloAlAlquilarElBufferNoAgotaLaCapacidadDeLaTabla()
+        {
+            TablaSesiones<int> tabla = new(0);
+
+            for (int i = 0; i < ValueLINQConfig.Slots + 10; i++)
+            {
+                Action obtenerConTamañoInvalido = () => tabla.ObtenerMetadatos(-1);
+                obtenerConTamañoInvalido.Should().Throw<ArgumentOutOfRangeException>();
+            }
+
+            tabla.IndicesLibres.Should().Be(ValueLINQConfig.Slots);
+            tabla.ObtenerMetadatos(4).Token.Should().NotBe(0L);
+        }
+
+        [Fact]
+        public void HasSesionesVivasReflejaElEstadoDeLaTabla()
+        {
+            TablaSesiones<int> tabla = new(0);
+            tabla.HasSesionesVivas.Should().BeFalse();
 
             long token = tabla.ObtenerMetadatos(4).Token;
-            tabla.TieneSesionesVivas.Should().BeTrue();
+            tabla.HasSesionesVivas.Should().BeTrue();
 
             tabla.LiberarMetadatos(token);
-            tabla.TieneSesionesVivas.Should().BeFalse();
+            tabla.HasSesionesVivas.Should().BeFalse();
         }
 
         [Fact]

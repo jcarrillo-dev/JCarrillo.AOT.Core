@@ -15,7 +15,7 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
             // Verificar
             _ = array.Tamaño.Should().Be(10);
             _ = array.Span.Length.Should().Be(10);
-            _ = array.EsAmpliable.Should().BeFalse();
+            _ = array.IsAmpliable.Should().BeFalse();
             _ = array.IntentarAmpliar(20).Should().BeFalse();
         }
 
@@ -64,7 +64,7 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
 
             // Actuar y Verificar
             array.Dispose();
-            _ = array.EstaDisposed.Should().BeTrue();
+            _ = array.IsDisposed.Should().BeTrue();
 
             // Llamar a Dispose de nuevo no debería lanzar una excepción
             array.Dispose();

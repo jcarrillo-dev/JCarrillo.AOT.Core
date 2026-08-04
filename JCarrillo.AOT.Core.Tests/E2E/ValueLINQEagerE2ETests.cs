@@ -570,7 +570,7 @@ namespace JCarrillo.AOT.Core.Tests.E2E
                 using ValueLINQStruct<LogEvent> events = errors.Select<string, LogParserSelector, LogEvent>(new LogParserSelector());
                 using ValueLINQRefStruct<ValueLINQStruct<LogEvent>> chunks = events.Chunk(100);
 
-                chunks.ProcessChunks(new LogBatchProcessor(semaphore));
+                chunks.ProcesarChunks(new LogBatchProcessor(semaphore));
             });
         }
 

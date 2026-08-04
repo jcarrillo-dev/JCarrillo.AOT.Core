@@ -451,7 +451,7 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
         }
 
         [Fact]
-        public void ValueLINQExtensionsProcessChunksShouldExecuteSuccessfully()
+        public void ValueLINQExtensionsProcesarChunksShouldExecuteSuccessfully()
         {
             int[] array = [1, 2, 3, 4, 5];
             ValueLINQStruct<int> query = array.ToValueQuery();
@@ -459,7 +459,7 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
             int[] sharedCounter = new int[1];
             ChunkProcessorCounter counter = new(sharedCounter);
 
-            chunks.ProcessChunks(counter);
+            chunks.ProcesarChunks(counter);
 
             _ = sharedCounter[0].Should().Be(5);
         }
@@ -649,7 +649,7 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
                 bool isExcepcionLanzada = false;
                 try
                 {
-                    chunks.ProcessChunks(new ChunkProcessorThrowing());
+                    chunks.ProcesarChunks(new ChunkProcessorThrowing());
                 }
                 catch (InvalidOperationException ex) when (ex.Message == "Simulated chunk processor error")
                 {
@@ -702,7 +702,7 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
         }
 
         [Fact]
-        public void ProcessChunksShouldReclaimBuffersWhenProcessorThrowsException()
+        public void ProcesarChunksShouldReclaimBuffersWhenProcessorThrowsException()
         {
             int initialActive = GetActiveSlotsCount<int>();
             int[] array = [1, 2, 3, 4, 5];
@@ -711,7 +711,7 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
 
             try
             {
-                chunks.ProcessChunks(new ChunkProcessorThrowing());
+                chunks.ProcesarChunks(new ChunkProcessorThrowing());
                 Assert.Fail("Should have thrown InvalidOperationException");
             }
             catch (InvalidOperationException ex) when (ex.Message == "Simulated chunk processor error")
@@ -737,7 +737,7 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
                 using ValueLINQStruct<int> filtered = query.Where(2, new IntEqualsPredicate());
                 using ValueLINQStruct<int> projected = filtered.Select<int, IntDoubleSelector, int>(new IntDoubleSelector());
                 using ValueLINQRefStruct<ValueLINQStruct<int>> chunks = projected.Chunk(2);
-                chunks.ProcessChunks(new ChunkProcessorCounter(new int[1]));
+                chunks.ProcesarChunks(new ChunkProcessorCounter(new int[1]));
             }
 
             int[] counterArray = new int[1];
@@ -749,7 +749,7 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
             using (ValueLINQStruct<int> filtered = query.Where(2, new IntEqualsPredicate()))
             using (ValueLINQStruct<int> projected = filtered.Select<int, IntDoubleSelector, int>(new IntDoubleSelector()))
             using (ValueLINQRefStruct<ValueLINQStruct<int>> chunks = projected.Chunk(2))
-                chunks.ProcessChunks(new ChunkProcessorCounter(counterArray));
+                chunks.ProcesarChunks(new ChunkProcessorCounter(counterArray));
 
             long bytesAfter = GC.GetAllocatedBytesForCurrentThread();
             long allocated = bytesAfter - bytesBefore;
@@ -953,6 +953,78 @@ namespace JCarrillo.AOT.Core.Tests.Extensiones
             List<int> result = query.ToListStandard();
 
             _ = result.Should().Equal(array);
+        }
+
+        [Fact]
+        public void ValueLINQStructToArrayStandardEmptySourceShouldReturnEmptyAndDispose()
+        {
+            int[] array = [];
+            ValueLINQStruct<int> query = array.ToValueQuery();
+            long token = query.Token;
+
+            int[] result = query.ToArrayStandard();
+
+            _ = result.Should().BeEmpty();
+            _ = ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse();
+        }
+
+        [Fact]
+        public void ValueLINQStructToListStandardEmptySourceShouldReturnEmptyAndDispose()
+        {
+            int[] array = [];
+            ValueLINQStruct<int> query = array.ToValueQuery();
+            long token = query.Token;
+
+            List<int> result = query.ToListStandard();
+
+            _ = result.Should().BeEmpty();
+            _ = ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse();
+        }
+
+        [Fact]
+        public void ValueLINQRefStructToArrayStandardEmptySourceShouldReturnEmptyAndDispose()
+        {
+            int[] array = [];
+            ValueLINQRefStruct<int> query = array.ToValueRefQuery();
+            long token = query.Token;
+
+            int[] result = query.ToArrayStandard();
+
+            _ = result.Should().BeEmpty();
+            _ = ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse();
+        }
+
+        [Fact]
+        public void ValueLINQRefStructToListStandardEmptySourceShouldReturnEmptyAndDispose()
+        {
+            int[] array = [];
+            ValueLINQRefStruct<int> query = array.ToValueRefQuery();
+            long token = query.Token;
+
+            List<int> result = query.ToListStandard();
+
+            _ = result.Should().BeEmpty();
+            _ = ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse();
+        }
+
+        [Fact]
+        public void ValueLINQStructStandardMaterializersWithZeroTokenShouldReturnEmpty()
+        {
+            ValueLINQStruct<int> queryArray = new(0L);
+            ValueLINQStruct<int> queryLista = new(0L);
+
+            _ = queryArray.ToArrayStandard().Should().BeEmpty();
+            _ = queryLista.ToListStandard().Should().BeEmpty();
+        }
+
+        [Fact]
+        public void ValueLINQRefStructStandardMaterializersWithZeroTokenShouldReturnEmpty()
+        {
+            ValueLINQRefStruct<int> queryArray = new(0L);
+            ValueLINQRefStruct<int> queryLista = new(0L);
+
+            _ = queryArray.ToArrayStandard().Should().BeEmpty();
+            _ = queryLista.ToListStandard().Should().BeEmpty();
         }
 
         [Fact]

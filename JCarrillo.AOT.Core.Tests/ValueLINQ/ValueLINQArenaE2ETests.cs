@@ -26,6 +26,11 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
             public readonly string Ejecutar(int item) => item.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
+        private static readonly int[] DatosArenaDispuesta = [1, 2, 3];
+        private static readonly int[] DatosAmbiente = [10, 20];
+        private static readonly int[] DatosConcatA = [1, 2];
+        private static readonly int[] DatosConcatB = [3, 4];
+
         [Fact]
         public void CrearYDisponerUnaArenaEsCoherente()
         {
@@ -95,10 +100,10 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
         public void DisponerUnaArenaNoAfectaLaArenaAmbiente()
         {
             ValueLINQArena arena = ValueLINQArena.Crear();
-            _ = new int[] { 1, 2, 3 }.ToValueQuery(arena);
+            _ = DatosArenaDispuesta.ToValueQuery(arena);
             arena.Dispose();
 
-            using PooledArray<int> resultado = new int[] { 10, 20 }.ToValueQuery().ToArray();
+            using PooledArray<int> resultado = DatosAmbiente.ToValueQuery().ToArray();
 
             _ = resultado.Tamaño.Should().Be(2);
             _ = resultado.Span[0].Should().Be(10);
@@ -109,8 +114,8 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
         public void ConcatDentroDeLaMismaArenaFunciona()
         {
             using ValueLINQArena arena = ValueLINQArena.Crear();
-            ValueLINQStruct<int> a = new int[] { 1, 2 }.ToValueQuery(arena);
-            ValueLINQStruct<int> b = new int[] { 3, 4 }.ToValueQuery(arena);
+            ValueLINQStruct<int> a = DatosConcatA.ToValueQuery(arena);
+            ValueLINQStruct<int> b = DatosConcatB.ToValueQuery(arena);
 
             List<int> resultado = [];
             foreach (int x in a.Concat(b))

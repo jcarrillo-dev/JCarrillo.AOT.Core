@@ -15,7 +15,7 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
             // Verificar
             _ = list.Tamaño.Should().Be(0);
             _ = list.Span.Length.Should().Be(0);
-            _ = list.EsAmpliable.Should().BeTrue();
+            _ = list.IsAmpliable.Should().BeTrue();
         }
 
         [Fact]
@@ -85,7 +85,7 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
 
             // Actuar y Verificar
             list.Dispose();
-            _ = list.EstaDisposed.Should().BeTrue();
+            _ = list.IsDisposed.Should().BeTrue();
 
             // Llamar a Dispose de nuevo no debería lanzar una excepción
             list.Dispose();

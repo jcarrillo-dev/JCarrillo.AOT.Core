@@ -675,6 +675,21 @@ namespace JCarrillo.AOT.Core.Tests.E2E
             });
             _ = sum.Should().Be(15);
         }
+
+        [Fact]
+        public void ToValueDelayQueryFromNullArrayShouldThrowArgumentNullException()
+        {
+            // Preparar: el motor eager ya valida null en sus sobrecargas de T[]; el Delay debe hacer lo mismo.
+            int[]? origen = null;
+
+            // Actuar
+            Action act = () => origen!.ToValueDelayQuery();
+
+            // Aserción: sin la guarda, la conversión implícita a ReadOnlySpan<T> daría un intervalo vacío
+            // y la consulta devolvería cero elementos en silencio.
+            _ = act.Should().Throw<ArgumentNullException>()
+                .And.ParamName.Should().Be("origen");
+        }
     }
 }
 #endif
