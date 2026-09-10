@@ -1,6 +1,10 @@
 using FluentAssertions;
 using JCarrillo.AOT.Core.ValueLINQ;
+using JCarrillo.AOT.Core.ValueLINQ.Arena;
 using JCarrillo.AOT.Core.ValueLINQ.Excepciones;
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Reflection;
 using Xunit;
 
 namespace JCarrillo.AOT.Core.Tests.ValueLINQ
@@ -211,6 +215,261 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
             finally
             {
                 ValueLINQArenaManager.Liberar(recuperada);
+            }
+        }
+
+        [Fact]
+        public void RecolectarArenasReentranciaEnMismoHiloRetornaCeroInmediatamente()
+        {
+            long token = ValueLINQArenaManager.Alquilar();
+            int idArena = TokenHelper.ObtenerIdTokenArena(token);
+            int resultadoReentrante = -1;
+            int contadorEjecucion = 0;
+            bool isActivo = true;
+
+            ValueLINQArenaManager.Registrar(
+                _ => { },
+                id =>
+                {
+                    if (isActivo && id == idArena && Interlocked.Increment(ref contadorEjecucion) == 1)
+                        resultadoReentrante = ValueLINQArenaManager.RecolectarArenas();
+
+                    return default;
+                });
+
+            try
+            {
+                int resultadoExterno = ValueLINQArenaManager.RecolectarArenas();
+
+                _ = resultadoReentrante.Should().Be(0, "una invocación anidada a RecolectarArenas debe retornar 0 de inmediato");
+                _ = resultadoExterno.Should().BeGreaterThanOrEqualTo(0);
+            }
+            finally
+            {
+                isActivo = false;
+                ValueLINQArenaManager.Liberar(token);
+            }
+        }
+
+        [Fact]
+        public async Task RecolectarArenasConcurrenteDuranteEjecucionRetornaCeroInmediatamente()
+        {
+            long token = ValueLINQArenaManager.Alquilar();
+            int idArena = TokenHelper.ObtenerIdTokenArena(token);
+            using ManualResetEventSlim enRecoleccion = new(false);
+            using ManualResetEventSlim reentranciaVerificada = new(false);
+            int resultadoConcurrente = -1;
+            bool isActivo = true;
+
+            ValueLINQArenaManager.Registrar(
+                _ => { },
+                id =>
+                {
+                    if (isActivo && id == idArena)
+                    {
+                        enRecoleccion.Set();
+                        _ = reentranciaVerificada.Wait(TimeSpan.FromSeconds(5));
+                    }
+
+                    return default;
+                });
+
+            Task<int>? tareaRecoleccion = null;
+            try
+            {
+                tareaRecoleccion = Task.Run(() => ValueLINQArenaManager.RecolectarArenas());
+
+                bool hasIngresado = enRecoleccion.Wait(TimeSpan.FromSeconds(5));
+                _ = hasIngresado.Should().BeTrue("el hilo en segundo plano debe haber ingresado al barrido");
+
+                Stopwatch cronometro = Stopwatch.StartNew();
+                resultadoConcurrente = ValueLINQArenaManager.RecolectarArenas();
+                cronometro.Stop();
+
+                reentranciaVerificada.Set();
+
+                _ = resultadoConcurrente.Should().Be(0, "la llamada concurrente debe abortar y retornar 0 de inmediato");
+                _ = cronometro.ElapsedMilliseconds.Should().BeLessThan(2000, "el retorno debe ser inmediato sin esperas activas");
+
+                int resultadoFondo = await tareaRecoleccion;
+                _ = resultadoFondo.Should().BeGreaterThanOrEqualTo(0);
+            }
+            finally
+            {
+                isActivo = false;
+                reentranciaVerificada.Set();
+                if (tareaRecoleccion is not null)
+                    _ = await Task.WhenAny(tareaRecoleccion, Task.Delay(TimeSpan.FromSeconds(5)));
+
+                ValueLINQArenaManager.Liberar(token);
+            }
+        }
+
+        [Fact]
+        public async Task RecolectarArenasConcurrenciaMasivaSinBloqueosNiExcepciones()
+        {
+            const int hilos = 16;
+            const int iteracionesPorHilo = 50;
+
+            List<ValueLINQArena> arenasCreadas = [];
+            for (int i = 0; i < 8; i++)
+                arenasCreadas.Add(ValueLINQArena.Crear(inactividad: TimeSpan.Zero));
+
+            using Barrier barrera = new(hilos);
+            ConcurrentBag<Exception> excepciones = new();
+            Task[] tareas = new Task[hilos];
+
+            for (int i = 0; i < hilos; i++)
+                tareas[i] = Task.Run(() =>
+                {
+                    try
+                    {
+                        barrera.SignalAndWait();
+
+                        for (int it = 0; it < iteracionesPorHilo; it++)
+                        {
+                            int recolectadas = ValueLINQArenaManager.RecolectarArenas();
+                            if (recolectadas < 0)
+                                throw new InvalidOperationException($"Conteo negativo de recolección: {recolectadas}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        excepciones.Add(ex);
+                    }
+                });
+
+            Task tareaTodas = Task.WhenAll(tareas);
+            Task tareaCompletada = await Task.WhenAny(tareaTodas, Task.Delay(TimeSpan.FromSeconds(10)));
+            bool hasCompletado = tareaCompletada == tareaTodas;
+
+            foreach (ValueLINQArena arena in arenasCreadas)
+                if (arena.IsViva)
+                    arena.Dispose();
+
+            _ = hasCompletado.Should().BeTrue("todas las tareas deben completarse sin interbloqueos en el tiempo límite");
+            _ = excepciones.Should().BeEmpty("ningún hilo debe experimentar excepciones durante la contención concurrente masiva");
+
+            int recoleccionPosterior = ValueLINQArenaManager.RecolectarArenas();
+            _ = recoleccionPosterior.Should().BeGreaterThanOrEqualTo(0);
+        }
+
+        [Fact]
+        public void RecolectarArenasBloqueFinallyRestauraGuardaParaLlamadasPosteriores()
+        {
+            ValueLINQArena primeraArena = ValueLINQArena.Crear(inactividad: TimeSpan.Zero);
+            _ = primeraArena.IsViva.Should().BeTrue();
+
+            int primeraRecoleccion = ValueLINQArenaManager.RecolectarArenas();
+            _ = primeraRecoleccion.Should().BeGreaterThan(0);
+            _ = primeraArena.IsViva.Should().BeFalse();
+
+            FieldInfo? campoGuarda = typeof(ValueLINQArenaManager).GetField("_isRecolectando", BindingFlags.NonPublic | BindingFlags.Static);
+            _ = campoGuarda.Should().NotBeNull("el campo _isRecolectando debe existir en ValueLINQArenaManager");
+            _ = ((int)campoGuarda!.GetValue(null)!).Should().Be(0, "el bloque finally debe dejar la guarda en 0 tras completar");
+
+            ValueLINQArena segundaArena = ValueLINQArena.Crear(inactividad: TimeSpan.Zero);
+            _ = segundaArena.IsViva.Should().BeTrue();
+
+            int segundaRecoleccion = ValueLINQArenaManager.RecolectarArenas();
+            _ = segundaRecoleccion.Should().BeGreaterThan(0, "la guarda liberada debe permitir que la siguiente llamada recolecte");
+            _ = segundaArena.IsViva.Should().BeFalse();
+
+            _ = ((int)campoGuarda.GetValue(null)!).Should().Be(0, "la guarda debe retornar a 0 tras la segunda recolección");
+        }
+
+        [Fact]
+        public void RecolectarArenasRecuperaGuardaTrasExcepcionEnColeccion()
+        {
+            long token = ValueLINQArenaManager.Alquilar();
+            int idArena = TokenHelper.ObtenerIdTokenArena(token);
+            int lanzamientos = 0;
+            bool isActivo = true;
+
+            ValueLINQArenaManager.Registrar(
+                _ => { },
+                id =>
+                {
+                    if (isActivo && id == idArena && Interlocked.Increment(ref lanzamientos) == 1)
+                        throw new InvalidOperationException("Fallo simulado para verificar recuperación de excepción.");
+
+                    return default;
+                });
+
+            try
+            {
+                Action accionFallida = () => ValueLINQArenaManager.RecolectarArenas();
+                _ = accionFallida.Should().Throw<InvalidOperationException>();
+
+                FieldInfo? campoGuarda = typeof(ValueLINQArenaManager).GetField("_isRecolectando", BindingFlags.NonPublic | BindingFlags.Static);
+                _ = campoGuarda.Should().NotBeNull("el campo _isRecolectando debe existir en ValueLINQArenaManager");
+                _ = ((int)campoGuarda!.GetValue(null)!).Should().Be(0, "la guarda debe quedar en 0 tras lanzar excepción");
+
+                ValueLINQArena arenaPosterior = ValueLINQArena.Crear(inactividad: TimeSpan.Zero);
+                int recolectadas = ValueLINQArenaManager.RecolectarArenas();
+
+                _ = recolectadas.Should().BeGreaterThan(0, "la siguiente llamada debe recolectar con normalidad tras una excepción previa");
+                _ = arenaPosterior.IsViva.Should().BeFalse();
+            }
+            finally
+            {
+                isActivo = false;
+                ValueLINQArenaManager.Liberar(token);
+            }
+        }
+
+        [Fact]
+        public async Task RecolectarArenasContencionRetornaCeroConCeroAsignacionesHeap()
+        {
+            long token = ValueLINQArenaManager.Alquilar();
+            int idArena = TokenHelper.ObtenerIdTokenArena(token);
+            using ManualResetEventSlim enRecoleccion = new(false);
+            using ManualResetEventSlim reentranciaVerificada = new(false);
+            bool isActivo = true;
+
+            ValueLINQArenaManager.Registrar(
+                _ => { },
+                id =>
+                {
+                    if (isActivo && id == idArena)
+                    {
+                        enRecoleccion.Set();
+                        _ = reentranciaVerificada.Wait(TimeSpan.FromSeconds(5));
+                    }
+
+                    return default;
+                });
+
+            Task<int>? tareaRecoleccion = null;
+            try
+            {
+                tareaRecoleccion = Task.Run(() => ValueLINQArenaManager.RecolectarArenas());
+
+                bool hasIngresado = enRecoleccion.Wait(TimeSpan.FromSeconds(5));
+                _ = hasIngresado.Should().BeTrue();
+
+                // Calentamiento JIT
+                _ = ValueLINQArenaManager.RecolectarArenas();
+
+                long asignadoAntes = GC.GetAllocatedBytesForCurrentThread();
+                int resultado = ValueLINQArenaManager.RecolectarArenas();
+                long asignadoDespues = GC.GetAllocatedBytesForCurrentThread();
+
+                reentranciaVerificada.Set();
+
+                _ = resultado.Should().Be(0);
+                _ = (asignadoDespues - asignadoAntes).Should().Be(0, "la salida anticipada por contención no debe realizar asignaciones en el heap");
+
+                _ = await tareaRecoleccion;
+            }
+            finally
+            {
+                isActivo = false;
+                reentranciaVerificada.Set();
+                if (tareaRecoleccion is not null)
+                    _ = await Task.WhenAny(tareaRecoleccion, Task.Delay(TimeSpan.FromSeconds(5)));
+
+                ValueLINQArenaManager.Liberar(token);
             }
         }
     }

@@ -23,6 +23,8 @@ namespace JCarrillo.AOT.Core.ValueLINQ
         private static Action<int>[] _liberadores = [];
         private static Func<int, EstadoTabla>[] _sondas = [];
 
+        private static int _isRecolectando;
+
         static ValueLINQArenaManager()
         {
             for (int i = 0; i < ValueLINQConfig.Arenas; i++)
@@ -143,30 +145,40 @@ namespace JCarrillo.AOT.Core.ValueLINQ
 
         internal static int RecolectarArenas()
         {
-            long ahora = Stopwatch.GetTimestamp();
-            int recolectadas = 0;
+            if (Interlocked.CompareExchange(ref _isRecolectando, 1, 0) != 0)
+                return 0;
 
-            for (int id = 1; id < ValueLINQConfig.Arenas; id++)
+            try
             {
-                ref EstadoArena estado = ref _arenas[id];
-                long tokenArena = TokenHelper.LeerToken(ref estado.Token);
+                long ahora = Stopwatch.GetTimestamp();
+                int recolectadas = 0;
 
-                if (tokenArena == 0L || estado.IsPersistente)
-                    continue;
+                for (int id = 1; id < ValueLINQConfig.Arenas; id++)
+                {
+                    ref EstadoArena estado = ref _arenas[id];
+                    long tokenArena = TokenHelper.LeerToken(ref estado.Token);
 
-                if (!IsArenaVacia(id, out long vaciaDesde))
-                    continue;
+                    if (tokenArena == 0L || estado.IsPersistente)
+                        continue;
 
-                long referencia = vaciaDesde != 0L ? vaciaDesde : Volatile.Read(ref estado.UltimoUso);
+                    if (!IsArenaVacia(id, out long vaciaDesde))
+                        continue;
 
-                if (referencia <= 0L || Stopwatch.GetElapsedTime(referencia, ahora).Ticks < estado.InactividadTicks)
-                    continue;
+                    long referencia = vaciaDesde != 0L ? vaciaDesde : Volatile.Read(ref estado.UltimoUso);
 
-                if (HasLiberado(id, tokenArena, confirmarVacia: true))
-                    recolectadas++;
+                    if (referencia <= 0L || Stopwatch.GetElapsedTime(referencia, ahora).Ticks < estado.InactividadTicks)
+                        continue;
+
+                    if (HasLiberado(id, tokenArena, confirmarVacia: true))
+                        recolectadas++;
+                }
+
+                return recolectadas;
             }
-
-            return recolectadas;
+            finally
+            {
+                Volatile.Write(ref _isRecolectando, 0);
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
