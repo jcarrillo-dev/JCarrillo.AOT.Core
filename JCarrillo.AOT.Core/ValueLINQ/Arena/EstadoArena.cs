@@ -5,6 +5,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
         public long Token;
         public long Generacion;
         public long UltimoUso;
+        public long InactividadTicks;
         public bool IsPersistente;
     }
 }

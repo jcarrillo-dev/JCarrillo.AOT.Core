@@ -7,6 +7,10 @@ using JCarrillo.AOT.Core.ValueLINQ.Arena;
 using JCarrillo.AOT.Core.ValueLINQ.Interfaces;
 using System.Runtime.CompilerServices;
 
+#if NET9_0_OR_GREATER
+using JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay;
+#endif
+
 namespace JCarrillo.AOT.Core.Benchmarks.Extensiones
 {
     [SimpleJob(RuntimeMoniker.Net80)]
@@ -46,13 +50,6 @@ namespace JCarrillo.AOT.Core.Benchmarks.Extensiones
 
             // Arena de larga vida, reutilizada por muchas consultas (la tabla se materializa una sola vez).
             _arenaReutilizada = ValueLINQArena.Crear(persistente: true);
-        }
-
-        // Coste puro de alquilar y liberar una arena (slotmap FIFO + token de arena).
-        [Benchmark]
-        public void CrearYDisponerArena()
-        {
-            using ValueLINQArena arena = ValueLINQArena.Crear();
         }
 
         // Baseline: cadena Where+Select materializada en la arena ambiente (arena 0, enrutado implícito).
@@ -96,6 +93,90 @@ namespace JCarrillo.AOT.Core.Benchmarks.Extensiones
                 .ToArray();
 
             return resultado.Tamaño;
+        }
+
+        /// <summary>
+        /// La misma cadena en el motor perezoso sobre la arena ambiente. Where y Select no crean sesiones
+        /// en este motor, así que la fila mide el pipeline diferido puro y sirve de referencia para su gemela con arena.
+        /// </summary>
+        [Benchmark]
+        public int DelayWhereSelect_Ambiente()
+        {
+#if NET9_0_OR_GREATER
+            EvenFilter filter = new();
+            MultiplyByTwoSelector selector = new();
+
+            using PooledArray<int> resultado = _array
+                .ToValueDelayQuery()
+                .Where(0, ref filter)
+                .Select<MultiplyByTwoSelector, int>(ref selector)
+                .ToArray();
+
+            return resultado.Tamaño;
+#else
+            throw new PlatformNotSupportedException("ValueLINQ Delay is only supported on .NET 9.0 or greater.");
+#endif
+        }
+
+        /// <summary>
+        /// La cadena perezosa adscrita a la arena reutilizada: mide el coste de transportar y validar las
+        /// opciones de arena por la cadena de operadores, que debería ser indistinguible de la fila ambiente.
+        /// </summary>
+        [Benchmark]
+        public int DelayWhereSelect_ArenaReutilizada()
+        {
+#if NET9_0_OR_GREATER
+            EvenFilter filter = new();
+            MultiplyByTwoSelector selector = new();
+
+            using PooledArray<int> resultado = _array
+                .ToValueDelayQuery(_arenaReutilizada)
+                .Where(0, ref filter)
+                .Select<MultiplyByTwoSelector, int>(ref selector)
+                .ToArray();
+
+            return resultado.Tamaño;
+#else
+            throw new PlatformNotSupportedException("ValueLINQ Delay is only supported on .NET 9.0 or greater.");
+#endif
+        }
+
+        /// <summary>
+        /// Chunk perezoso sobre la arena ambiente: el único operador diferido que reserva un buffer de sesión,
+        /// con la validación de sesión que ejecuta cada MoveNext incluida en la medición.
+        /// </summary>
+        [Benchmark]
+        public int DelayChunk_Ambiente()
+        {
+#if NET9_0_OR_GREATER
+            int elementos = 0;
+
+            foreach (ReadOnlySpan<int> fragmento in _array.ToValueDelayQuery().Chunk(64))
+                elementos += fragmento.Length;
+
+            return elementos;
+#else
+            throw new PlatformNotSupportedException("ValueLINQ Delay is only supported on .NET 9.0 or greater.");
+#endif
+        }
+
+        /// <summary>
+        /// El mismo Chunk reservando su buffer en la arena reutilizada: mide el enrutado del alquiler a la tabla
+        /// de la arena y la comprobación de arena viva al construir el operador, en estado estacionario.
+        /// </summary>
+        [Benchmark]
+        public int DelayChunk_ArenaReutilizada()
+        {
+#if NET9_0_OR_GREATER
+            int elementos = 0;
+
+            foreach (ReadOnlySpan<int> fragmento in _array.ToValueDelayQuery(_arenaReutilizada).Chunk(64))
+                elementos += fragmento.Length;
+
+            return elementos;
+#else
+            throw new PlatformNotSupportedException("ValueLINQ Delay is only supported on .NET 9.0 or greater.");
+#endif
         }
     }
 }

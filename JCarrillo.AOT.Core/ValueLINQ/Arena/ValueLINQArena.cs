@@ -37,17 +37,27 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
         /// Crea una nueva arena de memoria para ValueLINQ.
         /// </summary>
         /// <param name="persistente">
-        /// Reservado para la futura recolección automática de arenas por inactividad (aún no implementada).
-        /// En la versión actual no altera el comportamiento: toda arena persiste hasta su <see cref="Dispose"/> explícito.
+        /// Excluye la arena de la recolección automática por inactividad. Una arena guardada en un campo de larga
+        /// duración debe crearse con este indicador, porque el criterio de recolección no distingue una arena olvidada
+        /// de una viva que simplemente lleva un rato sin tráfico.
+        /// </param>
+        /// <param name="inactividad">
+        /// Tiempo que la arena debe permanecer vacía antes de que la recolección automática la libere. Si se omite se
+        /// usa <see cref="ValueLINQConfig.TiempoInactividadArena"/>. <see cref="TimeSpan.Zero"/> y cualquier valor
+        /// negativo se comportan igual: hacen la arena recolectable en el primer barrido tras vaciarse (la comparación
+        /// de recolección es <c>elapsed.Ticks &lt; InactividadTicks</c>, que con cero o negativo nunca salta). Para
+        /// indicar que no se recolecte nunca use <paramref name="persistente"/> en <see langword="true"/>, no un umbral
+        /// bajo. No tiene efecto sobre una arena persistente.
         /// </param>
         /// <returns>Una nueva <see cref="ValueLINQArena"/> activa.</returns>
         /// <remarks>
-        /// La arena debe disponerse explícitamente. Una arena no dispuesta retiene su identificador durante toda
-        /// la vida del proceso; agotar los identificadores disponibles hace fallar la creación de nuevas arenas.
+        /// La arena debe disponerse explícitamente. La recolección automática solo alcanza a las arenas no persistentes
+        /// que quedan vacías, así que no sustituye al <see cref="Dispose"/>: agotar los identificadores disponibles hace
+        /// fallar la creación de nuevas arenas.
         /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static ValueLINQArena Crear(bool persistente = false)
-            => new(ValueLINQArenaManager.Alquilar(persistente));
+        public static ValueLINQArena Crear(bool persistente = false, TimeSpan? inactividad = null)
+            => new(ValueLINQArenaManager.Alquilar(persistente, inactividad));
 
         /// <summary>
         /// Libera la arena y todas las sesiones de ValueLINQ creadas dentro de ella, en cualquier tipo.

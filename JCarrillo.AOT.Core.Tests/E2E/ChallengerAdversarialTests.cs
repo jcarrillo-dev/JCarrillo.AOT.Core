@@ -138,8 +138,19 @@ namespace JCarrillo.AOT.Core.Tests.E2E
             // 3. Desechar la consulta original a mitad de la enumeración
             query1.Dispose();
 
-            // 4. Continuar la enumeración - debe retornar false de forma segura
-            _ = enumerator.MoveNext().Should().BeFalse("debe retornar false en lugar de lanzar una excepción al haber sido desechada la sesión");
+            // 4. Continuar la enumeración - debe lanzar en lugar de truncar el resultado en silencio
+            bool lanzo = false;
+
+            try
+            {
+                _ = enumerator.MoveNext();
+            }
+            catch (ValueLinqSesionExpiradaException)
+            {
+                lanzo = true;
+            }
+
+            _ = lanzo.Should().BeTrue("perder la sesión a mitad del recorrido debe lanzar: detenerse entregaría un resultado truncado indistinguible de uno completo");
         }
 
         [Fact]

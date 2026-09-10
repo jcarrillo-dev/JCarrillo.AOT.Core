@@ -2,6 +2,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using JCarrillo.AOT.Core.ValueLINQ;
+using JCarrillo.AOT.Core.ValueLINQ.Arena;
 using JCarrillo.AOT.Core.ValueLINQ.Delay;
 using JCarrillo.AOT.Core.ValueLINQ.Interfaces;
 
@@ -24,7 +25,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
         public static ValueLINQDelayStruct<T, ValueLINQSessionEnumerator<T>> ToValueDelayQuery<T>(this ValueLINQStruct<T> query)
         {
             ValueLINQSessionEnumerator<T> sessionEnumerator = new(query.Token);
-            return new ValueLINQDelayStruct<T, ValueLINQSessionEnumerator<T>>(sessionEnumerator);
+            return new ValueLINQDelayStruct<T, ValueLINQSessionEnumerator<T>>(sessionEnumerator, ValueLINQDelayOptions.Ambiente.DesdeSesion(query.Token));
         }
 
         /// <summary>
@@ -37,7 +38,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
         public static ValueLINQDelayStruct<T, ValueLINQSessionEnumerator<T>> ToValueDelayQuery<T>(this ValueLINQRefStruct<T> query)
         {
             ValueLINQSessionEnumerator<T> sessionEnumerator = new(query.Token);
-            return new ValueLINQDelayStruct<T, ValueLINQSessionEnumerator<T>>(sessionEnumerator);
+            return new ValueLINQDelayStruct<T, ValueLINQSessionEnumerator<T>>(sessionEnumerator, ValueLINQDelayOptions.Ambiente.DesdeSesion(query.Token));
         }
 
         /// <summary>
@@ -56,7 +57,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
                 ThrowArgumentNullException(nameof(origen));
 
             ValueLINQSourceEnumerator<T> sourceEnumerator = new(origen);
-            return new ValueLINQDelayStruct<T, ValueLINQSourceEnumerator<T>>(sourceEnumerator);
+            return new ValueLINQDelayStruct<T, ValueLINQSourceEnumerator<T>>(sourceEnumerator, ValueLINQDelayOptions.Ambiente);
         }
 
         /// <summary>
@@ -69,7 +70,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
         public static ValueLINQDelayStruct<T, ValueLINQSourceEnumerator<T>> ToValueDelayQuery<T>(this Span<T> origen)
         {
             ValueLINQSourceEnumerator<T> sourceEnumerator = new(origen);
-            return new ValueLINQDelayStruct<T, ValueLINQSourceEnumerator<T>>(sourceEnumerator);
+            return new ValueLINQDelayStruct<T, ValueLINQSourceEnumerator<T>>(sourceEnumerator, ValueLINQDelayOptions.Ambiente);
         }
 
         /// <summary>
@@ -82,7 +83,57 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
         public static ValueLINQDelayStruct<T, ValueLINQSourceEnumerator<T>> ToValueDelayQuery<T>(this ReadOnlySpan<T> span)
         {
             ValueLINQSourceEnumerator<T> sourceEnumerator = new(span);
-            return new ValueLINQDelayStruct<T, ValueLINQSourceEnumerator<T>>(sourceEnumerator);
+            return new ValueLINQDelayStruct<T, ValueLINQSourceEnumerator<T>>(sourceEnumerator, ValueLINQDelayOptions.Ambiente);
+        }
+
+        /// <summary>
+        /// Crea un flujo de datos de evaluación perezosa (lazy) a partir de un arreglo, cuyas sesiones intermedias vivirán en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos en el arreglo.</typeparam>
+        /// <param name="origen">El arreglo de origen.</param>
+        /// <param name="arena">La arena propietaria de las sesiones que cree la canalización.</param>
+        /// <returns>Una estructura <see cref="ValueLINQDelayStruct{T, TEnumerator}"/> adscrita a la arena.</returns>
+        /// <remarks>
+        /// Los operadores que reservan memoria (como <c>Chunk</c>) pedirán su buffer a esta arena, de modo que disponerla
+        /// libera esos buffers aunque la canalización no llegue a disponerse.
+        /// </remarks>
+        /// <exception cref="ArgumentNullException">Se lanza cuando <paramref name="origen"/> es <see langword="null"/>.</exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQDelayStruct<T, ValueLINQSourceEnumerator<T>> ToValueDelayQuery<T>(this T[] origen, ValueLINQArena arena)
+        {
+            if (origen == null)
+                ThrowArgumentNullException(nameof(origen));
+
+            ValueLINQSourceEnumerator<T> sourceEnumerator = new(origen);
+            return new ValueLINQDelayStruct<T, ValueLINQSourceEnumerator<T>>(sourceEnumerator, ValueLINQDelayOptions.Ambiente.DesdeArena(arena));
+        }
+
+        /// <summary>
+        /// Crea un flujo de datos de evaluación perezosa (lazy) a partir de un <see cref="Span{T}"/>, cuyas sesiones intermedias vivirán en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos en el intervalo.</typeparam>
+        /// <param name="origen">El intervalo de origen.</param>
+        /// <param name="arena">La arena propietaria de las sesiones que cree la canalización.</param>
+        /// <returns>Una estructura <see cref="ValueLINQDelayStruct{T, TEnumerator}"/> adscrita a la arena.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQDelayStruct<T, ValueLINQSourceEnumerator<T>> ToValueDelayQuery<T>(this Span<T> origen, ValueLINQArena arena)
+        {
+            ValueLINQSourceEnumerator<T> sourceEnumerator = new(origen);
+            return new ValueLINQDelayStruct<T, ValueLINQSourceEnumerator<T>>(sourceEnumerator, ValueLINQDelayOptions.Ambiente.DesdeArena(arena));
+        }
+
+        /// <summary>
+        /// Crea un flujo de datos de evaluación perezosa (lazy) a partir de un <see cref="ReadOnlySpan{T}"/>, cuyas sesiones intermedias vivirán en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos en el intervalo.</typeparam>
+        /// <param name="span">El intervalo de solo lectura de origen.</param>
+        /// <param name="arena">La arena propietaria de las sesiones que cree la canalización.</param>
+        /// <returns>Una estructura <see cref="ValueLINQDelayStruct{T, TEnumerator}"/> adscrita a la arena.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQDelayStruct<T, ValueLINQSourceEnumerator<T>> ToValueDelayQuery<T>(this ReadOnlySpan<T> span, ValueLINQArena arena)
+        {
+            ValueLINQSourceEnumerator<T> sourceEnumerator = new(span);
+            return new ValueLINQDelayStruct<T, ValueLINQSourceEnumerator<T>>(sourceEnumerator, ValueLINQDelayOptions.Ambiente.DesdeArena(arena));
         }
 
         #endregion
@@ -110,8 +161,8 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
         public static ValueLINQDelayStruct<ReadOnlySpan<T>, ValueLINQChunkDelay<T, TEnumerator>> Chunk<T, TEnumerator>(this ValueLINQDelayStruct<T, TEnumerator> pipeline, int chunkSize)
             where TEnumerator : IValueLINQEnumerator<T>, allows ref struct
         {
-            ValueLINQChunkDelay<T, TEnumerator> chunkEnumerator = new(ref pipeline._enumerator, chunkSize);
-            return new ValueLINQDelayStruct<ReadOnlySpan<T>, ValueLINQChunkDelay<T, TEnumerator>>(chunkEnumerator);
+            ValueLINQChunkDelay<T, TEnumerator> chunkEnumerator = new(ref pipeline._enumerator, chunkSize, pipeline._opciones);
+            return new ValueLINQDelayStruct<ReadOnlySpan<T>, ValueLINQChunkDelay<T, TEnumerator>>(chunkEnumerator, pipeline._opciones);
         }
 
         /// <summary>

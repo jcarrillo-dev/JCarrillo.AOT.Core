@@ -1,6 +1,7 @@
 #if NET9_0_OR_GREATER
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
+using JCarrillo.AOT.Core.ValueLINQ.Excepciones;
 
 namespace JCarrillo.AOT.Core.ValueLINQ.Delay
 {
@@ -20,7 +21,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
         private ReadOnlySpan<T> _currentSpan;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal ValueLINQChunkDelay(scoped ref TEnumerator enumerator, int chunkSize)
+        internal ValueLINQChunkDelay(scoped ref TEnumerator enumerator, int chunkSize, ValueLINQDelayOptions opciones)
         {
             if (chunkSize <= 0)
                 ThrowArgumentOutOfRangeException();
@@ -28,7 +29,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
             _enumerator = enumerator;
 
             _chunkSize = chunkSize;
-            _metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(chunkSize);
+            _metadatos = ref ObtenerMetadatos(chunkSize, opciones);
             _token = TokenHelper.LeerToken(ref _metadatos.Token);
             _currentSpan = default;
         }
@@ -37,33 +38,46 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
         /// Obtiene una referencia de solo lectura al fragmento (<see cref="ReadOnlySpan{T}"/>) en la posición actual del enumerador.
         /// </summary>
         /// <value>Una referencia de solo lectura al fragmento actual de elementos.</value>
+        /// <exception cref="ValueLinqArenaInactivaException">Se lanza cuando la arena del buffer fue liberada.</exception>
+        /// <exception cref="ValueLinqSesionExpiradaException">Se lanza cuando la sesión del buffer ya no es válida.</exception>
         public readonly ref readonly ReadOnlySpan<T> Current
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => ref Unsafe.AsRef(in _currentSpan);
+            get
+            {
+                if (_token != 0L && !ValueLINQStateManager<T>.IsMetadatoValido(_token))
+                    ThrowSesionPerdida(_token);
+
+                return ref Unsafe.AsRef(in _currentSpan);
+            }
         }
 
         /// <summary>
         /// Desplaza el enumerador al siguiente bloque de datos agrupados del flujo.
         /// </summary>
         /// <returns><see langword="true"/> si el enumerador avanzó con éxito al siguiente fragmento; <see langword="false"/> si se alcanzó el final del flujo.</returns>
+        /// <remarks>
+        /// Perder la sesión del buffer no termina la enumeración en silencio, sino que lanza: entregar los fragmentos ya leídos y detenerse produciría un resultado truncado indistinguible de uno completo.
+        /// </remarks>
+        /// <exception cref="ValueLinqArenaInactivaException">Se lanza cuando la arena del buffer fue liberada.</exception>
+        /// <exception cref="ValueLinqSesionExpiradaException">Se lanza cuando la sesión del buffer ya no es válida.</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool MoveNext()
         {
-            if (!ValueLINQStateManager<T>.IsMetadatoValido(_token))
+            if (_token == 0L)
             {
                 _currentSpan = default;
                 return false;
             }
+
+            if (!ValueLINQStateManager<T>.IsMetadatoValido(_token))
+                ThrowSesionPerdida(_token);
 
             ValueLINQStateManager<T>.RefrescarUltimoAcceso(_token, ValueLINQConfig.TiempoRefrescoAcceso);
 
             T[]? array = Volatile.Read(ref _metadatos.Array);
             if (array == null)
-            {
-                _currentSpan = default;
-                return false;
-            }
+                ThrowSesionPerdida(_token);
 
             int tamaño = 0;
 
@@ -102,9 +116,6 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
             DisposeSlow();
         }
 
-        /// <summary>
-        /// Concentra el camino con manejo de excepciones (try/finally) para no bloquear el inlining del wrapper <see cref="Dispose"/> en net9.0 (el JIT ignora AggressiveInlining con EH) y net10.0 (inline de EH posible pero no garantizado).
-        /// </summary>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private void DisposeSlow()
         {
@@ -121,6 +132,38 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
             {
                 ValueLINQStateManager<T>.LiberarMetadatos(token);
             }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static ref MetadatosSesion<T> ObtenerMetadatos(int chunkSize, ValueLINQDelayOptions opciones)
+        {
+            if (!opciones.HasArena)
+                return ref ValueLINQStateManager<T>.ObtenerMetadatos(chunkSize);
+
+            if (!ValueLINQArenaManager.IsArenaViva(opciones.TokenArena))
+                ThrowArenaInactiva(opciones.IdArena);
+
+            return ref ValueLINQStateManager<T>.ObtenerMetadatos(opciones.IdArena, chunkSize);
+        }
+
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void ThrowArenaInactiva(int idArena)
+            => throw new ValueLinqArenaInactivaException(idArena);
+
+        /// <summary>
+        /// Lanza distinguiendo si la sesión se perdió porque su arena fue liberada o porque la sesión caducó por su cuenta.
+        /// </summary>
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void ThrowSesionPerdida(long token)
+        {
+            int idArena = TokenHelper.ObtenerArenaId(token);
+
+            if (!ValueLINQArenaManager.IsArenaViva(idArena))
+                throw new ValueLinqArenaInactivaException(idArena);
+
+            throw new ValueLinqSesionExpiradaException(token, 0L, TokenHelper.ObtenerSlotIndex(token));
         }
 
         [DoesNotReturn]

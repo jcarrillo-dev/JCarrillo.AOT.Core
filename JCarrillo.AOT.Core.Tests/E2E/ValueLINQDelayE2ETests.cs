@@ -1,4 +1,5 @@
 #if NET9_0_OR_GREATER
+using System.Runtime.CompilerServices;
 using FluentAssertions;
 using Xunit;
 using JCarrillo.AOT.Core.ValueLINQ;
@@ -180,7 +181,7 @@ namespace JCarrillo.AOT.Core.Tests.E2E
         }
 
         [Fact]
-        public void ValueLINQDelaySourceDisposedBeforeEnumerationReturnsFalse()
+        public void ValueLINQDelaySourceDisposedBeforeEnumerationLanzaSesionExpirada()
         {
             int[] array = [1, 2, 3];
             ValueLINQStruct<int> query = array.ToValueQuery();
@@ -189,12 +190,22 @@ namespace JCarrillo.AOT.Core.Tests.E2E
             // Act: Dispose source query before enumeration
             query.Dispose();
 
-            // Assert: Enumeration should return false (does not produce elements)
+            // Assert: perder la sesión lanza en vez de entregar cero elementos, porque un resultado vacío sería
+            // indistinguible de un origen legítimamente vacío. Un ref struct no se puede capturar en un lambda.
+            bool lanzo = false;
             int count = 0;
-            foreach (ref readonly int item in pipeline)
+
+            try
             {
-                count++;
+                foreach (ref readonly int item in pipeline)
+                    count++;
             }
+            catch (ValueLinqSesionExpiradaException)
+            {
+                lanzo = true;
+            }
+
+            _ = lanzo.Should().BeTrue();
             _ = count.Should().Be(0);
         }
 
@@ -318,14 +329,24 @@ namespace JCarrillo.AOT.Core.Tests.E2E
                 sum1 += item;
             }
 
+            // La primera enumeración auto-dispone la sesión, así que la segunda ya no encuentra estado que recorrer.
+            // Desde que perder la sesión lanza, reenumerar deja de devolver cero elementos en silencio.
+            bool lanzoLaSegunda = false;
             int sum2 = 0;
-            foreach (ref readonly int item in pipeline)
+
+            try
             {
-                sum2 += item;
+                foreach (ref readonly int item in pipeline)
+                    sum2 += item;
+            }
+            catch (ValueLinqSesionExpiradaException)
+            {
+                lanzoLaSegunda = true;
             }
 
             _ = sum1.Should().Be(6);
-            _ = sum2.Should().Be(0); // Under auto-disposal, the first enumeration auto-disposes the session.
+            _ = lanzoLaSegunda.Should().BeTrue();
+            _ = sum2.Should().Be(0);
         }
 
         [Fact]
@@ -689,6 +710,156 @@ namespace JCarrillo.AOT.Core.Tests.E2E
             // y la consulta devolvería cero elementos en silencio.
             _ = act.Should().Throw<ArgumentNullException>()
                 .And.ParamName.Should().Be("origen");
+        }
+
+        private struct MayorQuePredicado : IWhereDelegado<int, int>
+        {
+            public readonly bool Ejecutar(int item, int otro) => item > otro;
+        }
+
+        /// <summary>
+        /// Sobrescribe la zona de pila contigua para que una referencia devuelta a un temporal muerto
+        /// deje de leer el valor correcto por casualidad. Sin esto, una copia defensiva pasa inadvertida
+        /// porque el bucle lee la referencia antes de que nada pise el temporal.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void EnsuciarPila()
+        {
+            Span<int> basura = stackalloc int[64];
+            basura.Fill(-999);
+            ConsumirPila(basura);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void ConsumirPila(Span<int> basura)
+        {
+            if (basura[0] == int.MaxValue)
+                throw new InvalidOperationException();
+        }
+
+        [Fact]
+        public void ConcatSobreSelectDevuelveLosValoresProyectados()
+        {
+            // Preparar: Select devuelve una referencia a su propio campo _current, así que un envoltorio
+            // que marque Current como readonly copia el enumerador y devuelve una referencia a un temporal
+            // muerto. Sobre enumeradores de span el fallo no se manifiesta: hace falta Select o Chunk.
+            int[] primero = [1, 2];
+            int[] segundo = [3, 4];
+            int[] tercero = [5, 6];
+
+            // Actuar
+            var consulta = primero.ToValueDelayQuery().Select<IntDoubleSelector, int>()
+                .Concat(segundo.ToValueDelayQuery().Select<IntDoubleSelector, int>(),
+                        tercero.ToValueDelayQuery().Select<IntDoubleSelector, int>());
+
+            List<int> resultado = [];
+            foreach (ref readonly int item in consulta)
+            {
+                EnsuciarPila();
+                resultado.Add(item);
+            }
+
+            // Aserción: con la copia defensiva estos valores son basura, no la proyección.
+            _ = resultado.Should().Equal(2, 4, 6, 8, 10, 12);
+        }
+
+        [Fact]
+        public void WhereSobreSelectDevuelveLosValoresProyectados()
+        {
+            // Preparar: mismo defecto que el anterior, pero en la cadena Select -> Where.
+            int[] origen = [1, 2, 3];
+            MayorQuePredicado predicado = default;
+
+            // Actuar
+            var consulta = origen.ToValueDelayQuery().Select<IntDoubleSelector, int>().Where(0, ref predicado);
+
+            List<int> resultado = [];
+            foreach (ref readonly int item in consulta)
+            {
+                EnsuciarPila();
+                resultado.Add(item);
+            }
+
+            // Aserción
+            _ = resultado.Should().Equal(2, 4, 6);
+        }
+
+        [Fact]
+        public void ConcatConSobrecargasEquilibradasPreservaElOrden()
+        {
+            // Preparar: el receptor cuenta como fuente, así que N parámetros son N+1 fuentes.
+            int[] a = [1, 2];
+            int[] b = [3, 4];
+            int[] c = [5, 6];
+            int[] d = [7, 8];
+
+            // Actuar: C(A,B) / C(C(A,B),C) / C(C(A,B),C(C,D))
+            List<int> dos = [];
+            foreach (ref readonly int item in a.ToValueDelayQuery().Concat(b.ToValueDelayQuery()))
+                dos.Add(item);
+
+            List<int> tres = [];
+            foreach (ref readonly int item in a.ToValueDelayQuery().Concat(b.ToValueDelayQuery(), c.ToValueDelayQuery()))
+                tres.Add(item);
+
+            List<int> cuatro = [];
+            foreach (ref readonly int item in a.ToValueDelayQuery().Concat(b.ToValueDelayQuery(), c.ToValueDelayQuery(), d.ToValueDelayQuery()))
+                cuatro.Add(item);
+
+            // Aserción: equilibrar el árbol cambia la profundidad, nunca el orden de emisión.
+            _ = dos.Should().Equal(1, 2, 3, 4);
+            _ = tres.Should().Equal(1, 2, 3, 4, 5, 6);
+            _ = cuatro.Should().Equal(1, 2, 3, 4, 5, 6, 7, 8);
+        }
+
+        [Fact]
+        public void ConcatComponeUnArbolEquilibradoDeOchoFuentes()
+        {
+            // Preparar: componiendo la sobrecarga de 3 parámetros con la de 1 se obtienen ocho fuentes
+            // a profundidad 3, frente a la profundidad 7 del encadenamiento binario.
+            int[] a = [1]; int[] b = [2]; int[] c = [3]; int[] d = [4];
+            int[] e = [5]; int[] f = [6]; int[] g = [7]; int[] h = [8];
+
+            // Actuar
+            var consulta = a.ToValueDelayQuery().Concat(b.ToValueDelayQuery(), c.ToValueDelayQuery(), d.ToValueDelayQuery())
+                .Concat(e.ToValueDelayQuery().Concat(f.ToValueDelayQuery(), g.ToValueDelayQuery(), h.ToValueDelayQuery()));
+
+            List<int> resultado = [];
+            foreach (ref readonly int item in consulta)
+                resultado.Add(item);
+
+            // Aserción
+            _ = resultado.Should().Equal(1, 2, 3, 4, 5, 6, 7, 8);
+        }
+
+        [Fact]
+        public void ConcatSoportaDisposicionRepetida()
+        {
+            // Preparar: Dispose propaga en cadena para devolver los recursos al StateManager,
+            // así que debe ser idempotente aunque se invoque tras el agotamiento o de forma temprana.
+            int[] a = [1, 2];
+            int[] b = [3, 4];
+
+            // Actuar: disposición temprana, con el primer enumerador todavía activo. No se puede usar
+            // Should().NotThrow() porque un ref struct no se puede capturar en un lambda: si Dispose
+            // lanzara o dejara de ser idempotente, la prueba fallaría aquí directamente.
+            var temprana = a.ToValueDelayQuery().Concat(b.ToValueDelayQuery());
+            var enumeradorTemprano = temprana.GetEnumerator();
+            _ = enumeradorTemprano.MoveNext();
+            enumeradorTemprano.Dispose();
+            enumeradorTemprano.Dispose();
+            bool avanzaTrasDisposicionTemprana = enumeradorTemprano.MoveNext();
+
+            // Actuar: disposición tras agotar el flujo, que ya dispone desde MoveNext.
+            var agotada = a.ToValueDelayQuery().Concat(b.ToValueDelayQuery());
+            var enumeradorAgotado = agotada.GetEnumerator();
+            while (enumeradorAgotado.MoveNext()) { }
+            enumeradorAgotado.Dispose();
+            bool avanzaTrasAgotar = enumeradorAgotado.MoveNext();
+
+            // Aserción: tras disponer, el enumerador queda agotado de forma estable.
+            _ = avanzaTrasDisposicionTemprana.Should().BeFalse();
+            _ = avanzaTrasAgotar.Should().BeFalse();
         }
     }
 }

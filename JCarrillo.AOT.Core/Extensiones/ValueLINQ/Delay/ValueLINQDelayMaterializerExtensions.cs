@@ -11,7 +11,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
     /// <summary>
     /// Métodos de extensión para materializar consultas de evaluación perezosa.
     /// </summary>
-    internal static class ValueLINQDelayMaterializerExtensions
+    public static class ValueLINQDelayMaterializerExtensions
     {
         /// <summary>
         /// Materializa el flujo de datos perezoso en una lista agrupada de memoria eficiente (<see cref="PooledList{T}"/>).
@@ -21,7 +21,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
         /// <param name="pipeline">El flujo de datos perezoso a materializar.</param>
         /// <returns>Una instancia de <see cref="PooledList{T}"/> que contiene los elementos del flujo.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static PooledList<T> ToList<T, TEnumerator>(this scoped in ValueLINQDelayStruct<T, TEnumerator> pipeline)
+        public static PooledList<T> ToList<T, TEnumerator>(this scoped in ValueLINQDelayStruct<T, TEnumerator> pipeline)
             where TEnumerator : IValueLINQEnumerator<T>, allows ref struct
         {
             TEnumerator enumerator = pipeline.GetEnumerator();
@@ -45,7 +45,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
         /// <param name="pipeline">El flujo de datos perezoso a materializar.</param>
         /// <returns>Una instancia de <see cref="PooledArray{T}"/> que contiene los elementos del flujo.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static PooledArray<T> ToArray<T, TEnumerator>(this scoped in ValueLINQDelayStruct<T, TEnumerator> pipeline)
+        public static PooledArray<T> ToArray<T, TEnumerator>(this scoped in ValueLINQDelayStruct<T, TEnumerator> pipeline)
             where TEnumerator : IValueLINQEnumerator<T>, allows ref struct
         {
             TEnumerator enumerator = pipeline.GetEnumerator();
@@ -71,7 +71,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
         /// <param name="pipeline">El flujo de datos perezoso a materializar.</param>
         /// <returns>Una lista estándar <see cref="List{T}"/> que contiene los elementos del flujo.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static List<T> ToListStandard<T, TEnumerator>(this scoped in ValueLINQDelayStruct<T, TEnumerator> pipeline)
+        public static List<T> ToListStandard<T, TEnumerator>(this scoped in ValueLINQDelayStruct<T, TEnumerator> pipeline)
             where TEnumerator : IValueLINQEnumerator<T>, allows ref struct
         {
             TEnumerator enumerator = pipeline.GetEnumerator();
@@ -102,7 +102,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
         /// <param name="pipeline">El flujo de datos perezoso a materializar.</param>
         /// <returns>Un arreglo estándar de tipo <typeparamref name="T"/>[] que contiene los elementos del flujo.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static T[] ToArrayStandard<T, TEnumerator>(this scoped in ValueLINQDelayStruct<T, TEnumerator> pipeline)
+        public static T[] ToArrayStandard<T, TEnumerator>(this scoped in ValueLINQDelayStruct<T, TEnumerator> pipeline)
             where TEnumerator : IValueLINQEnumerator<T>, allows ref struct
         {
             TEnumerator enumerator = pipeline.GetEnumerator();

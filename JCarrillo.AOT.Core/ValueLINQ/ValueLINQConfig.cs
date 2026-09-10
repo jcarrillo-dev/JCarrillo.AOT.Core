@@ -101,5 +101,10 @@ namespace JCarrillo.AOT.Core.ValueLINQ
         /// Intervalo mínimo entre refrescos de <c>UltimoAcceso</c> durante el consumo activo de una sesión.
         /// </summary>
         public static readonly TimeSpan TiempoRefrescoAcceso = TimeSpan.FromSeconds(30);
+
+        /// <summary>
+        /// Tiempo que una arena no persistente debe permanecer vacía e inactiva antes de que la recolección automática la libere, cuando no se indica uno propio al crearla.
+        /// </summary>
+        public static readonly TimeSpan TiempoInactividadArena = TimeSpan.FromMinutes(5);
     }
 }

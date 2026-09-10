@@ -1,3 +1,4 @@
+using JCarrillo.AOT.Core.Diagnostico;
 using System.Runtime.CompilerServices;
 
 namespace JCarrillo.AOT.Core.ValueLINQ.Excepciones
@@ -12,7 +13,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Excepciones
     /// <param name="idObtenido">El identificador de sesión obtenido.</param>
     /// <param name="indice">El índice del slot.</param>
     [method: MethodImpl(MethodImplOptions.NoInlining)]
-    public sealed class ValueLinqSesionExpiradaException(long idEsperado, long idObtenido, int indice) : InvalidOperationException($"Operación inválida en ValueLINQ: La sesión del índice [{indice}] ha expirado o el buffer fue reutilizado. Se esperaba el token '{idEsperado}' pero el slot está ocupado por '{idObtenido}'.")
+    public sealed class ValueLinqSesionExpiradaException(long idEsperado, long idObtenido, int indice) : InvalidOperationException($"Operación inválida en ValueLINQ: La sesión del índice [{indice}] ha expirado o el buffer fue reutilizado. Se esperaba el token '{idEsperado}' pero el slot está ocupado por '{idObtenido}'.{JCEDiagnostico.Referencia(JCEDiagnostico.JCE0003.Url)}")
     {
         /// <summary>
         /// Obtiene el identificador de sesión esperado.

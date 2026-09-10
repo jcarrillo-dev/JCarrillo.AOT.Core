@@ -179,19 +179,30 @@ namespace JCarrillo.AOT.Core.Tests.E2E
             int outerCount = 0;
             int innerCount = 0;
 
-            foreach (ref readonly int outerItem in pipeline)
+            bool lanzoElExterno = false;
+
+            try
             {
-                outerCount++;
-                // Nesting: starts another enumerator on the same session
-                foreach (ref readonly int innerItem in pipeline)
+                foreach (ref readonly int outerItem in pipeline)
                 {
-                    innerCount++;
+                    outerCount++;
+                    // Nesting: starts another enumerator on the same session
+                    foreach (ref readonly int innerItem in pipeline)
+                    {
+                        innerCount++;
+                    }
                 }
             }
+            catch (ValueLinqSesionExpiradaException)
+            {
+                lanzoElExterno = true;
+            }
 
-            // Outer loop completes exactly 1 iteration before inner loop disposes the shared session.
+            // El bucle interno agota y libera la sesión compartida, así que el externo la pierde tras su primera
+            // iteración. Desde que perder la sesión lanza, el externo lo detecta en vez de terminar en silencio.
             outerCount.Should().Be(1);
             innerCount.Should().Be(5);
+            lanzoElExterno.Should().BeTrue();
 
             // Verify that all slots are freed
             GetActiveSlotsCount().Should().Be(initialActive);
@@ -430,11 +441,23 @@ namespace JCarrillo.AOT.Core.Tests.E2E
             foreach (var chunk in pipeline)
                 chunksPrimera++;
 
+            // La primera enumeración libera la sesión del buffer, así que la segunda ya no la encuentra. Desde que
+            // perder la sesión lanza, reenumerar deja de entregar cero fragmentos en silencio.
+            bool lanzoLaSegunda = false;
             int chunksSegunda = 0;
-            foreach (var chunk in pipeline)
-                chunksSegunda++;
+
+            try
+            {
+                foreach (var chunk in pipeline)
+                    chunksSegunda++;
+            }
+            catch (ValueLinqSesionExpiradaException)
+            {
+                lanzoLaSegunda = true;
+            }
 
             chunksPrimera.Should().Be(3);
+            lanzoLaSegunda.Should().BeTrue();
             chunksSegunda.Should().Be(0);
         }
 
@@ -445,7 +468,16 @@ namespace JCarrillo.AOT.Core.Tests.E2E
             var pipeline = array.ToValueDelayQuery().Chunk(2);
 
             foreach (var chunk in pipeline) { }
-            foreach (var chunk in pipeline) { }
+
+            // La segunda enumeración lanza al no encontrar la sesión; lo que se comprueba aquí es que aun así
+            // el buffer no se devolvió dos veces al pool.
+            try
+            {
+                foreach (var chunk in pipeline) { }
+            }
+            catch (ValueLinqSesionExpiradaException)
+            {
+            }
 
             int[] alquiler1 = System.Buffers.ArrayPool<int>.Shared.Rent(2);
             int[] alquiler2 = System.Buffers.ArrayPool<int>.Shared.Rent(2);

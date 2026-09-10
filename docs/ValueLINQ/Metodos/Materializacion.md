@@ -23,6 +23,8 @@ La expiración por inactividad no es el único riesgo de ciclo de vida. Las cons
 
 Por ello, los datos que deban sobrevivir al cierre de la arena deben materializarse con `ToList`/`ToArray` (o sus variantes `ToListRef`/`ToArrayRef`, o los materializadores estándar) **antes** de liberar la arena: las colecciones resultantes arriendan sus buffers directamente de `ArrayPool<T>.Shared` y no dependen de la tabla de sesiones, por lo que permanecen válidas tras el `Dispose()` de la arena.
 
+Esa misma propiedad es la que permite **trasladar datos de una arena a otra**, ya que una consulta no puede abarcar dos arenas explícitas: se materializa fuera de ambas y se vuelve a entrar en consulta sobre la arena destino. El procedimiento, con ejemplo y con el motivo de la restricción, está en [Arenas de Memoria § Pasar datos de una arena a otra](../Core/Arenas.md#pasar-datos-de-una-arena-a-otra).
+
 ---
 
 ## 2. Firmas de los Operadores

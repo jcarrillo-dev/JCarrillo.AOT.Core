@@ -1,5 +1,6 @@
 using FluentAssertions;
 using JCarrillo.AOT.Core.ValueLINQ;
+using JCarrillo.AOT.Core.ValueLINQ.Excepciones;
 using Xunit;
 
 namespace JCarrillo.AOT.Core.Tests.ValueLINQ
@@ -92,6 +93,50 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
         }
 
         [Fact]
+        public void ObtenerMetadatosEnUnaArenaLiberadaLanzaEnSuPropiaCapa()
+        {
+            // Preparar: el StateManager defiende su propia precondición sin confiar en que el llamante la validara.
+            // Se comprueba invocándolo directamente, que es el único nivel donde ninguna capa anterior lo enmascara.
+            long token = ValueLINQArenaManager.Alquilar();
+            int id = TokenHelper.ObtenerIdTokenArena(token);
+            ValueLINQArenaManager.Liberar(token);
+
+            // Actuar
+            Action actObtener = () => _ = ValueLINQStateManager<TipoArenaCeroManager>.ObtenerMetadatos(id, 4).TamañoActual;
+
+            // Aserción
+            _ = actObtener.Should().Throw<ValueLinqArenaInactivaException>(
+                "crear una tabla en una arena que ya no existe es un error de la propia operación, la valide quien la valide antes");
+        }
+
+        [Fact]
+        public void SoloLaSobrecargaPorTokenDistingueUnaEncarnacionReciclada()
+        {
+            // Preparar: es la diferencia que justifica que ValueLINQChunkDelay compare el token completo en vez del
+            // identificador. Agotar los 4095 ids para provocar un reciclaje real no es viable en una prueba, pero la
+            // distinción sí se comprueba forjando el token de una generación anterior sobre una arena viva.
+            long tokenActual = ValueLINQArenaManager.Alquilar();
+
+            try
+            {
+                int id = TokenHelper.ObtenerIdTokenArena(tokenActual);
+                long generacionActual = TokenHelper.ObtenerGeneracionTokenArena(tokenActual);
+                long tokenEncarnacionAnterior = TokenHelper.CrearTokenArena(id, generacionActual - 1);
+
+                // Aserción: por identificador la arena está viva, porque lo está; por token, la encarnación anterior
+                // se detecta como ajena. Si ambas dijeran lo mismo, el guardián de ChunkDelay sería redundante.
+                _ = ValueLINQArenaManager.IsArenaViva(id).Should().BeTrue();
+                _ = ValueLINQArenaManager.IsArenaViva(tokenActual).Should().BeTrue();
+                _ = ValueLINQArenaManager.IsArenaViva(tokenEncarnacionAnterior).Should().BeFalse(
+                    "solo la comparación del token completo distingue encarnaciones del mismo identificador");
+            }
+            finally
+            {
+                ValueLINQArenaManager.Liberar(tokenActual);
+            }
+        }
+
+        [Fact]
         public void LaArenaCeroNoSePuedeLiberar()
         {
             long tokenForjado = TokenHelper.CrearTokenArena(0, 1L);
@@ -122,7 +167,7 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
                         vivaDuranteElCallback.Add(ValueLINQArenaManager.IsArenaViva(token));
                     }
                 },
-                _ => false);
+                _ => default);
 
             ValueLINQArenaManager.Liberar(token);
 

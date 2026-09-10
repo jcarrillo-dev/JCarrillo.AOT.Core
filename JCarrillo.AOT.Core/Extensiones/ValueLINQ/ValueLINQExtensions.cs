@@ -2,6 +2,8 @@ using JCarrillo.AOT.Core.Colecciones.Pooled;
 using JCarrillo.AOT.Core.Colecciones.Pooled.Ref;
 using JCarrillo.AOT.Core.ValueLINQ;
 using JCarrillo.AOT.Core.ValueLINQ.Arena;
+using JCarrillo.AOT.Core.ValueLINQ.Delegados;
+using JCarrillo.AOT.Core.ValueLINQ.Estados;
 using JCarrillo.AOT.Core.ValueLINQ.Excepciones;
 using JCarrillo.AOT.Core.ValueLINQ.Interfaces;
 using JCarrillo.AOT.Core.Diagnostico;
@@ -25,20 +27,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
     {
         #region ToValueQuery
 
-        /// <summary>
-        /// Copia el contenido del origen en la sesión identificada por el token, liberando la sesión si la copia falla.
-        /// </summary>
-        /// <typeparam name="T">El tipo de los elementos.</typeparam>
-        /// <param name="token">El token de la sesión de destino recién creada.</param>
-        /// <param name="origen">Los elementos de origen a copiar.</param>
-        /// <remarks>
-        /// Método frío compartido por todas las sobrecargas de construcción (array/Span/ReadOnlySpan ×
-        /// ValueLINQStruct/ValueLINQRefStruct). Concentra el bloque try/catch para que los wrappers públicos
-        /// queden sin manejo de excepciones y sean inlineables en net8/net9. La ventana entre el constructor de
-        /// la consulta y la entrada al try ya existía en el código original; este método conserva la garantía de
-        /// liberación vía catch. Liberar por token es exactamente lo que hace Dispose() en ambas estructuras
-        /// (un reenvío a <see cref="ValueLINQStateManager{T}.LiberarMetadatos(long)"/>).
-        /// </remarks>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void CopiarOrigenSlow<T>(long token, scoped ReadOnlySpan<T> origen)
         {
@@ -226,6 +214,42 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         #region Where
 
         /// <summary>
+        /// Filtra un flujo de datos representado por una estructura de referencia de ValueLINQ basándose en un predicado struct sin estado.
+        /// </summary>
+        /// <typeparam name="TOrigen">El tipo de los elementos de origen.</typeparam>
+        /// <typeparam name="TPredicate">El tipo del predicado que implementa <see cref="IWhereDelegado{TOrigen}"/>.</typeparam>
+        /// <param name="origen">La estructura de origen.</param>
+        /// <param name="predicado">El predicado de filtro.</param>
+        /// <returns>Una estructura de referencia de ValueLINQ con los elementos filtrados.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQRefStruct<TOrigen> Where<TOrigen, TPredicate>(
+            this ValueLINQRefStruct<TOrigen> origen,
+            scoped in TPredicate predicado)
+            where TPredicate : struct, IWhereDelegado<TOrigen>
+        {
+            ValueLINQStatelessWherePredicate<TOrigen, TPredicate> adapter = new(in predicado);
+            return origen.Where<TOrigen, ValueLINQVoidState, ValueLINQStatelessWherePredicate<TOrigen, TPredicate>>(default, in adapter);
+        }
+
+        /// <summary>
+        /// Filtra un flujo de datos representado por una estructura de ValueLINQ basándose en un predicado struct sin estado.
+        /// </summary>
+        /// <typeparam name="TOrigen">El tipo de los elementos de origen.</typeparam>
+        /// <typeparam name="TPredicate">El tipo del predicado que implementa <see cref="IWhereDelegado{TOrigen}"/>.</typeparam>
+        /// <param name="origen">La estructura de origen.</param>
+        /// <param name="predicado">El predicado de filtro.</param>
+        /// <returns>Una estructura de ValueLINQ con los elementos filtrados.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQStruct<TOrigen> Where<TOrigen, TPredicate>(
+            this ValueLINQStruct<TOrigen> origen,
+            in TPredicate predicado)
+            where TPredicate : struct, IWhereDelegado<TOrigen>
+        {
+            ValueLINQStatelessWherePredicate<TOrigen, TPredicate> adapter = new(in predicado);
+            return origen.Where<TOrigen, ValueLINQVoidState, ValueLINQStatelessWherePredicate<TOrigen, TPredicate>>(default, in adapter);
+        }
+
+        /// <summary>
         /// Filtra un flujo de datos representado por una estructura de referencia de ValueLINQ basándose en un predicado struct.
         /// </summary>
         /// <typeparam name="TOrigen">El tipo de los elementos de origen.</typeparam>
@@ -256,18 +280,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             return WhereSlow(origen, origenTamaño, dato, in predicado);
         }
 
-        /// <summary>
-        /// Camino frío de Where para <see cref="ValueLINQRefStruct{T}"/>: concentra el try/finally para que el
-        /// wrapper público quede sin manejo de excepciones y sea inlineable en net8/net9.
-        /// </summary>
-        /// <typeparam name="TOrigen">El tipo de los elementos de origen.</typeparam>
-        /// <typeparam name="TDato">El tipo del dato de comparación.</typeparam>
-        /// <typeparam name="TPredicate">El tipo del predicado que implementa <see cref="IWhereDelegado{TOrigen, TDato}"/>.</typeparam>
-        /// <param name="origen">La estructura de origen (por valor; su Dispose libera por token).</param>
-        /// <param name="origenTamaño">El tamaño del origen, calculado en el wrapper fuera del EH.</param>
-        /// <param name="dato">El valor del dato de comparación.</param>
-        /// <param name="predicado">El predicado de filtro.</param>
-        /// <returns>Una estructura de referencia de ValueLINQ con los elementos filtrados.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static ValueLINQRefStruct<TOrigen> WhereSlow<TOrigen, TDato, TPredicate>(
             ValueLINQRefStruct<TOrigen> origen,
@@ -347,18 +359,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             return WhereSlow<TOrigen, TDato, TPredicate>(origenToken, origenTamaño, dato, in predicado);
         }
 
-        /// <summary>
-        /// Camino frío de Where para <see cref="ValueLINQStruct{T}"/>: concentra el try/finally para que el
-        /// wrapper público quede sin manejo de excepciones y sea inlineable en net8/net9.
-        /// </summary>
-        /// <typeparam name="TOrigen">El tipo de los elementos de origen.</typeparam>
-        /// <typeparam name="TDato">El tipo del dato de comparación.</typeparam>
-        /// <typeparam name="TPredicate">El tipo del predicado que implementa <see cref="IWhereDelegado{TOrigen, TDato}"/>.</typeparam>
-        /// <param name="origenToken">El token del origen; liberar por token equivale exactamente a origen.Dispose().</param>
-        /// <param name="origenTamaño">El tamaño del origen, calculado en el wrapper fuera del EH.</param>
-        /// <param name="dato">El valor del dato de comparación.</param>
-        /// <param name="predicado">El predicado de filtro.</param>
-        /// <returns>Una estructura de ValueLINQ con los elementos filtrados.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static ValueLINQStruct<TOrigen> WhereSlow<TOrigen, TDato, TPredicate>(
             long origenToken,
@@ -400,7 +400,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             }
             finally
             {
-                // LiberarMetadatos(origenToken) es exactamente el cuerpo de origen.Dispose().
                 ValueLINQStateManager<TOrigen>.LiberarMetadatos(origenToken);
                 if (!isExito)
                     destino.Dispose();
@@ -426,8 +425,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             scoped in TPredicate selector)
             where TPredicate : struct, ISelectDelegado<TOrigen, TResultado>
         {
-            // La lectura de metadatos permanece en el wrapper, fuera de todo EH: si lanza, origen no se
-            // libera, igual que en el código original.
             int origenTamaño = 0;
             long origenToken = origen.Token;
             bool isTokenValido = origenToken != 0L;
@@ -440,18 +437,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             return SelectSlow<TOrigen, TPredicate, TResultado>(origenToken, origenTamaño, isTokenValido, in selector);
         }
 
-        /// <summary>
-        /// Camino frío de Select para <see cref="ValueLINQRefStruct{T}"/>: concentra el try/finally para que el
-        /// wrapper público quede sin manejo de excepciones y sea inlineable en net8/net9.
-        /// </summary>
-        /// <typeparam name="TOrigen">El tipo de los elementos de origen.</typeparam>
-        /// <typeparam name="TPredicate">El tipo del selector que implementa <see cref="ISelectDelegado{TOrigen, TResultado}"/>.</typeparam>
-        /// <typeparam name="TResultado">El tipo del elemento de resultado.</typeparam>
-        /// <param name="origenToken">El token del origen; liberar por token equivale exactamente a origen.Dispose().</param>
-        /// <param name="origenTamaño">El tamaño del origen, calculado en el wrapper fuera del EH.</param>
-        /// <param name="isTokenValido">Indica si el token del origen es válido (distinto de 0).</param>
-        /// <param name="selector">El selector de proyección; 'scoped' garantiza que la referencia no escapa en el valor devuelto.</param>
-        /// <returns>Una estructura de referencia de ValueLINQ con los elementos proyectados.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static ValueLINQRefStruct<TResultado> SelectSlow<TOrigen, TPredicate, TResultado>(
             long origenToken,
@@ -524,17 +509,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             return SelectSlow<TOrigen, TPredicate, TResultado>(origen, in selector, origenTamaño);
         }
 
-        /// <summary>
-        /// Camino frío de Select para <see cref="ValueLINQStruct{T}"/>: concentra el try/finally para que el
-        /// wrapper público quede sin manejo de excepciones y sea inlineable en net8/net9.
-        /// </summary>
-        /// <typeparam name="TOrigen">El tipo de los elementos de origen.</typeparam>
-        /// <typeparam name="TPredicate">El tipo del selector que implementa <see cref="ISelectDelegado{TOrigen, TResultado}"/>.</typeparam>
-        /// <typeparam name="TResultado">El tipo del elemento de resultado.</typeparam>
-        /// <param name="origen">La estructura de origen (por valor, 8 bytes readonly; su Dispose libera por token).</param>
-        /// <param name="selector">El selector de proyección; nunca escapa (solo se copia a una local).</param>
-        /// <param name="origenTamaño">El tamaño del origen, calculado en el wrapper fuera del EH.</param>
-        /// <returns>Una estructura de ValueLINQ con los elementos proyectados.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static ValueLINQStruct<TResultado> SelectSlow<TOrigen, TPredicate, TResultado>(
             ValueLINQStruct<TOrigen> origen,
@@ -592,24 +566,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         private static void ThrowArgumentNullException(string paramName)
             => throw new ArgumentNullException(paramName);
 
-        [DoesNotReturn]
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        private static void ThrowArenaCruzada(int arenaEsperada, int arenaEncontrada)
-            => throw new ValueLinqArenaCruzadaException(arenaEsperada, arenaEncontrada);
-
-        // Verifica que un operando pertenezca a la arena de destino (la del primer operando).
-        // Un token 0 (consulta default/vacía) no impone arena y se omite.
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static void ValidarMismaArena(int arenaDestino, long token)
-        {
-            if (token == 0L)
-                return;
-
-            int arena = TokenHelper.ObtenerArenaId(token);
-            if (arena != arenaDestino)
-                ThrowArenaCruzada(arenaDestino, arena);
-        }
-
         /// <summary>
         /// Splits a <see cref="ValueLINQRefStruct{T}"/> into chunks of a specified size.
         /// </summary>
@@ -638,16 +594,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             return ChunkSlow<T>(origenToken, cantidadChunks, tamaño);
         }
 
-        /// <summary>
-        /// Camino frío de Chunk compartido por ambas sobrecargas (ValueLINQRefStruct y ValueLINQStruct):
-        /// concentra el try/finally para que los wrappers públicos queden sin manejo de excepciones y sean
-        /// inlineables en net8/net9. Solo cruzan tipos escalares (long/int), ningún ref struct.
-        /// </summary>
-        /// <typeparam name="T">El tipo de los elementos.</typeparam>
-        /// <param name="origenToken">El token del origen; liberar por token equivale exactamente a origen.Dispose() en ambas sobrecargas.</param>
-        /// <param name="cantidadChunks">El número de chunks a crear, calculado en el wrapper.</param>
-        /// <param name="tamaño">El tamaño máximo de cada chunk (ya validado en el wrapper).</param>
-        /// <returns>Una consulta que contiene los chunks.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static ValueLINQRefStruct<ValueLINQStruct<T>> ChunkSlow<T>(long origenToken, int cantidadChunks, int tamaño)
         {
@@ -688,7 +634,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             }
             finally
             {
-                // LiberarMetadatos(origenToken) es exactamente el cuerpo de origen.Dispose() en ambas sobrecargas.
                 ValueLINQStateManager<T>.LiberarMetadatos(origenToken);
                 if (!isExito)
                 {
@@ -753,15 +698,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             where TProcessor : struct, IProcesarChunkDelegado<T>
             => ProcesarChunksSlow<T, TProcessor>(listaChunks.Token, procesarChunk);
 
-        /// <summary>
-        /// Camino frío de ProcesarChunks compartido por ambas sobrecargas (ValueLINQRefStruct y ValueLINQStruct):
-        /// concentra el try/finally para que los wrappers públicos queden sin manejo de excepciones y sean
-        /// inlineables en net8/net9. Solo cruzan el token (long) y el procesador struct, ningún ref struct.
-        /// </summary>
-        /// <typeparam name="T">El tipo de los elementos dentro del fragmento.</typeparam>
-        /// <typeparam name="TProcessor">El tipo del procesador que implementa <see cref="IProcesarChunkDelegado{T}"/>.</typeparam>
-        /// <param name="token">El token de la lista de chunks; liberar por token equivale exactamente a listaChunks.Dispose() en ambas sobrecargas.</param>
-        /// <param name="procesarChunk">El procesador de fragmentos.</param>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ProcesarChunksSlow<T, TProcessor>(long token, TProcessor procesarChunk)
             where TProcessor : struct, IProcesarChunkDelegado<T>
@@ -798,8 +734,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                                 array![i].Dispose();
                     }
                 }
-                // LiberarMetadatos(token) es exactamente el cuerpo de listaChunks.Dispose() en ambas sobrecargas.
-                // Ver el invariante del #region "Caminos fríos compartidos": Dispose es hoy un mero reenvío a LiberarMetadatos(Token).
                 ValueLINQStateManager<ValueLINQStruct<T>>.LiberarMetadatos(token);
             }
         }
@@ -867,19 +801,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             ValueLINQRefStruct<T> lista4)
             => ConcatRefSlow<T>(lista1.Token, lista2.Token, lista3.Token, lista4.Token);
 
-        /// <summary>
-        /// Camino frío de Concat compartido por las sobrecargas de aridad 2, 3 y 4 sobre
-        /// <see cref="ValueLINQRefStruct{T}"/>: concentra el try/finally para que los wrappers públicos queden
-        /// sin manejo de excepciones y sean inlineables en net8/net9. A diferencia de Where/Select/Chunk, las
-        /// lecturas de metadatos y <see cref="ValidarMismaArena"/> permanecen DENTRO del try porque en el Concat
-        /// original todo fallo libera las fuentes.
-        /// </summary>
-        /// <typeparam name="T">El tipo de los elementos.</typeparam>
-        /// <param name="token1">El token de la primera lista; liberar por token equivale exactamente a lista1.Dispose().</param>
-        /// <param name="token2">El token de la segunda lista; liberar por token equivale exactamente a lista2.Dispose().</param>
-        /// <param name="token3">El token de la tercera lista, o 0L si el slot está ausente (aridad menor); 0L es no-op garantizado en lectura, validación, copia y liberación.</param>
-        /// <param name="token4">El token de la cuarta lista, o 0L si el slot está ausente (aridad menor); 0L es no-op garantizado en lectura, validación, copia y liberación.</param>
-        /// <returns>Una consulta concatenada.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static ValueLINQRefStruct<T> ConcatRefSlow<T>(long token1, long token2, long token3, long token4)
         {
@@ -895,9 +816,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 if (token4 != 0L) len4 = ValueLINQStateManager<T>.ObtenerMetadatos(token4).TamañoActual;
 
                 int arenaDestino = TokenHelper.ObtenerArenaId(token1);
-                ValidarMismaArena(arenaDestino, token2);
-                ValidarMismaArena(arenaDestino, token3);
-                ValidarMismaArena(arenaDestino, token4);
                 destino = new ValueLINQRefStruct<T>(arenaDestino, len1 + len2 + len3 + len4);
                 ref MetadatosSesion<T> metadatosDestino = ref ValueLINQStateManager<T>.ObtenerMetadatos(destino.Token);
                 T[]? destinoArray = metadatosDestino.Array;
@@ -937,9 +855,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             }
             finally
             {
-                // LiberarMetadatos(tokenN) es exactamente el cuerpo de listaN.Dispose(); con token 0 es no-op
-                // estricto (TablaSesiones.LiberarMetadatos hace early-return). No eliminar los guards token != 0L
-                // creyéndolos redundantes: sostienen las aridades 2 y 3, que pasan 0L en los slots finales.
                 ValueLINQStateManager<T>.LiberarMetadatos(token1);
                 ValueLINQStateManager<T>.LiberarMetadatos(token2);
                 ValueLINQStateManager<T>.LiberarMetadatos(token3);
@@ -994,19 +909,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             ValueLINQStruct<T> lista4)
             => ConcatSlow<T>(lista1.Token, lista2.Token, lista3.Token, lista4.Token);
 
-        /// <summary>
-        /// Camino frío de Concat compartido por las sobrecargas de aridad 2, 3 y 4 sobre
-        /// <see cref="ValueLINQStruct{T}"/>: concentra el try/finally para que los wrappers públicos queden sin
-        /// manejo de excepciones y sean inlineables en net8/net9. A diferencia de Where/Select/Chunk, las
-        /// lecturas de metadatos y <see cref="ValidarMismaArena"/> permanecen DENTRO del try porque en el Concat
-        /// original todo fallo libera las fuentes.
-        /// </summary>
-        /// <typeparam name="T">El tipo de los elementos.</typeparam>
-        /// <param name="token1">El token de la primera lista; liberar por token equivale exactamente a lista1.Dispose().</param>
-        /// <param name="token2">El token de la segunda lista; liberar por token equivale exactamente a lista2.Dispose().</param>
-        /// <param name="token3">El token de la tercera lista, o 0L si el slot está ausente (aridad menor); 0L es no-op garantizado en lectura, validación, copia y liberación.</param>
-        /// <param name="token4">El token de la cuarta lista, o 0L si el slot está ausente (aridad menor); 0L es no-op garantizado en lectura, validación, copia y liberación.</param>
-        /// <returns>Una consulta concatenada.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static ValueLINQStruct<T> ConcatSlow<T>(long token1, long token2, long token3, long token4)
         {
@@ -1022,9 +924,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 if (token4 != 0L) len4 = ValueLINQStateManager<T>.ObtenerMetadatos(token4).TamañoActual;
 
                 int arenaDestino = TokenHelper.ObtenerArenaId(token1);
-                ValidarMismaArena(arenaDestino, token2);
-                ValidarMismaArena(arenaDestino, token3);
-                ValidarMismaArena(arenaDestino, token4);
                 destino = new ValueLINQStruct<T>(arenaDestino, len1 + len2 + len3 + len4);
                 ref MetadatosSesion<T> metadatosDestino = ref ValueLINQStateManager<T>.ObtenerMetadatos(destino.Token);
                 T[]? destinoArray = metadatosDestino.Array;
@@ -1064,9 +963,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             }
             finally
             {
-                // LiberarMetadatos(tokenN) es exactamente el cuerpo de listaN.Dispose(); con token 0 es no-op
-                // estricto (TablaSesiones.LiberarMetadatos hace early-return). No eliminar los guards token != 0L
-                // creyéndolos redundantes: sostienen las aridades 2 y 3, que pasan 0L en los slots finales.
                 ValueLINQStateManager<T>.LiberarMetadatos(token1);
                 ValueLINQStateManager<T>.LiberarMetadatos(token2);
                 ValueLINQStateManager<T>.LiberarMetadatos(token3);
@@ -1093,19 +989,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
 #endif
             => ConcatParamsSlow<T>(lista1.Token, listas);
 
-        /// <summary>
-        /// Camino frío de la sobrecarga variádica de Concat sobre <see cref="ValueLINQStruct{T}"/>: concentra el
-        /// try/finally para que los wrappers públicos queden sin manejo de excepciones y sean inlineables en
-        /// net8/net9. A diferencia de Where/Select/Chunk, las lecturas de metadatos y
-        /// <see cref="ValidarMismaArena"/> permanecen DENTRO del try porque en el Concat original todo fallo
-        /// libera las fuentes.
-        /// </summary>
-        /// <typeparam name="T">El tipo de los elementos.</typeparam>
-        /// <param name="token1">El token de la primera lista; liberar por token equivale exactamente a lista1.Dispose() (con 0L es no-op).</param>
-        /// <param name="listas">Las demás listas a concatenar. En net8 el wrapper recibe un array por params: si se
-        /// invoca con un array null explícito, el span queda vacío (antes se producía NRE dentro del try; ahora el
-        /// resultado es una copia de lista1 con las fuentes ya liberadas).</param>
-        /// <returns>Una consulta concatenada.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static ValueLINQStruct<T> ConcatParamsSlow<T>(long token1, scoped ReadOnlySpan<ValueLINQStruct<T>> listas)
         {
@@ -1123,10 +1006,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 {
                     long token = lista.Token;
                     if (token != 0L)
-                    {
-                        ValidarMismaArena(arenaDestino, token);
                         tamañoTotal += ValueLINQStateManager<T>.ObtenerMetadatos(token).TamañoActual;
-                    }
                 }
 
                 destino = new ValueLINQStruct<T>(arenaDestino, tamañoTotal);
@@ -1162,7 +1042,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             }
             finally
             {
-                // LiberarMetadatos(token1) es exactamente el cuerpo de lista1.Dispose() (con 0L es no-op estricto).
                 ValueLINQStateManager<T>.LiberarMetadatos(token1);
                 foreach (ValueLINQStruct<T> lista in listas)
                     lista.Dispose();
@@ -1177,18 +1056,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
 
         #region Caminos fríos compartidos
 
-        // INVARIANTE: estos métodos fríos liberan por token en el finally porque Dispose() de
-        // ValueLINQStruct<T> y de ValueLINQRefStruct<T> es hoy un mero reenvío a
-        // ValueLINQStateManager<T>.LiberarMetadatos(Token). Si algún día Dispose ganara estado por
-        // instancia, estos helpers deberían actualizarse en consecuencia.
-
-        /// <summary>
-        /// Camino frío de ToList compartido por ambas sobrecargas: concentra el try/finally para que los
-        /// wrappers públicos queden sin manejo de excepciones y sean inlineables en net8/net9.
-        /// </summary>
-        /// <typeparam name="T">El tipo de los elementos.</typeparam>
-        /// <param name="token">El token válido (distinto de 0) de la sesión de origen.</param>
-        /// <returns>Un <see cref="PooledList{T}"/> con los elementos.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static PooledList<T> ToListSlow<T>(long token)
         {
@@ -1210,13 +1077,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             }
         }
 
-        /// <summary>
-        /// Camino frío de ToListRef compartido por ambas sobrecargas: concentra el try/finally para que los
-        /// wrappers públicos queden sin manejo de excepciones y sean inlineables en net8/net9.
-        /// </summary>
-        /// <typeparam name="T">El tipo de los elementos.</typeparam>
-        /// <param name="token">El token válido (distinto de 0) de la sesión de origen.</param>
-        /// <returns>Un <see cref="PooledListRef{T}"/> con los elementos (envuelve un array del heap; es legal devolverlo).</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static PooledListRef<T> ToListRefSlow<T>(long token)
         {
@@ -1238,13 +1098,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             }
         }
 
-        /// <summary>
-        /// Camino frío de ToArray compartido por ambas sobrecargas: concentra el try/finally para que los
-        /// wrappers públicos queden sin manejo de excepciones y sean inlineables en net8/net9.
-        /// </summary>
-        /// <typeparam name="T">El tipo de los elementos.</typeparam>
-        /// <param name="token">El token válido (distinto de 0) de la sesión de origen.</param>
-        /// <returns>Un <see cref="PooledArray{T}"/> con los elementos.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static PooledArray<T> ToArraySlow<T>(long token)
         {
@@ -1267,13 +1120,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             }
         }
 
-        /// <summary>
-        /// Camino frío de ToArrayRef compartido por ambas sobrecargas: concentra el try/finally para que los
-        /// wrappers públicos queden sin manejo de excepciones y sean inlineables en net8/net9.
-        /// </summary>
-        /// <typeparam name="T">El tipo de los elementos.</typeparam>
-        /// <param name="token">El token válido (distinto de 0) de la sesión de origen.</param>
-        /// <returns>Un <see cref="PooledArrayRef{T}"/> con los elementos (envuelve un array del heap; es legal devolverlo).</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static PooledArrayRef<T> ToArrayRefSlow<T>(long token)
         {
@@ -1296,13 +1142,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             }
         }
 
-        /// <summary>
-        /// Camino frío de ToArrayStandard compartido por ambas sobrecargas: concentra el try/finally para que los
-        /// wrappers públicos queden sin manejo de excepciones y sean inlineables en net8/net9.
-        /// </summary>
-        /// <typeparam name="T">El tipo de los elementos.</typeparam>
-        /// <param name="token">El token válido (distinto de 0) de la sesión de origen.</param>
-        /// <returns>Un arreglo estándar del heap con los elementos.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static T[] ToArrayStandardSlow<T>(long token)
         {
@@ -1324,13 +1163,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             }
         }
 
-        /// <summary>
-        /// Camino frío de ToListStandard compartido por ambas sobrecargas: concentra el try/finally para que los
-        /// wrappers públicos queden sin manejo de excepciones y sean inlineables en net8/net9.
-        /// </summary>
-        /// <typeparam name="T">El tipo de los elementos.</typeparam>
-        /// <param name="token">El token válido (distinto de 0) de la sesión de origen.</param>
-        /// <returns>Una <see cref="List{T}"/> estándar con los elementos.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static List<T> ToListStandardSlow<T>(long token)
         {
@@ -1636,7 +1468,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         public static ValueLINQDelayStruct<T, ValueLINQSessionEnumerator<T>> Delay<T>(this ValueLINQStruct<T> query)
         {
             ValueLINQSessionEnumerator<T> sessionEnumerator = new(query.Token);
-            return new ValueLINQDelayStruct<T, ValueLINQSessionEnumerator<T>>(sessionEnumerator);
+            return new ValueLINQDelayStruct<T, ValueLINQSessionEnumerator<T>>(sessionEnumerator, ValueLINQDelayOptions.Ambiente.DesdeSesion(query.Token));
         }
 
         /// <summary>
@@ -1649,7 +1481,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         public static ValueLINQDelayStruct<T, ValueLINQSessionEnumerator<T>> Delay<T>(this ValueLINQRefStruct<T> query)
         {
             ValueLINQSessionEnumerator<T> sessionEnumerator = new(query.Token);
-            return new ValueLINQDelayStruct<T, ValueLINQSessionEnumerator<T>>(sessionEnumerator);
+            return new ValueLINQDelayStruct<T, ValueLINQSessionEnumerator<T>>(sessionEnumerator, ValueLINQDelayOptions.Ambiente.DesdeSesion(query.Token));
         }
 #endif
     }

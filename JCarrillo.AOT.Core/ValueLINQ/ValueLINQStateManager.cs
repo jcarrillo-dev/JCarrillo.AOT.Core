@@ -19,7 +19,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ
             _tablas[0] = new(0, ValueLINQArenaManager.ObtenerGeneracion(0));
 
             ValueLINQGC.Registrar(LimpiarExpirados);
-            ValueLINQArenaManager.Registrar(LiberarTablasDeArena, HasSesionesVivasEnArena);
+            ValueLINQArenaManager.Registrar(LiberarTablasDeArena, EstadoEnArena);
         }
 
         #region Limpieza
@@ -94,7 +94,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ
         [DoesNotReturn]
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowSesionNoEncontrada(long token)
-            => throw new ValueLinqSesionExpiradaException(0L, token, TokenHelper.ObtenerSlotIndex(token));
+            => throw new ValueLinqSesionExpiradaException(token, 0L, TokenHelper.ObtenerSlotIndex(token));
 
         [DoesNotReturn]
         [MethodImpl(MethodImplOptions.NoInlining)]
@@ -139,8 +139,8 @@ namespace JCarrillo.AOT.Core.ValueLINQ
         internal static void LiberarTablasDeArena(int id)
             => Interlocked.Exchange(ref _tablas[id], null)?.LiberarTodo();
 
-        internal static bool HasSesionesVivasEnArena(int id)
-            => _tablas[id]?.HasSesionesVivas ?? false;
+        internal static EstadoTabla EstadoEnArena(int id)
+            => _tablas[id]?.Estado ?? default;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool IsTablaMaterializada(int idArena)

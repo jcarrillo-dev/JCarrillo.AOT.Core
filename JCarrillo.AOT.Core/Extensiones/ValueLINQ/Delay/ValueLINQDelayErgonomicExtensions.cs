@@ -2,6 +2,8 @@
 using JCarrillo.AOT.Core.Diagnostico;
 using JCarrillo.AOT.Core.ValueLINQ.Delay;
 using JCarrillo.AOT.Core.ValueLINQ.Delegados;
+using JCarrillo.AOT.Core.ValueLINQ.Estados;
+using JCarrillo.AOT.Core.ValueLINQ.Interfaces;
 using System.Runtime.CompilerServices;
 
 namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
@@ -12,6 +14,21 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ.Delay
     public static class ValueLINQDelayErgonomicExtensions
     {
         #region Where
+
+        /// <summary>
+        /// Filtra un flujo de datos perezoso (lazy) basándose en un predicado struct sin estado.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQDelayStruct<TOrigen, ValueLINQWhereDelay<TOrigen, TEnumerable, ValueLINQStatelessWherePredicate<TOrigen, TPredicate>, ValueLINQVoidState>> Where<TOrigen, TEnumerable, TPredicate>(
+            this in ValueLINQDelayStruct<TOrigen, TEnumerable> origen,
+            in TPredicate predicado)
+            where TEnumerable : struct, IValueLINQEnumerator<TOrigen>
+            where TPredicate : struct, IWhereDelegado<TOrigen>
+            where TOrigen : allows ref struct
+        {
+            ValueLINQStatelessWherePredicate<TOrigen, TPredicate> adapter = new(in predicado);
+            return origen.Where<ValueLINQStatelessWherePredicate<TOrigen, TPredicate>, ValueLINQVoidState>(default, ref adapter);
+        }
 
         /// <summary>
         /// Filtra un flujo de datos perezoso basándose en un predicado ergonómico (delegado <see cref="Func{T, TResult}"/>).

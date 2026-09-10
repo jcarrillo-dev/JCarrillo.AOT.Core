@@ -1,3 +1,4 @@
+using JCarrillo.AOT.Core.Diagnostico;
 using System.Runtime.CompilerServices;
 
 namespace JCarrillo.AOT.Core.ValueLINQ.Excepciones
@@ -11,7 +12,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Excepciones
     /// <param name="tokenObtenido">El token de sesión obtenido.</param>
     /// <param name="indiceMapeado">El índice mapeado.</param>
     [method: MethodImpl(MethodImplOptions.NoInlining)]
-    public sealed class ValueLinqTokenInvalidoException(long tokenObtenido, int indiceMapeado) : InvalidOperationException($"Operación inválida en ValueLINQ: El token de sesión '{tokenObtenido}' no es válido para su procesamiento (mapea al índice [{indiceMapeado}]). Asegúrese de inicializar la estructura correctamente.")
+    public sealed class ValueLinqTokenInvalidoException(long tokenObtenido, int indiceMapeado) : InvalidOperationException($"Operación inválida en ValueLINQ: El token de sesión '{tokenObtenido}' no es válido para su procesamiento (mapea al índice [{indiceMapeado}]). Asegúrese de inicializar la estructura correctamente.{JCEDiagnostico.Referencia(JCEDiagnostico.JCE0004.Url)}")
     {
         /// <summary>
         /// Obtiene el token inválido obtenido.

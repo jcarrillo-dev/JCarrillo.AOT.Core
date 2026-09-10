@@ -22,6 +22,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
 
         private readonly int[] _indicesLibresStack = new int[ValueLINQConfig.Slots];
         private int _topStack;
+        private long _vaciaDesde;
 
         internal int IndicesLibres
         {
@@ -35,6 +36,12 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
             get => Volatile.Read(ref _topStack) < _capacidadMaxima;
         }
 
+        internal EstadoTabla Estado
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => new(HasSesionesVivas, Volatile.Read(ref _vaciaDesde));
+        }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal bool IsParticionMaterializada(int particion) => _datos[particion] is not null;
 
@@ -46,6 +53,8 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
                 ThrowInvalidOperationSinCapacidad();
 
             int indice = _indicesLibresStack[--_topStack];
+            Volatile.Write(ref _vaciaDesde, 0L);
+
             (int particion, int index) = ObtenerIndiceParticion(indice);
 
             if (_datos[particion] is null)
@@ -78,6 +87,9 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
             using ValueLINQSpinLock spinLock = new(ref _spinLockStack);
 
             _indicesLibresStack[_topStack++] = indice;
+
+            if (_topStack == _capacidadMaxima)
+                Volatile.Write(ref _vaciaDesde, Stopwatch.GetTimestamp());
         }
 
         [DoesNotReturn]
@@ -128,7 +140,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
         [DoesNotReturn]
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowSesionNoEncontrada(long token)
-            => throw new ValueLinqSesionExpiradaException(0L, token, TokenHelper.ObtenerSlotIndex(token));
+            => throw new ValueLinqSesionExpiradaException(token, 0L, TokenHelper.ObtenerSlotIndex(token));
 
         #endregion
 
@@ -211,9 +223,10 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
                 ThrowSesionNoEncontrada(token);
 
             ref MetadatosSesion<T> metadatoRef = ref metadato[index];
+            long tokenEnSlot = TokenHelper.LeerToken(ref metadatoRef.Token);
 
-            if (TokenHelper.LeerToken(ref metadatoRef.Token) != token)
-                ThrowSesionExpirada(TokenHelper.LeerToken(ref metadatoRef.Token), token, slotIndex);
+            if (tokenEnSlot != token)
+                ThrowSesionExpirada(token, tokenEnSlot, slotIndex);
 
             return ref metadatoRef;
         }
