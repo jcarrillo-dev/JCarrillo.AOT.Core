@@ -31,6 +31,10 @@ namespace JCarrillo.AOT.Core.Benchmarks.ValueLINQ.Metodos
             _structForIteration = _array.ToValueQuery();
         }
 
+        [GlobalCleanup]
+        public void Cleanup()
+            => _structForIteration.Dispose();
+
         [Benchmark(Baseline = true)]
         public void ArrayIteration()
         {

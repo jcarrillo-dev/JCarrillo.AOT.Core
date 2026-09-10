@@ -80,5 +80,20 @@ namespace JCarrillo.AOT.Core.Benchmarks.ValueLINQ.Secuencias
             foreach (ref int x in pipeline)
                 _consumer.Consume(x);
         }
+
+        [Benchmark]
+        public void ValueLINQRefStructConcatPipelineLambdas()
+        {
+            ValueLINQRefStruct<int> q1 = _array.ToValueRefQuery();
+            ValueLINQRefStruct<int> q2 = _array.ToValueRefQuery();
+
+            using ValueLINQRefStruct<int> pipeline = q1
+                .Concat(q2)
+                .Where(static x => (x & 1) == 0)
+                .Select(static x => x * 2);
+
+            foreach (ref int x in pipeline)
+                _consumer.Consume(x);
+        }
     }
 }

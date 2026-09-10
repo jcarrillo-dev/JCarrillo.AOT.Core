@@ -19,6 +19,16 @@ namespace JCarrillo.AOT.Core.Benchmarks.Extensiones
         }
 
         [Benchmark]
+        public int BoxingInterfaceHeap()
+        {
+            int val = 42;
+#pragma warning disable CA1859 // Use concrete types when possible for performance - intentional boxing benchmark
+            IComparable comp = val;
+#pragma warning restore CA1859
+            return comp.CompareTo(42);
+        }
+
+        [Benchmark]
         public void ValidarNoBoxeadoStack()
         {
             int val = 42;

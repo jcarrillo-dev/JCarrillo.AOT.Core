@@ -36,8 +36,11 @@ namespace JCarrillo.AOT.Core.Benchmarks.ValueLINQ.Metodos
         [Benchmark]
         public void ValueLINQStructToArrayPooled()
         {
-            using ValueLINQStruct<int> query = _array.ToValueQuery().Where(0, new EvenFilter());
-            using PooledArray<int> array = query.ToArray();
+            using PooledArray<int> array = _array
+                .ToValueQuery()
+                .Where(0, new EvenFilter())
+                .ToArray();
+
             Span<int> span = array.Span;
             for (int i = 0; i < span.Length; i++)
                 _consumer.Consume(span[i]);
@@ -46,8 +49,11 @@ namespace JCarrillo.AOT.Core.Benchmarks.ValueLINQ.Metodos
         [Benchmark]
         public void ValueLINQStructToArrayStandardHeap()
         {
-            using ValueLINQStruct<int> query = _array.ToValueQuery().Where(0, new EvenFilter());
-            int[] array = query.ToArrayStandard();
+            int[] array = _array
+                .ToValueQuery()
+                .Where(0, new EvenFilter())
+                .ToArrayStandard();
+
             for (int i = 0; i < array.Length; i++)
                 _consumer.Consume(array[i]);
         }
@@ -55,8 +61,11 @@ namespace JCarrillo.AOT.Core.Benchmarks.ValueLINQ.Metodos
         [Benchmark]
         public void ValueLINQStructToListPooled()
         {
-            using ValueLINQStruct<int> query = _array.ToValueQuery().Where(0, new EvenFilter());
-            using PooledList<int> list = query.ToList();
+            using PooledList<int> list = _array
+                .ToValueQuery()
+                .Where(0, new EvenFilter())
+                .ToList();
+
             Span<int> span = list.Span;
             for (int i = 0; i < span.Length; i++)
                 _consumer.Consume(span[i]);
@@ -65,8 +74,11 @@ namespace JCarrillo.AOT.Core.Benchmarks.ValueLINQ.Metodos
         [Benchmark]
         public void ValueLINQStructToListStandardHeap()
         {
-            using ValueLINQStruct<int> query = _array.ToValueQuery().Where(0, new EvenFilter());
-            List<int> list = query.ToListStandard();
+            List<int> list = _array
+                .ToValueQuery()
+                .Where(0, new EvenFilter())
+                .ToListStandard();
+
             for (int i = 0; i < list.Count; i++)
                 _consumer.Consume(list[i]);
         }
@@ -74,8 +86,11 @@ namespace JCarrillo.AOT.Core.Benchmarks.ValueLINQ.Metodos
         [Benchmark]
         public void ValueLINQRefStructToArrayPooled()
         {
-            using ValueLINQRefStruct<int> query = _array.ToValueRefQuery().Where(0, new EvenFilter());
-            using PooledArray<int> array = query.ToArray();
+            using PooledArray<int> array = _array
+                .ToValueRefQuery()
+                .Where(0, new EvenFilter())
+                .ToArray();
+
             Span<int> span = array.Span;
             for (int i = 0; i < span.Length; i++)
                 _consumer.Consume(span[i]);
@@ -84,8 +99,11 @@ namespace JCarrillo.AOT.Core.Benchmarks.ValueLINQ.Metodos
         [Benchmark]
         public void ValueLINQRefStructToListPooled()
         {
-            using ValueLINQRefStruct<int> query = _array.ToValueRefQuery().Where(0, new EvenFilter());
-            using PooledList<int> list = query.ToList();
+            using PooledList<int> list = _array
+                .ToValueRefQuery()
+                .Where(0, new EvenFilter())
+                .ToList();
+
             Span<int> span = list.Span;
             for (int i = 0; i < span.Length; i++)
                 _consumer.Consume(span[i]);
