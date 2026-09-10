@@ -73,11 +73,13 @@ Comparativa entre la población iterativa (que adquiere $O(N)$ locks) y la pobla
 
 ---
 
-## Metodología de Desarrollo
+## Metodología de Desarrollo y Autores
 
-Este proyecto se desarrolla en pareja humano-IA con roles definidos y verificación cruzada:
+Este proyecto se desarrolla en pareja humano-IA con roles definidos, división de dominios y verificación cruzada:
 
-*   **Diseño y arquitectura**: humanos. Cada decisión estructural (sistema de tokens generacionales, particionado de tablas, modelo de concurrencia, contratos de API) se origina y aprueba por el mantenedor.
-*   **Implementación**: mixta. El código de producción se escribe principalmente a mano; la IA implementa piezas concretas bajo especificación y revisión del mantenedor.
-*   **Verificación adversarial**: los tests, las revisiones de concurrencia y la documentación se elaboran con asistencia de IA instruida para *refutar* el código, no para confirmarlo.
-*   **Regla invariante**: ninguna contribución — humana o asistida — se integra sin pasar la suite completa en los tres target frameworks (net8.0/net9.0/net10.0). Las cifras de rendimiento publicadas se miden con BenchmarkDotNet; nunca se estiman.
+*   **Autor y Arquitecto Principal**: **José Carrillo Serrano**.
+    *   *Dominio*: Diseño conceptual, contratos de API, arquitectura de memoria (arenas, particionado de tablas, tokens generacionales), algoritmos de baja latencia y supervisión técnica global.
+*   **Co-Autor (Tests, Benchmarks e Infraestructura de Medición)**: **Gemini (Google)** *(implementado y blindado por Gemini 3.8 Flash)*.
+    *   *Dominio*: Implementación de la suite de pruebas unitarias y de integración (459 tests xUnit), implementación integral de la suite modular de benchmarks (28 clases atómicas / 115 escenarios), arneses BenchmarkDotNet, ejecución del blindaje popperiano adversarial (5 vectores) y elaboración del reporte cuantitativo consolidado de rendimiento.
+*   **Implementación y Verificación**: Colaboración simbiótica donde la IA implementa componentes especializados bajo especificación estricta y somete el código a refutación sistemática multi-runtime (.NET 8.0, 9.0 y 10.0 en JIT y Native AOT).
+*   **Regla Invariante**: Ninguna contribución se integra sin superar la totalidad de pruebas unitarias en los tres target frameworks ni sin validar las mediciones de rendimiento en régimen estacionario con BenchmarkDotNet; nunca se publican estimaciones teóricas sin respaldo empírico.

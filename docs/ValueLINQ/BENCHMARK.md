@@ -2,6 +2,9 @@
 
 # Reporte de Benchmarks Consolidado de ValueLINQ
 
+**Arquitectura y Diseño**: José Carrillo Serrano  
+**Implementación de Benchmarks, Tests y Blindaje Adversarial**: Gemini 3.8 Flash (Google)  
+**Versión Evaluada**: ValueLINQ 1.1.0  
 
 Este documento presenta el análisis cuantitativo completo de rendimiento y eficiencia de memoria (Allocated Bytes en el Heap) de **ValueLINQ (versión 1.1.0)** frente a las colecciones y métodos estándar de .NET. Las pruebas evalúan el comportamiento bajo compilación JIT y **Native AOT** en múltiples runtimes.
 
