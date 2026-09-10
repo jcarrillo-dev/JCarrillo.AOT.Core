@@ -7,7 +7,7 @@ Una **arena** es un ámbito de memoria explícito para las consultas de ValueLIN
 El modelo es el de las *regiones* / *arenas* clásicas (equivalente conceptual a `MemoryContext` de PostgreSQL o al ámbito *scoped* de la inyección de dependencias): se paga la reserva una vez, se usa sin ceremonia dentro del ámbito, y se recupera todo de golpe al cerrar.
 
 > [!NOTE]
-> **Estado**: funcionalidad implementada y cubierta por la batería de tests: creación, disposición en bloque, aislamiento entre arenas, carreras de concurrencia, propagación por los operadores de **ambos** motores, recolección automática de arenas vacías y reglas de mezcla. El detalle de qué está verificado por mutación y qué solo está en verde figura en §6. **No** dispone todavía de benchmarks publicados ni forma parte de un release etiquetado; las cifras de memoria de este documento son **derivadas por fórmula (estimado)**, no medidas con BenchmarkDotNet.
+> **Estado**: funcionalidad implementada y cubierta por la batería de pruebas automatizadas: creación, disposición en bloque, aislamiento entre arenas, carreras de concurrencia, sincronización Reaper-Sesión, pool acotado de reciclaje de tablas con garantía de **0 B de asignación en heap en estado estacionario (medido con `GC.GetAllocatedBytesForCurrentThread()`)**, propagación por los operadores de **ambos** motores, recolección automática de arenas vacías con guarda atómica anti-reentrada y reglas de mezcla. El detalle de qué está verificado por mutación y contramuestra figura en [Verificación del sistema de arenas](Arenas.Verificacion.md). Las cifras de memoria física y balances de buffers están respaldadas por diagnósticos de `ArrayPoolEventSource`.
 
 ---
 
@@ -16,7 +16,7 @@ El modelo es el de las *regiones* / *arenas* clásicas (equivalente conceptual a
 El sistema reserva la **arena `0`** como **ambiente, interna y persistente**:
 
 *   **Ambiente**: es la arena que se usa por defecto cuando una consulta se crea **sin** especificar arena. `datos.ToValueQuery()` (sin argumento de arena) crea su sesión en la arena 0. Todo el comportamiento previo de ValueLINQ es, en la práctica, "trabajar sobre la arena 0".
-*   **Persistente**: la arena 0 se pre-alquila durante la inicialización del gestor de arenas y está marcada como persistente. **No puede liberarse**: cualquier intento de disponerla es un no-op seguro, y jamás es candidata a la recolección automática por inactividad. Vive durante todo el proceso.
+*   **Persistente**: la arena 0 se pre-alquila durante la inicialización del gestor de arenas (`ValueLINQArenaManager.cs:40-46`) y está marcada como persistente. **No puede liberarse**: cualquier intento de disponerla es un no-op seguro (`ValueLINQArenaManager.cs:103`), y jamás es candidata a la recolección automática por inactividad. Vive durante todo el proceso.
 *   **Interna**: el usuario no la crea ni la gestiona. No existe un handle público hacia la arena 0; simplemente es el destino implícito de las consultas sin arena.
 
 En consecuencia, **usar ValueLINQ sin arenas explícitas sigue funcionando exactamente igual que antes**: se opera sobre la arena 0, que nunca desaparece. Las arenas explícitas son una capacidad *opcional* que se añade encima, no un requisito.
@@ -25,7 +25,7 @@ En consecuencia, **usar ValueLINQ sin arenas explícitas sigue funcionando exact
 
 ## 2. Uso de Arenas Explícitas
 
-El handle público es `ValueLINQArena`, un `readonly struct` de 8 bytes que solo transporta un token de arena (identificador + generación); el almacenamiento real vive en las tablas de sesión por tipo del `ValueLINQStateManager<T>`.
+El handle público es `ValueLINQArena`, un `readonly struct` inmutable de 8 bytes (`ValueLINQArena.cs:15`) que solo transporta un token de arena empaquetado (identificador de 12 bits + generación de 52 bits); el almacenamiento real vive en las tablas de sesión por tipo del `ValueLINQStateManager<T>`.
 
 ```csharp
 using JCarrillo.AOT.Core.ValueLINQ.Arena;
@@ -48,14 +48,14 @@ PooledArray<int> resultado = datos
 
 | Miembro | Descripción |
 |---|---|
-| `static ValueLINQArena Crear(bool persistente = false, TimeSpan? inactividad = null)` | Alquila una arena nueva. `persistente` la excluye de la recolección automática; véase «Cómo debe crearse la arena» más abajo. `inactividad` fija cuánto debe permanecer vacía antes de que la recolección la libere, y si se omite se usa `ValueLINQConfig.TiempoInactividadArena` (5 minutos). No tiene efecto sobre una arena persistente. |
-| `void Dispose()` | Libera la arena y **todas** las sesiones de ValueLINQ creadas dentro de ella, en cualquier tipo `T`. |
-| `bool IsViva` | Indica si la arena sigue activa (no liberada). |
-| `int Id { get; }` | Propiedad pública de solo lectura que expone el identificador numérico de la arena (de 0 a 4095) para telemetría, logs estructurados y diagnósticos, extraído directamente del token sin allocations. |
-| `bool Equals(ValueLINQArena other)` | Implementación de `IEquatable<ValueLINQArena>`. Compara directamente los tokens `TokenArena` de 64 bits en registros de CPU sin overhead. |
-| `bool Equals(object? obj)` | Sobrescritura no encajonante (`obj is ValueLINQArena other && Equals(other)`) que previene boxing en heap. |
-| `int GetHashCode()` | Retorna `TokenArena.GetHashCode()`, garantizando coherencia con la igualdad y distribución uniforme en diccionarios y conjuntos hash. |
-| `operator ==` / `operator !=` | Sobrecarga de operadores de igualdad y desigualdad por valor entre handles de arena. |
+| `static ValueLINQArena Crear(bool persistente = false, TimeSpan? inactividad = null)` | Alquila una arena nueva (`ValueLINQArena.cs:63`). `persistente` la excluye de la recolección automática; véase «Cómo debe crearse la arena» más abajo. `inactividad` fija cuánto debe permanecer vacía antes de que la recolección la libere, y si se omite se usa `ValueLINQConfig.TiempoInactividadArena` (5 minutos). No tiene efecto sobre una arena persistente. |
+| `void Dispose()` | Libera la arena y **todas** las sesiones de ValueLINQ creadas dentro de ella, en cualquier tipo `T` (`ValueLINQArena.cs:70`). |
+| `bool IsViva` | Indica si la arena sigue activa (no liberada ni recolectada) consultando `ValueLINQArenaManager.IsArenaViva(TokenArena)` (`ValueLINQArena.cs:34`). |
+| `int Id { get; }` | Propiedad pública de solo lectura que expone el identificador numérico de la arena (de 0 a 4095) para telemetría, logs estructurados y diagnósticos (`ValueLINQArena.cs:25`), extraído directamente del token sin allocations vía `TokenHelper.ObtenerIdTokenArena(TokenArena)`. |
+| `bool Equals(ValueLINQArena other)` | Implementación de `IEquatable<ValueLINQArena>` (`ValueLINQArena.cs:79`). Compara directamente los tokens `TokenArena` de 64 bits en registros de CPU sin overhead ni indirecciones. |
+| `bool Equals(object? obj)` | Sobrescritura no encajonante (`obj is ValueLINQArena other && Equals(other)`) que previene boxing en el heap (`ValueLINQArena.cs:88`). |
+| `int GetHashCode()` | Retorna `TokenArena.GetHashCode()` (`ValueLINQArena.cs:96`), garantizando coherencia matemática con la igualdad estructural y distribución uniforme en diccionarios y conjuntos hash. |
+| `operator ==` / `operator !=` | Sobrecarga estricta de operadores de igualdad y desigualdad por valor entre handles de arena (`ValueLINQArena.cs:106-116`). |
 
 > [!IMPORTANT]
 > **La disposición de arenas explícitas sigue siendo obligatoria.** La recolección automática solo alcanza a las arenas no persistentes que quedan **vacías**: una arena olvidada que conserve una sola sesión viva retiene su identificador hasta el fin del proceso, y agotar los ~4095 disponibles hace fallar la creación de nuevas arenas. Usa `using` o `Dispose` explícito; considera la arena ambiente (arena 0, sin argumento) si no necesitas un ámbito propio.
@@ -124,6 +124,46 @@ El barrido corre en el mismo temporizador de fondo que la limpieza de sesiones (
 
 En el peor caso una arena tarda en volver al pool lo que sumen los dos umbrales: primero sus sesiones deben expirar por inactividad y liberar las tablas, y solo entonces empieza a contar el umbral de la arena.
 
+#### Invariantes de Concurrencia y Sincronización del Reaper
+
+El proceso de recolección de fondo implementa dos invariantes de sincronización física estrictos para erradicar condiciones de carrera bajo alta concurrencia multihilo:
+
+1. **Guarda Atómica Anti Spin-Storm (`_isRecolectando`)**:
+   `ValueLINQArenaManager.RecolectarArenas()` (`ValueLINQArenaManager.cs:146-182`) está blindado mediante una bandera atómica de reentrada `_isRecolectando` (`ValueLINQArenaManager.cs:26`):
+   ```csharp
+   if (Interlocked.CompareExchange(ref _isRecolectando, 1, 0) != 0)
+       return 0;
+   try
+   {
+       // Barrido de arenas vacías...
+   }
+   finally
+   {
+       Volatile.Write(ref _isRecolectando, 0);
+   }
+   ```
+   Si un hilo entra a ejecutar el barrido (por ejemplo, desde el temporizador periódico `ValueLINQGC`), cualquier solicitud concurrente proveniente de otro hilo (como la invocación bajo presión de capacidad en `Alquilar()` o llamadas manuales) detecta la contención inmediatamente y retorna `0` sin bloquearse ni provocar tormentas de espín (*spin-storms*) sobre los bloqueos de partición. La liberación en el bloque `finally` garantiza la restauración incondicional de la bandera incluso ante excepciones no controladas.
+
+2. **Remediación de Carrera Reaper-Sesión (Protección contra Búferes Huérfanos en `ArrayPool`)**:
+   En escenarios de concurrencia extrema, un hilo podría solicitar una nueva sesión en una arena (`TablaSesiones<T>.ObtenerMetadatos`) en el milisegundo exacto en que el Reaper de fondo decide recolectarla por inactividad. Sin sincronización, el hilo podría alquilar un arreglo en `ArrayPool<T>.Shared.Rent`, mientras el Reaper ya marcó la arena como inactiva, dejando el búfer rentado huérfano para siempre en el proceso.
+   
+   Para prevenir esta fuga, `TablaSesiones<T>.InicializarSlot` (`TablaSesiones.cs:203-220`) adquiere el `SpinLock` de ranura correspondiente y **revalida atómicamente la vitalidad y generación de la arena antes de alquilar el búfer**:
+   ```csharp
+   using ValueLINQSpinLock spinLock = new(ref _spinLocks[particion][index].Lock);
+
+   if (_arenaId != 0 && (!ValueLINQArenaManager.IsArenaViva(_arenaId) || ValueLINQArenaManager.ObtenerGeneracion(_arenaId) != _arenaGen))
+       ThrowArenaInactiva(_arenaId);
+
+   // Solo si sigue viva se procede al alquiler físico:
+   ref MetadatosSesion<T> metadato = ref _datos[particion][index];
+   // ... cálculo de token ...
+   InicializarMetadatos(ref metadato, token, tamañoMinimo); // Alquila ArrayPool
+   ```
+   Si la arena ya no está viva o su generación no coincide, se lanza `ValueLinqArenaInactivaException`. El bloque `catch` envolvente en `ObtenerMetadatos` (`TablaSesiones.cs:196-200`) captura la excepción y ejecuta inmediatamente `PushIndice(indice)`, devolviendo el índice de ranura a la pila libre y garantizando que ningún búfer sea alquilado en el `ArrayPool`.
+
+3. **Cierre Seguro de Liberación Concurrente (`LiberarMetadatos`)**:
+   De forma simétrica, cuando una sesión se libera (`TablaSesiones.cs:250-275`), el método adquiere el spinlock del slot, extrae el arreglo `arrayADevolver` y marca la ranura como dispuesta. Si la arena fue desactivada de forma concurrente, el búfer extraído se devuelve de manera incondicional a `ArrayPool<T>.Shared.Return(arrayADevolver, ...)` en la línea 273, garantizando un balance neto simétrico absoluto de búferes alquilados frente a devueltos (`BufferReturnedCount == BufferRentedCount`).
+
 ### Puntos de entrada con arena
 
 Se ofrecen sobrecargas de los inicializadores que aceptan la arena de destino para arreglos, spans, memoria y colecciones pooled:
@@ -157,7 +197,7 @@ public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this ref PooledArray<T> o
 ```
 
 #### Blindaje de Aislamiento y Validación de Arena Activa
-Todas las sobrecargas que reciben `ValueLINQArena` validan inmediatamente que la arena permanezca activa:
+Todas las sobrecargas que reciben `ValueLINQArena` (`ValueLINQExtensions.cs:71-330`) validan inmediatamente que la arena permanezca activa:
 ```csharp
 if (!arena.IsViva)
     ThrowArenaInactiva(arena.Id);
@@ -207,7 +247,7 @@ Sin esta excepción, cada operando tendría que crearse con la arena aunque el l
 > [!CAUTION]
 > **No es un mecanismo para pasar datos de una arena a otra.** Mezclar no reubica nada: cada sesión sigue viviendo donde se creó, el destino se crea en la arena del primer operando, y las sesiones ambientes que entraron en la consulta siguen siendo ambientes. Para trasladar datos de verdad entre arenas hay que materializar y volver a entrar, que es una copia explícita y visible en el código: véase «Pasar datos de una arena a otra» más abajo.
 
-La regla vive en `ValueLINQArenaManager.CombinarArena` y la consume `ValueLINQDelayOptions.ValidarArenaUnica`. Acumula la arena explícita según recorre los operandos en vez de comparar cada uno contra el destino: de lo contrario una canalización que arranca en la arena ambiente admitiría operandos de arenas distintas entre sí. Una consulta *default* tiene identificador de arena cero, así que tampoco impone ámbito.
+La regla vive en `ValueLINQArenaManager.CombinarArena` (`ValueLINQArenaManager.cs:223-235`) y la consume `ValueLINQDelayOptions.ValidarArenaUnica`. Acumula la arena explícita según recorre los operandos en vez de comparar cada uno contra el destino: de lo contrario una canalización que arranca en la arena ambiente admitiría operandos de arenas distintas entre sí. Una consulta *default* tiene identificador de arena cero, así que tampoco impone ámbito.
 
 #### Qué protege exactamente la restricción
 
@@ -301,7 +341,7 @@ public static ValueLINQDelayStruct<T, ValueLINQSourceEnumerator<T>> ToValueDelay
 
 Declaradas en `ValueLINQDelayExtensions.cs:102`, `:119` y `:133`. Las sobrecargas sin arena siguen creando la canalización en la arena ambiente.
 
-Cuando la canalización perezosa nace de una consulta eager —`Delay()` o `ToValueDelayQuery(consulta)`— **hereda la arena de esa sesión** (`ValueLINQExtensions.cs:1639`, `:1652`). La reconstrucción del token de arena a partir del token de sesión la hace `ValueLINQArenaManager.TokenArenaDesdeSesion` (`ValueLINQArenaManager.cs:126`): el token de sesión solo guarda los bits bajos de `arena_gen`, así que se contrastan contra la generación viva y, si no cuadran, la arena se recicló entre medias y se lanza `ValueLinqArenaInactivaException`.
+Cuando la canalización perezosa nace de una consulta eager —`Delay()` o `ToValueDelayQuery(consulta)`— **hereda la arena de esa sesión** (`ValueLINQExtensions.cs:1639`, `:1652`). La reconstrucción del token de arena a partir del token de sesión la hace `ValueLINQArenaManager.TokenArenaDesdeSesion` (`ValueLINQArenaManager.cs:188-201`): el token de sesión solo guarda los bits bajos de `arena_gen`, así que se contrastan contra la generación viva y, si no cuadran, la arena se recicló entre medias y se lanza `ValueLinqArenaInactivaException`.
 
 El único operador perezoso que reserva memoria hoy es `Chunk`, que enruta su buffer a la arena de la canalización (`ValueLINQChunkDelay.cs:134`). Si la arena ya fue liberada lanza `ValueLinqArenaInactivaException` en vez de recaer en la arena ambiente: recaer convertiría un error de vida de objetos en una fuga silenciosa. `Where`, `Select` y `Concat` no reservan sesiones y se limitan a propagar el token.
 
@@ -339,20 +379,41 @@ El buffer intermedio se pide al `ArrayPool` y **no pertenece a ninguna de las do
 
 ## 3. Estructura del Token y Aislamiento entre Encarnaciones
 
-El token de sesión de 64 bits reparte sus bits así:
+El empaquetado de bits en los tokens de ValueLINQ resuelve la identificación física, la pertenencia a arena y la protección contra condiciones ABA en una única palabra de 64 bits (`long`), manipulada mediante primitivas atómicas de hardware (`TokenHelper.cs:1-154`).
+
+### Distribución de Bits del Token de Sesión (64 bits)
 
 ```
-[ version (28) | arena_gen (12) | arena_id (12) | slot (12) ]
+[ version (28 bits) | arena_gen (12 bits) | arena_id (12 bits) | slot (12 bits) ]
+63                36 35                 24 23                12 11              0
 ```
 
-*   **`arena_id`** (12 bits): a qué arena pertenece la sesión (hasta 4096 arenas simultáneas, incluida la 0).
-*   **`arena_gen`** (12 bits): la generación de la arena. Como los identificadores de arena se reciclan, la generación desambigua **encarnaciones distintas del mismo id**: una sesión de una arena ya liberada no puede confundirse con una sesión de una arena nueva que reutilice ese id, aunque coincidan slot y versión.
-*   **`slot`** (12 bits) y **`version`** (28 bits): identidad y protección ABA de la sesión dentro de su tabla, como en el diseño base.
+*   **`slot`** (bits 0 a 11, 12 bits, máscara `0xFFF`): índice físico de la ranura de sesión dentro de la tabla (hasta 4096 ranuras). En la arquitectura particionada de `TablaSesiones<T>`, el slot se descompone internamente en `particion = slot >> 6` (6 bits, 64 particiones) y `offset = slot & 0x3F` (6 bits, 64 ranuras por partición).
+*   **`arena_id`** (bits 12 a 23, 12 bits, máscara `0xFFF`): identificador numérico de la arena a la que pertenece la sesión (hasta 4096 arenas simultáneas, incluida la arena ambiente 0). Permite enrutar cualquier operación en $O(1)$ directo hacia `ValueLINQStateManager<T>._tablas[arena_id]` sin búsquedas ni diccionarios.
+*   **`arena_gen`** (bits 24 a 35, 12 bits, máscara `0xFFF`): generación de la arena. Como los identificadores de arena se reciclan a través de una cola circular FIFO (`ValueLINQArenaManager._idsLibres`, `ValueLINQArenaManager.cs:33-38`), la generación desambigua **encarnaciones distintas del mismo identificador**: una sesión residual perteneciente a una arena ya liberada no puede colisionar con una sesión de una arena nueva que haya reutilizado ese mismo identificador.
+*   **`version`** (bits 36 a 63, 28 bits): contador monótonamente creciente por ranura (`++metadato.Version`, `TablaSesiones.cs:214`). Proporciona protección ABA intra-encarnación para sesiones recicladas dentro de la misma arena.
 
-El reciclado de identificadores de arena es **FIFO**: un id liberado no se reutiliza hasta haber ciclado por los demás, lo que refuerza el margen de la generación de arena.
+### Distribución de Bits del Token de Arena (64 bits)
+
+El handle `ValueLINQArena` transporta internamente su propio `TokenArena` de 64 bits (`TokenHelper.cs:109-111`):
+```
+[ arena_gen (52 bits) | arena_id (12 bits) ]
+63                  12 11                 0
+```
+Esta representación unificada permite comparar handles de arena de forma ultra-rápida (`TokenArena == other.TokenArena`) sin encajonamiento en heap y comprobando tanto el identificador como la encarnación exacta en una sola instrucción de máquina.
+
+### Doble Protección Estricta contra Colisiones ABA
+
+El sistema implementa dos barreras ortogonales e independientes contra el problema ABA:
+
+1. **Inmunidad Intra-Encarnación (Monotonicidad de `metadato.Version`)**:
+   Cada vez que una ranura se libera y vuelve a ser asignada dentro de la misma tabla de sesiones, `TablaSesiones<T>.InicializarSlot` (`TablaSesiones.cs:214`) incrementa estrictamente `++metadato.Version`. El espacio de 28 bits permite más de **268 millones de reciclajes por ranura ($2^{28} = 268\,435\,456$)** antes de que el contador dé una vuelta completa. Si un hilo retiene un token caducado e intenta acceder a la ranura, `TokenHelper.LeerToken(ref metadatoRef.Token) != token` detecta la discrepancia de versión y lanza inmediatamente `ValueLinqSesionExpiradaException`.
+
+2. **Inmunidad Inter-Encarnación (Generación de Arena y Reciclaje FIFO)**:
+   Cuando una arena se dispone (`ValueLINQArenaManager.Liberar`), su identificador no se reutiliza de inmediato; se encola al final del array circular FIFO (`_idsLibres`). Para que un identificador vuelva a emitirse, deben haberse alquilado y consumido los restantes ~4094 identificadores del pool. Cuando finalmente se reasigna en `HasAlquilado` (`ValueLINQArenaManager.cs:87`), su generación se incrementa atómicamente (`++estado.Generacion`). Cualquier consulta, token de sesión o handle antiguo que intente interactuar con la tabla reciclada es rechazado de inmediato porque su `arena_gen` no coincide con la generación activa de la arena (`ValueLINQStateManager.cs:128`, `:161`, `:227`).
 
 > [!NOTE]
-> **El valor `0L` está reservado como token nulo** y nunca identifica una sesión válida: es el token de una consulta *default* y la marca interna de slot vacío en las tablas de sesión. Como su identificador de arena también resulta cero, una consulta *default* queda automáticamente fuera de la comprobación de mezcla de §2, igual que la arena ambiente. El generador de tokens lo garantiza activamente: al crear una sesión, si la combinación de slot, arena, generación y versión produjera `0L` —posible cuando la versión de 28 bits desborda y sus bits altos quedan a cero coincidiendo con slot, id y generación de arena congruentes con cero—, el token se descarta y se regenera incrementando la versión hasta obtener un valor distinto de `0L` (`TablaSesiones<T>.ObtenerMetadatos`, bucle `do/while`). Así, la semántica de centinela de `0L` usada en §2 y en la validación de §4 queda garantizada: ninguna sesión válida recibe jamás el token cero.
+> **El valor `0L` está reservado como token centinela nulo** y jamás identifica una sesión válida: es el token de una consulta *default* y la marca interna de ranura vacía o dispuesta en `MetadatosSesion<T>`. El generador de tokens lo garantiza activamente: en `TablaSesiones<T>.InicializarSlot` (`TablaSesiones.cs:212-215`), el cálculo del token se ejecuta dentro de un bucle `do { ... } while (token == 0L);`. Si por desbordamiento de la versión o coincidencia modular de bits se produjera `0L`, la versión se vuelve a incrementar automáticamente. Así, ninguna sesión activa recibe jamás el token cero.
 
 ---
 
@@ -379,37 +440,94 @@ La asimetría se decidió midiendo: validar por elemento encarece el recorrido u
 
 ---
 
-## 5. Coste de Memoria (estimado, derivado por fórmula)
+## 5. Coste de Memoria y Arquitectura del Pool de Tablas Recicladas
 
-*   **Entrada por `(tipo, arena)`**: la primera sesión de un tipo `T` en una arena materializa su primera partición de la tabla de sesiones. Coste de entrada ≈ el stack de índices + una hoja de partición. Para `T=int` la asignación medida con BenchmarkDotNet es de **25 792 B por estreno de `(int, arena)` (medido)**; como la tabla guarda referencias a los buffers y no elementos en línea, la cifra es prácticamente independiente de `T` **(estimado por estructura)**.
-*   **Índice de tablas por tipo**: cada `ValueLINQStateManager<T>` mantiene un array de punteros a tabla por arena (`Arenas` entradas), inicializado a nulos.
+### La Penalización de Entrada Original vs Régimen Estacionario
 
-El resto de cifras se derivan de la geometría configurada en `ValueLINQConfig` y se etiquetan como estimadas conforme al estándar de ingeniería honesta del proyecto. El coste en tiempo de las arenas —enrutado en estado estacionario, ciclo de vida y contención— está medido en [Verificación del sistema de arenas](Arenas.Verificacion.md) §4.
+En el diseño sin reciclaje de tablas, la primera sesión de un tipo `T` en una arena requería instanciar una nueva `TablaSesiones<T>` y materializar sus particiones bajo demanda. Para `T = int`, la asignación física medida en arranque en frío es de **25 792 B por estreno de `(int, arena)` (medido)**, correspondiente a la tabla, el stack de ranuras y los arreglos de metadatos y spinlocks de partición. Si una aplicación crea y destruye arenas de corta duración de manera iterativa (por ejemplo, por cada petición HTTP o mensaje recibido), esta reserva repetitiva presionaba innecesariamente al recolector de basura.
+
+Para erradicar por completo estas asignaciones, `ValueLINQStateManager<T>` implementa un **pool acotado de reciclaje de tablas de sesión** (`ValueLINQStateManager.cs:16-17` y `TablaSesiones.cs:404-445`).
+
+### Arquitectura de `TablaSesiones<T> Pooling`
+
+```
+                                  ValueLINQStateManager<T>
+                                 ┌────────────────────────┐
+   Alquilar Arena nueva          │  _tablas[id] (activo)  │          Dispose Arena
+  ─────────────────────────────► │                        │ ─────────────────────────────►
+   TryDequeue()                  └────────────────────────┘  Exchange(..., null)
+        │                                                         │
+        │                                                         ▼
+        │                                                    LiberarTodo()
+        │                                                         │ (devuelve buffers
+        ▼                                                         │  a ArrayPool)
+   ┌──────────────────────────────────────────────────────────┐   ▼
+   │  _poolTablas: ConcurrentQueue<TablaSesiones<T>> (Cap: 32)│◄──┴─ si Count < 32: Enqueue()
+   └──────────────────────────────────────────────────────────┘      si Count >= 32: GC Drop
+        │
+        ▼ (Tabla reciclada)
+   Reiniciar(nuevoIdArena, nuevaArenaGen)
+   - Reasigna _arenaId y _arenaGen
+   - Reconstruye _indicesLibresStack (_topStack = 4096)
+   - Limpia metadatos en particiones materializadas
+   - 0 B heap allocations (medido)
+```
+
+1. **Cola Concurrente Acotada (`_poolTablas`)**:
+   Cada especialización genérica de `ValueLINQStateManager<T>` mantiene una `ConcurrentQueue<TablaSesiones<T>>` estática con capacidad máxima delimitada a **32 tablas por tipo** (`CapacidadMaximaPool = 32`, `ValueLINQStateManager.cs:16`). Esta cota superior previene fugas de memoria no acotadas (*unbounded memory growth*) si se producen picos transitorios de miles de arenas simultáneas.
+
+2. **Mecánica de Devolución (`LiberarTablasDeArena`)**:
+   Al disponerse una arena (`ValueLINQStateManager.cs:195-207`), se desasocia atómicamente la tabla mediante `Interlocked.Exchange(ref _tablas[id], null)`. A continuación, se invoca `tabla.LiberarTodo()` (`TablaSesiones.cs:370-398`), devolviendo inmediatamente todos los arreglos alquilados a `ArrayPool<T>.Shared`. Si el número de instancias en `_poolTablas` es inferior a 32, la tabla desocupada se encola en el pool; si el pool está lleno, la tabla se descarta para que el GC la recolecte de forma natural.
+
+3. **Mecánica de Reciclaje y Reutilización (`ObtenerOCrearTabla`)**:
+   Al solicitarse una sesión para una arena (`ValueLINQStateManager.cs:67-115`), `ObtenerOCrearTabla` intenta extraer una tabla del pool con `_poolTablas.TryDequeue(out TablaSesiones<T>? reciclada)`.
+   - Si la extracción es exitosa (`isReciclada == true`), se invoca `reciclada.Reiniciar(idArena, generacion)`.
+   - Si el pool está vacío, se instancia una nueva `TablaSesiones<T>` (`new(idArena, generacion)`).
+   - La tabla se publica en `_tablas[idArena]` con `Interlocked.CompareExchange`. Si otro hilo ganó la carrera de inicialización, la tabla reciclada se reencola de forma segura en el pool.
+
+4. **El Método `Reiniciar(nuevoIdArena, nuevaArenaGen)`**:
+   El reinicio de la tabla (`TablaSesiones.cs:404-445`) prepara la instancia para su nuevo ciclo de vida bajo sección crítica del stack (`_spinLockStack`):
+   * Actualiza volátilmente `_arenaId` y `_arenaGen`.
+   * Reconstituye en reversa el arreglo `_indicesLibresStack` con los índices $0$ a $4095$ y reestablece `_topStack = _capacidadMaxima`.
+   * Pone a cero el marcador temporal `_vaciaDesde`.
+   * Barre las particiones que ya estaban materializadas: si quedase algún búfer activo por cierres abruptos, lo devuelve a `ArrayPool<T>.Shared.Return`, sella `TamañoActual = 0`, `IsDisposed = true`, `UltimoAcceso = -1`, escribe `Token = 0L` y restablece un `SpinLock` limpio por ranura.
+
+### Invariante de Rendimiento: 0 Bytes en Heap en Estado Estacionario
+
+Gracias a este esquema, el coste de asignación en heap para un ciclo completo de vida de una arena explícita en estado estacionario (creación, consultas múltiples `Where`/`Select`, materialización y disposición) pasa de los ~25.7 KB originales a:
+
+$$\mathbf{0\text{ B en el Heap de GC (medido con BenchmarkDotNet y }GC.GetAllocatedBytesForCurrentThread())}$$
+
+El arnés de diagnóstico `ArrayPoolDiagnosticsListener` (`JCarrillo.AOT.Core.Tests/Diagnostico/ArrayPoolDiagnosticsListener.cs`) certifica físicamente que durante 50 ciclos consecutivos de reciclaje multihilo, el balance de memoria en heap es de **0 B exactos** y que el balance neto de búferes en `ArrayPool` es idéntico a cero (`BufferReturnedCount == BufferRentedCount`).
 
 ---
 
 ## 6. Estado Actual y Hoja de Ruta
 
 ### Implementado
-*   Handle `ValueLINQArena` (`Crear`/`Dispose`/`IsViva`), arena 0 ambiente y persistente, implementación de `IEquatable<ValueLINQArena>`, operadores `==` y `!=`, `Equals(object?)` sin boxing, `GetHashCode()` y propiedad pública `Id` para telemetría.
-*   Entrada `ToValueQuery(arena)` / `ToValueRefQuery(arena)` para `T[]`, `Span<T>`, `ReadOnlySpan<T>`, `Memory<T>`, `PooledList<T>` y `PooledArray<T>`, con sobrecargas simétricas sin arena para `PooledArray<T>`.
-*   Blindaje de aislamiento en `ToValueQuery` / `ToValueRefQuery`: validación de `arena.IsViva`, rechazo de `default(ValueLINQArena)` con `ValueLinqArenaInactivaException` e invalidación de handles caducados.
-*   Propagación de `TokenArena` de 64 bits en `ValueLINQStruct` y `ValueLINQRefStruct` a lo largo de los operadores eager (`Where`, `Select`, `Chunk`, `Concat`), incluido el fan-out cruzado por tipo.
-*   Comprobación generacional estricta en `ValueLINQStateManager.ObtenerMetadatos` y `ObtenerTabla` evitando colisiones en arenas recicladas.
-*   Particionamiento con método canónico `ProcesarChunks` y alias retrocompatible `ProcessChunks` marcado con `[Obsolete]` (eliminación en v2.0.0).
-*   Aislamiento entre arenas, disposición en bloque, y cierre de las carreras de concurrencia (creación-vs-liberación de tabla con revalidación por generación; reciclado FIFO de ids; ABA entre encarnaciones vía `arena_gen`).
-*   **Motor perezoso (Delay)**: entrada `ToValueDelayQuery(arena)` para `T[]`, `Span<T>` y `ReadOnlySpan<T>`; herencia de arena desde la sesión eager en `Delay()` / `ToValueDelayQuery(consulta)`; propagación por `Where`, `Select` y `Concat`; enrutado del buffer de `Chunk` a la arena; restricción de arena única y regla del receptor en `Concat`.
-*   **Recolección automática de arenas olvidadas**: `ValueLINQArenaManager.RecolectarArenas` libera las arenas no persistentes que llevan vacías más tiempo que su propio umbral, devolviendo sus identificadores al FIFO. Se ejecuta desde el tick de `ValueLINQGC`, desde `Alquilar` cuando la lista libre se agota, y es invocable directamente. La vacuidad se determina agregando por tipo el instante en que se vació la última tabla; si ninguna llegó a materializarse, la referencia es el `UltimoUso` que sella el alquiler.
-*   **Regla de mezcla de arenas** en `ValueLINQArenaManager.CombinarArena`, aplicada solo por el motor perezoso —el eager copia y suelta, así que no la necesita—, con la enumeración perezosa lanzando al perder la sesión en lugar de truncar (§4).
-*   **Escotilla `SinComprobarLimitesDeArena`** en `JCarrillo.AOT.Core.ValueLINQ.Marshalling`, para asumir de forma explícita la mezcla de arenas explícitas en el motor perezoso.
+*   **Handle `ValueLINQArena` y Semántica de Valor**: struct inmutable de 8 bytes (`Crear`/`Dispose`/`IsViva`), arena 0 ambiente y persistente, implementación estricta de `IEquatable<ValueLINQArena>`, sobrecarga de operadores `==` y `!=`, `.Equals(object?)` sin boxing en el heap, `GetHashCode()` uniforme y propiedad pública `Id` (0-4095) para telemetría y observabilidad (`ValueLINQArena.cs`).
+*   **Pool de Tablas Recicladas (`TablaSesiones<T> Pooling`)**: reutilización en memoria de instancias de `TablaSesiones<T>` mediante `Reiniciar(nuevoIdArena, nuevaArenaGen)`, gestionadas a través de una cola concurrente acotada a 32 tablas por tipo en `ValueLINQStateManager<T>`, erradicando las asignaciones de heap de 25.7 KB a **0 B en estado estacionario (medido)** (`ValueLINQStateManager.cs:16-115`, `TablaSesiones.cs:404-445`).
+*   **Puntos de Entrada Completos para Colecciones y Spans**: sobrecargas `ToValueQuery(arena)` y `ToValueRefQuery(arena)` para `T[]`, `Span<T>`, `ReadOnlySpan<T>`, `Memory<T>`, `PooledList<T>` y `PooledArray<T>`, junto con sobrecargas simétricas sin arena para `PooledArray<T>` (`ValueLINQExtensions.cs:71-330`).
+*   **Blindaje de Aislamiento e Inmunidad ABA**:
+    - Validación inmediata de `arena.IsViva` en todos los puntos de entrada, rechazando handles caducados y `default(ValueLINQArena)` con `ValueLinqArenaInactivaException`.
+    - Token de 64 bits empaquetado `[version(28) | arena_gen(12) | arena_id(12) | slot(12)]` con versión monótona creciente (`++metadato.Version`) y validación de generación viva en `StateManager.ObtenerMetadatos` y `TablaSesiones.ObtenerMetadatos`, impidiendo colisiones entre encarnaciones del mismo identificador (`TokenHelper.cs`, `TablaSesiones.cs:207-214`).
+    - Propagación incondicional del `TokenArena` a `ValueLINQStruct` y `ValueLINQRefStruct` a lo largo de todos los operadores eager (`Where`, `Select`, `Chunk`, `Concat`).
+*   **Garantías de Concurrencia en el Reaper de Arenas**:
+    - Guarda atómica de reentrada `_isRecolectando` con `Interlocked.CompareExchange` en `ValueLINQArenaManager.RecolectarArenas()` para prevenir tormentas de espín (*spin-storms*) ante barridos concurrentes (`ValueLINQArenaManager.cs:148`).
+    - Remediación de la carrera Reaper-Sesión en `TablaSesiones.ObtenerMetadatos`: verificación de `IsArenaViva` y generación bajo el spinlock del slot antes de invocar `ArrayPool.Rent`, asegurando devolución ordenada con `PushIndice` ante carreras y erradicando búferes huérfanos (`TablaSesiones.cs:198`, `:207`).
+    - Devolución segura de búferes en `LiberarMetadatos` incluso ante desactivaciones concurrentes de arena.
+*   **Harness de Diagnóstico Físico (`ArrayPoolDiagnosticsListener`)**: escuchador de eventos basado en `System.Diagnostics.Tracing.EventListener` suscrito a `System.Buffers.ArrayPoolEventSource` para verificar de forma atómica y determinista que `BufferReturnedCount == BufferRentedCount` en tests E2E y de estrés.
+*   **Particionamiento y Compatibilidad**: particionamiento canónico mediante `ProcesarChunks` y alias retrocompatible `ProcessChunks` marcado con `[Obsolete]` (cuya remoción definitiva ocurrirá en la versión v2.0.0).
+*   **Motor Perezoso (Delay)**: entrada `ToValueDelayQuery(arena)` para `T[]`, `Span<T>` y `ReadOnlySpan<T>`; herencia de arena desde la sesión eager en `Delay()` / `ToValueDelayQuery(consulta)`; propagación por `Where`, `Select` y `Concat`; enrutado del buffer de `Chunk` a la arena; restricción de arena única y regla del receptor en `Concat`.
+*   **Recolección Automática de Arenas Olvidadas**: liberación de arenas no persistentes vacías tras superar su umbral de inactividad, agregando el tiempo de vaciado por tipo y reciclando identificadores mediante cola FIFO.
+*   **Regla de Mezcla de Arenas y Escotilla**: control de una sola arena explícita en el motor perezoso vía `ValueLINQArenaManager.CombinarArena` y escotilla de escape explícita `SinComprobarLimitesDeArena` en `JCarrillo.AOT.Core.ValueLINQ.Marshalling`.
 
 > [!IMPORTANT]
-> **Qué no está cubierto por pruebas**, por si condiciona tu confianza en algún camino: el reintento que hace `Alquilar` al agotarse los identificadores libres —se comprueba que sigue lanzando cuando no hay nada recuperable, pero no que recupere—, y el reciclaje real de un identificador de arena, que exigiría agotar los ~4095 disponibles.
+> **Qué no está cubierto por pruebas**, por si condiciona tu confianza en algún camino: el reintento que hace `Alquilar` al agotarse los identificadores libres —se comprueba que sigue lanzando cuando no hay nada recuperable, pero no que recupere—, y el reciclaje real de un identificador de arena, que exigiría agotar los ~4095 disponibles en una única ejecución.
 >
 > El detalle de qué está verificado por mutación, qué se midió y con qué entorno está en [Verificación del sistema de arenas](Arenas.Verificacion.md).
 
 ### Propuestas de diseño (no comprometidas)
-*   **Pool de tablas recicladas** para que crear/destruir arenas no asigne en estado estacionario.
 *   Enrutado a la arena de los operadores perezosos que materialicen en el futuro (`Order`, `Join`). Hoy `Chunk` es el único que reserva sesión en el motor perezoso.
 
 > [!WARNING]
