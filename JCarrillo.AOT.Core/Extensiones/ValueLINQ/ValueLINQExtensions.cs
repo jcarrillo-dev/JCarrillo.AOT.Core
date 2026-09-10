@@ -134,6 +134,24 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         }
 
         /// <summary>
+        /// Convierte un span en un <see cref="ValueLINQStruct{T}"/> cuya sesión vive en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos del span.</typeparam>
+        /// <param name="origen">El span de origen.</param>
+        /// <param name="arena">La arena propietaria de la consulta y de sus sesiones intermedias.</param>
+        /// <returns>Un <see cref="ValueLINQStruct{T}"/> con los elementos del span, adscrito a la arena.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQStruct<T> ToValueQuery<T>(this Span<T> origen, ValueLINQArena arena)
+        {
+            if (!arena.IsViva)
+                ThrowArenaInactiva(arena.Id);
+
+            ValueLINQStruct<T> query = new(arena.TokenArena, origen.Length);
+            CopiarOrigenSlow<T>(query.Token, origen);
+            return query;
+        }
+
+        /// <summary>
         /// Converts a span to a <see cref="ValueLINQRefStruct{T}"/>.
         /// </summary>
         /// <typeparam name="T">The type of the elements in the span.</typeparam>
@@ -143,6 +161,24 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this Span<T> origen)
         {
             ValueLINQRefStruct<T> query = new(origen.Length);
+            CopiarOrigenSlow<T>(query.Token, origen);
+            return query;
+        }
+
+        /// <summary>
+        /// Convierte un span en un <see cref="ValueLINQRefStruct{T}"/> cuya sesión vive en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos del span.</typeparam>
+        /// <param name="origen">El span de origen.</param>
+        /// <param name="arena">La arena propietaria de la consulta y de sus sesiones intermedias.</param>
+        /// <returns>Un <see cref="ValueLINQRefStruct{T}"/> con los elementos del span, adscrito a la arena.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this Span<T> origen, ValueLINQArena arena)
+        {
+            if (!arena.IsViva)
+                ThrowArenaInactiva(arena.Id);
+
+            ValueLINQRefStruct<T> query = new(arena.TokenArena, origen.Length);
             CopiarOrigenSlow<T>(query.Token, origen);
             return query;
         }
@@ -162,6 +198,24 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         }
 
         /// <summary>
+        /// Convierte un span de solo lectura en un <see cref="ValueLINQStruct{T}"/> cuya sesión vive en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos del span de solo lectura.</typeparam>
+        /// <param name="origen">El span de solo lectura de origen.</param>
+        /// <param name="arena">La arena propietaria de la consulta y de sus sesiones intermedias.</param>
+        /// <returns>Un <see cref="ValueLINQStruct{T}"/> con los elementos del span de solo lectura, adscrito a la arena.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQStruct<T> ToValueQuery<T>(this ReadOnlySpan<T> origen, ValueLINQArena arena)
+        {
+            if (!arena.IsViva)
+                ThrowArenaInactiva(arena.Id);
+
+            ValueLINQStruct<T> query = new(arena.TokenArena, origen.Length);
+            CopiarOrigenSlow<T>(query.Token, origen);
+            return query;
+        }
+
+        /// <summary>
         /// Converts a read-only span to a <see cref="ValueLINQRefStruct{T}"/>.
         /// </summary>
         /// <typeparam name="T">The type of the elements in the read-only span.</typeparam>
@@ -171,6 +225,24 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this ReadOnlySpan<T> origen)
         {
             ValueLINQRefStruct<T> query = new(origen.Length);
+            CopiarOrigenSlow<T>(query.Token, origen);
+            return query;
+        }
+
+        /// <summary>
+        /// Convierte un span de solo lectura en un <see cref="ValueLINQRefStruct{T}"/> cuya sesión vive en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos del span de solo lectura.</typeparam>
+        /// <param name="origen">El span de solo lectura de origen.</param>
+        /// <param name="arena">La arena propietaria de la consulta y de sus sesiones intermedias.</param>
+        /// <returns>Un <see cref="ValueLINQRefStruct{T}"/> con los elementos del span de solo lectura, adscrito a la arena.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this ReadOnlySpan<T> origen, ValueLINQArena arena)
+        {
+            if (!arena.IsViva)
+                ThrowArenaInactiva(arena.Id);
+
+            ValueLINQRefStruct<T> query = new(arena.TokenArena, origen.Length);
             CopiarOrigenSlow<T>(query.Token, origen);
             return query;
         }
@@ -186,6 +258,17 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             => origen.Span.ToValueQuery();
 
         /// <summary>
+        /// Convierte una referencia a memoria en un <see cref="ValueLINQStruct{T}"/> cuya sesión vive en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos en la memoria.</typeparam>
+        /// <param name="origen">La referencia a memoria de origen.</param>
+        /// <param name="arena">La arena propietaria de la consulta y de sus sesiones intermedias.</param>
+        /// <returns>Un <see cref="ValueLINQStruct{T}"/> con los elementos de la memoria, adscrito a la arena.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQStruct<T> ToValueQuery<T>(this ref Memory<T> origen, ValueLINQArena arena)
+            => origen.Span.ToValueQuery(arena);
+
+        /// <summary>
         /// Converts a memory reference to a <see cref="ValueLINQRefStruct{T}"/>.
         /// </summary>
         /// <typeparam name="T">The type of the elements in the memory.</typeparam>
@@ -194,6 +277,17 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this ref Memory<T> origen)
             => origen.Span.ToValueRefQuery();
+
+        /// <summary>
+        /// Convierte una referencia a memoria en un <see cref="ValueLINQRefStruct{T}"/> cuya sesión vive en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos en la memoria.</typeparam>
+        /// <param name="origen">La referencia a memoria de origen.</param>
+        /// <param name="arena">La arena propietaria de la consulta y de sus sesiones intermedias.</param>
+        /// <returns>Un <see cref="ValueLINQRefStruct{T}"/> con los elementos de la memoria, adscrito a la arena.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this ref Memory<T> origen, ValueLINQArena arena)
+            => origen.Span.ToValueRefQuery(arena);
 
         /// <summary>
         /// Converts a pooled list reference to a <see cref="ValueLINQStruct{T}"/>.
@@ -206,6 +300,17 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             => origen.Span.ToValueQuery();
 
         /// <summary>
+        /// Convierte una referencia a una lista del pool en un <see cref="ValueLINQStruct{T}"/> cuya sesión vive en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos en la lista del pool.</typeparam>
+        /// <param name="origen">La referencia a la lista del pool de origen.</param>
+        /// <param name="arena">La arena propietaria de la consulta y de sus sesiones intermedias.</param>
+        /// <returns>Un <see cref="ValueLINQStruct{T}"/> con los elementos de la lista del pool, adscrito a la arena.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQStruct<T> ToValueQuery<T>(this ref PooledList<T> origen, ValueLINQArena arena)
+            => origen.Span.ToValueQuery(arena);
+
+        /// <summary>
         /// Converts a pooled list reference to a <see cref="ValueLINQRefStruct{T}"/>.
         /// </summary>
         /// <typeparam name="T">The type of the elements in the pooled list.</typeparam>
@@ -214,6 +319,59 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this ref PooledList<T> origen)
             => origen.Span.ToValueRefQuery();
+
+        /// <summary>
+        /// Convierte una referencia a una lista del pool en un <see cref="ValueLINQRefStruct{T}"/> cuya sesión vive en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos en la lista del pool.</typeparam>
+        /// <param name="origen">La referencia a la lista del pool de origen.</param>
+        /// <param name="arena">La arena propietaria de la consulta y de sus sesiones intermedias.</param>
+        /// <returns>Un <see cref="ValueLINQRefStruct{T}"/> con los elementos de la lista del pool, adscrito a la arena.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this ref PooledList<T> origen, ValueLINQArena arena)
+            => origen.Span.ToValueRefQuery(arena);
+
+        /// <summary>
+        /// Convierte una referencia a un arreglo del pool en un <see cref="ValueLINQStruct{T}"/>.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos en el arreglo del pool.</typeparam>
+        /// <param name="origen">La referencia al arreglo del pool de origen.</param>
+        /// <returns>Un <see cref="ValueLINQStruct{T}"/> con los elementos del arreglo del pool.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQStruct<T> ToValueQuery<T>(this ref PooledArray<T> origen)
+            => origen.Span.ToValueQuery();
+
+        /// <summary>
+        /// Convierte una referencia a un arreglo del pool en un <see cref="ValueLINQStruct{T}"/> cuya sesión vive en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos en el arreglo del pool.</typeparam>
+        /// <param name="origen">La referencia al arreglo del pool de origen.</param>
+        /// <param name="arena">La arena propietaria de la consulta y de sus sesiones intermedias.</param>
+        /// <returns>Un <see cref="ValueLINQStruct{T}"/> con los elementos del arreglo del pool, adscrito a la arena.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQStruct<T> ToValueQuery<T>(this ref PooledArray<T> origen, ValueLINQArena arena)
+            => origen.Span.ToValueQuery(arena);
+
+        /// <summary>
+        /// Convierte una referencia a un arreglo del pool en un <see cref="ValueLINQRefStruct{T}"/>.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos en el arreglo del pool.</typeparam>
+        /// <param name="origen">La referencia al arreglo del pool de origen.</param>
+        /// <returns>Un <see cref="ValueLINQRefStruct{T}"/> con los elementos del arreglo del pool.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this ref PooledArray<T> origen)
+            => origen.Span.ToValueRefQuery();
+
+        /// <summary>
+        /// Convierte una referencia a un arreglo del pool en un <see cref="ValueLINQRefStruct{T}"/> cuya sesión vive en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos en el arreglo del pool.</typeparam>
+        /// <param name="origen">La referencia al arreglo del pool de origen.</param>
+        /// <param name="arena">La arena propietaria de la consulta y de sus sesiones intermedias.</param>
+        /// <returns>Un <see cref="ValueLINQRefStruct{T}"/> con los elementos del arreglo del pool, adscrito a la arena.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this ref PooledArray<T> origen, ValueLINQArena arena)
+            => origen.Span.ToValueRefQuery(arena);
 
         #endregion
 
@@ -723,6 +881,24 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             where TProcessor : struct, IProcesarChunkDelegado<T>
             => ProcesarChunksSlow<T, TProcessor>(listaChunks.Token, procesarChunk);
 
+        /// <summary>
+        /// Procesa de forma eficiente fragmentos de elementos en una estructura de referencia de ValueLINQ utilizando un procesador struct.
+        /// </summary>
+        /// <remarks>
+        /// Alias retrocompatible para <see cref="ProcesarChunks{T, TProcessor}(ValueLINQRefStruct{ValueLINQStruct{T}}, TProcessor)"/>.
+        /// </remarks>
+        /// <typeparam name="T">El tipo de los elementos dentro del fragmento.</typeparam>
+        /// <typeparam name="TProcessor">El tipo del procesador que implementa <see cref="IProcesarChunkDelegado{T}"/>.</typeparam>
+        /// <param name="listaChunks">La estructura de fragmentos de origen.</param>
+        /// <param name="procesarChunk">El procesador de fragmentos.</param>
+        [Obsolete("Use ProcesarChunks en su lugar", false)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void ProcessChunks<T, TProcessor>(
+            this ValueLINQRefStruct<ValueLINQStruct<T>> listaChunks,
+            TProcessor procesarChunk)
+            where TProcessor : struct, IProcesarChunkDelegado<T>
+            => ProcesarChunks(listaChunks, procesarChunk);
+
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ProcesarChunksSlow<T, TProcessor>(long token, TProcessor procesarChunk)
             where TProcessor : struct, IProcesarChunkDelegado<T>
@@ -776,6 +952,24 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             TProcessor procesarChunk)
             where TProcessor : struct, IProcesarChunkDelegado<T>
             => ProcesarChunksSlow<T, TProcessor>(listaChunks.Token, procesarChunk);
+
+        /// <summary>
+        /// Procesa de forma eficiente fragmentos de elementos en una estructura de ValueLINQ utilizando un procesador struct.
+        /// </summary>
+        /// <remarks>
+        /// Alias retrocompatible para <see cref="ProcesarChunks{T, TProcessor}(ValueLINQStruct{ValueLINQStruct{T}}, TProcessor)"/>.
+        /// </remarks>
+        /// <typeparam name="T">El tipo de los elementos dentro del fragmento.</typeparam>
+        /// <typeparam name="TProcessor">El tipo del procesador que implementa <see cref="IProcesarChunkDelegado{T}"/>.</typeparam>
+        /// <param name="listaChunks">La estructura de fragmentos de origen.</param>
+        /// <param name="procesarChunk">El procesador de fragmentos.</param>
+        [Obsolete("Use ProcesarChunks en su lugar", false)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void ProcessChunks<T, TProcessor>(
+            this ValueLINQStruct<ValueLINQStruct<T>> listaChunks,
+            TProcessor procesarChunk)
+            where TProcessor : struct, IProcesarChunkDelegado<T>
+            => ProcesarChunks(listaChunks, procesarChunk);
 
         #endregion
 

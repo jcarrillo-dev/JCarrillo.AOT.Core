@@ -51,6 +51,11 @@ PooledArray<int> resultado = datos
 | `static ValueLINQArena Crear(bool persistente = false, TimeSpan? inactividad = null)` | Alquila una arena nueva. `persistente` la excluye de la recolección automática; véase «Cómo debe crearse la arena» más abajo. `inactividad` fija cuánto debe permanecer vacía antes de que la recolección la libere, y si se omite se usa `ValueLINQConfig.TiempoInactividadArena` (5 minutos). No tiene efecto sobre una arena persistente. |
 | `void Dispose()` | Libera la arena y **todas** las sesiones de ValueLINQ creadas dentro de ella, en cualquier tipo `T`. |
 | `bool IsViva` | Indica si la arena sigue activa (no liberada). |
+| `int Id { get; }` | Propiedad pública de solo lectura que expone el identificador numérico de la arena (de 0 a 4095) para telemetría, logs estructurados y diagnósticos, extraído directamente del token sin allocations. |
+| `bool Equals(ValueLINQArena other)` | Implementación de `IEquatable<ValueLINQArena>`. Compara directamente los tokens `TokenArena` de 64 bits en registros de CPU sin overhead. |
+| `bool Equals(object? obj)` | Sobrescritura no encajonante (`obj is ValueLINQArena other && Equals(other)`) que previene boxing en heap. |
+| `int GetHashCode()` | Retorna `TokenArena.GetHashCode()`, garantizando coherencia con la igualdad y distribución uniforme en diccionarios y conjuntos hash. |
+| `operator ==` / `operator !=` | Sobrecarga de operadores de igualdad y desigualdad por valor entre handles de arena. |
 
 > [!IMPORTANT]
 > **La disposición de arenas explícitas sigue siendo obligatoria.** La recolección automática solo alcanza a las arenas no persistentes que quedan **vacías**: una arena olvidada que conserve una sola sesión viva retiene su identificador hasta el fin del proceso, y agotar los ~4095 disponibles hace fallar la creación de nuevas arenas. Usa `using` o `Dispose` explícito; considera la arena ambiente (arena 0, sin argumento) si no necesitas un ámbito propio.
@@ -121,12 +126,43 @@ En el peor caso una arena tarda en volver al pool lo que sumen los dos umbrales:
 
 ### Puntos de entrada con arena
 
-Se ofrecen sobrecargas de los inicializadores que aceptan la arena de destino:
+Se ofrecen sobrecargas de los inicializadores que aceptan la arena de destino para arreglos, spans, memoria y colecciones pooled:
 
 ```csharp
+// Arreglos nativos
 public static ValueLINQStruct<T>    ToValueQuery<T>(this T[] origen, ValueLINQArena arena);
 public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this T[] origen, ValueLINQArena arena);
+
+// Spans en pila
+public static ValueLINQStruct<T>    ToValueQuery<T>(this Span<T> origen, ValueLINQArena arena);
+public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this Span<T> origen, ValueLINQArena arena);
+public static ValueLINQStruct<T>    ToValueQuery<T>(this ReadOnlySpan<T> origen, ValueLINQArena arena);
+public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this ReadOnlySpan<T> origen, ValueLINQArena arena);
+
+// Memoria
+public static ValueLINQStruct<T>    ToValueQuery<T>(this ref Memory<T> origen, ValueLINQArena arena);
+public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this ref Memory<T> origen, ValueLINQArena arena);
+
+// Colecciones Pooled
+public static ValueLINQStruct<T>    ToValueQuery<T>(this ref PooledList<T> origen, ValueLINQArena arena);
+public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this ref PooledList<T> origen, ValueLINQArena arena);
+public static ValueLINQStruct<T>    ToValueQuery<T>(this ref PooledArray<T> origen, ValueLINQArena arena);
+public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this ref PooledArray<T> origen, ValueLINQArena arena);
 ```
+
+Adicionalmente, `PooledArray<T>` cuenta con sobrecargas simétricas sin arena que operan sobre la arena ambiente 0:
+```csharp
+public static ValueLINQStruct<T>    ToValueQuery<T>(this ref PooledArray<T> origen);
+public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this ref PooledArray<T> origen);
+```
+
+#### Blindaje de Aislamiento y Validación de Arena Activa
+Todas las sobrecargas que reciben `ValueLINQArena` validan inmediatamente que la arena permanezca activa:
+```csharp
+if (!arena.IsViva)
+    ThrowArenaInactiva(arena.Id);
+```
+Esta guarda impide que una arena inválida, cerrada o un handle `default(ValueLINQArena)` degrade silenciosamente a la arena ambiente 0; ante cualquier handle inactivo se lanza inmediatamente `ValueLinqArenaInactivaException`. La arena ambiente 0 solo es accesible de manera deliberada a través de las sobrecargas sin parámetro de arena (`ToValueQuery()` y `ToValueRefQuery()`).
 
 ### Propagación por los operadores
 
@@ -355,9 +391,12 @@ El resto de cifras se derivan de la geometría configurada en `ValueLINQConfig` 
 ## 6. Estado Actual y Hoja de Ruta
 
 ### Implementado
-*   Handle `ValueLINQArena` (`Crear`/`Dispose`/`IsViva`), arena 0 ambiente y persistente.
-*   Entrada `ToValueQuery(arena)` / `ToValueRefQuery(arena)` para arrays.
-*   Propagación de arena en los operadores eager (`Where`, `Select`, `Chunk`, `Concat`), incluido el fan-out cruzado por tipo.
+*   Handle `ValueLINQArena` (`Crear`/`Dispose`/`IsViva`), arena 0 ambiente y persistente, implementación de `IEquatable<ValueLINQArena>`, operadores `==` y `!=`, `Equals(object?)` sin boxing, `GetHashCode()` y propiedad pública `Id` para telemetría.
+*   Entrada `ToValueQuery(arena)` / `ToValueRefQuery(arena)` para `T[]`, `Span<T>`, `ReadOnlySpan<T>`, `Memory<T>`, `PooledList<T>` y `PooledArray<T>`, con sobrecargas simétricas sin arena para `PooledArray<T>`.
+*   Blindaje de aislamiento en `ToValueQuery` / `ToValueRefQuery`: validación de `arena.IsViva`, rechazo de `default(ValueLINQArena)` con `ValueLinqArenaInactivaException` e invalidación de handles caducados.
+*   Propagación de `TokenArena` de 64 bits en `ValueLINQStruct` y `ValueLINQRefStruct` a lo largo de los operadores eager (`Where`, `Select`, `Chunk`, `Concat`), incluido el fan-out cruzado por tipo.
+*   Comprobación generacional estricta en `ValueLINQStateManager.ObtenerMetadatos` y `ObtenerTabla` evitando colisiones en arenas recicladas.
+*   Particionamiento con método canónico `ProcesarChunks` y alias retrocompatible `ProcessChunks` marcado con `[Obsolete]` (eliminación en v2.0.0).
 *   Aislamiento entre arenas, disposición en bloque, y cierre de las carreras de concurrencia (creación-vs-liberación de tabla con revalidación por generación; reciclado FIFO de ids; ABA entre encarnaciones vía `arena_gen`).
 *   **Motor perezoso (Delay)**: entrada `ToValueDelayQuery(arena)` para `T[]`, `Span<T>` y `ReadOnlySpan<T>`; herencia de arena desde la sesión eager en `Delay()` / `ToValueDelayQuery(consulta)`; propagación por `Where`, `Select` y `Concat`; enrutado del buffer de `Chunk` a la arena; restricción de arena única y regla del receptor en `Concat`.
 *   **Recolección automática de arenas olvidadas**: `ValueLINQArenaManager.RecolectarArenas` libera las arenas no persistentes que llevan vacías más tiempo que su propio umbral, devolviendo sus identificadores al FIFO. Se ejecuta desde el tick de `ValueLINQGC`, desde `Alquilar` cuando la lista libre se agota, y es invocable directamente. La vacuidad se determina agregando por tipo el instante en que se vació la última tabla; si ninguna llegó a materializarse, la referencia es el `UltimoUso` que sella el alquiler.
@@ -371,7 +410,6 @@ El resto de cifras se derivan de la geometría configurada en `ValueLINQConfig` 
 
 ### Propuestas de diseño (no comprometidas)
 *   **Pool de tablas recicladas** para que crear/destruir arenas no asigne en estado estacionario.
-*   Sobrecargas de entrada con arena para `Memory` y `PooledList`. Las de `Span` y `ReadOnlySpan` ya existen en el motor perezoso; el motor eager sigue admitiendo solo arrays.
 *   Enrutado a la arena de los operadores perezosos que materialicen en el futuro (`Order`, `Join`). Hoy `Chunk` es el único que reserva sesión en el motor perezoso.
 
 > [!WARNING]

@@ -33,7 +33,7 @@ Diseñado para el máximo rendimiento y escenarios críticos de Native AOT. Al e
 Esto proporciona una **garantía de hierro en tiempo de compilación** de que la consulta jamás alocará un solo byte de memoria en el heap ni causará recolecciones de basura.
 
 ### Ámbito de Arena
-Además de la creación en el ámbito global (arena 0), ambas estructuras pueden crearse dentro de una `ValueLINQArena` mediante las sobrecargas `ToValueQuery(origen, arena)` y `ToValueRefQuery(origen, arena)` (`ValueLINQExtensions.cs`). Internamente ambas exponen un constructor `internal (int idArena, int tamañoMinimo)` que registra la sesión en la tabla de esa arena y propaga el ámbito a las sesiones intermedias de los operadores; el token de sesión queda ligado a la arena (id + generación). Véase [Arenas de Memoria](Arenas.md) para el contrato completo.
+Además de la creación en el ámbito global (arena 0), ambas estructuras pueden crearse dentro de una `ValueLINQArena` mediante las sobrecargas `ToValueQuery(origen, arena)` y `ToValueRefQuery(origen, arena)` sobre arrays, `Span<T>`, `ReadOnlySpan<T>`, `Memory<T>`, `PooledList<T>` y `PooledArray<T>` (`ValueLINQExtensions.cs`). Ambas estructuras transportan internamente el token de arena de 64 bits mediante el campo `internal readonly long TokenArena`, e inicializan sus estados a través de constructores dedicados: `internal (long tokenArena, int tamañoMinimo)` y `internal (long token, long tokenArena)`. Este diseño propaga el identificador y la generación completa de la arena a través de todos los operadores del pipeline, asegurando que las sesiones intermedias pertenezcan a la misma arena y previniendo colisiones de sesión tras el reciclaje de identificadores. Véase [Arenas de Memoria](Arenas.md) para el contrato completo.
 
 ---
 

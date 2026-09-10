@@ -50,6 +50,30 @@ public static void ProcesarChunks<T, TProcessor>(
     where TProcessor : struct, IProcesarChunkDelegado<T>
 ```
 
+#### Alias Retrocompatible `ProcessChunks` (Obsoleto)
+Para preservar la compatibilidad con código consumidor de versiones previas, se proporciona el alias `ProcessChunks` que redirige a `ProcesarChunks`.
+
+> [!WARNING]
+> **Aviso de Deprecación**: `ProcessChunks` está marcado con `[Obsolete("Use ProcesarChunks en su lugar", false)]` y **será eliminado definitivamente en la versión mayor v2.0.0**. Se debe migrar todo código consumidor al método canónico `ProcesarChunks`.
+
+```csharp
+[Obsolete("Use ProcesarChunks en su lugar", false)]
+[MethodImpl(MethodImplOptions.AggressiveInlining)]
+public static void ProcessChunks<T, TProcessor>(
+    this ValueLINQRefStruct<ValueLINQStruct<T>> listaChunks,
+    TProcessor procesarChunk)
+    where TProcessor : struct, IProcesarChunkDelegado<T>
+```
+
+```csharp
+[Obsolete("Use ProcesarChunks en su lugar", false)]
+[MethodImpl(MethodImplOptions.AggressiveInlining)]
+public static void ProcessChunks<T, TProcessor>(
+    this ValueLINQStruct<ValueLINQStruct<T>> listaChunks,
+    TProcessor procesarChunk)
+    where TProcessor : struct, IProcesarChunkDelegado<T>
+```
+
 ### 1.2 Motor Lazy/Diferido (Delay)
 
 #### Operador `Chunk` Perezoso
@@ -111,13 +135,13 @@ Toda la variante Delay está compilada bajo `#if NET9_0_OR_GREATER`: el motor De
 El operador `Chunk` funciona bajo el siguiente flujo estrictamente síncrono:
 
 1.  **Cálculo de Ranuras**: Se calcula la cantidad de fragmentos necesarios como $\lceil N / S \rceil$ (donde $N$ es el tamaño de la colección original y $S$ es el tamaño del chunk).
-2.  **Renta del Contenedor**: Se solicita a `ValueLINQStateManager<ValueLINQStruct<T>>` una nueva sesión con capacidad para albergar las estructuras `ValueLINQStruct<T>`, **en la misma arena que la consulta de origen**: el operador extrae el identificador de arena del token de origen mediante `TokenHelper.ObtenerArenaId(origenToken)` y crea el contenedor con `new ValueLINQRefStruct<ValueLINQStruct<T>>(arenaId, cantidadChunks)`. Esto reserva un array temporal de structs en el StateManager, sin alocar memoria en el heap.
-3.  **Renta de Sub-Buffers**: Se itera sobre la colección de origen en bloques de tamaño $S$. Para cada bloque, se crea una nueva estructura `ValueLINQStruct<T>` con la capacidad exacta requerida, igualmente en la arena del origen mediante `ValueLINQStruct<T> chunk = new(TokenHelper.ObtenerArenaId(origenToken), chunkSize)`. El StateManager asigna el slot en la `TablaSesiones` correspondiente a esa arena y renta un buffer físico desde el `ArrayPool<T>`.
+2.  **Renta del Contenedor**: Se solicita a `ValueLINQStateManager<ValueLINQStruct<T>>` una nueva sesión con capacidad para albergar las estructuras `ValueLINQStruct<T>`, **en la misma arena que la consulta de origen**: el operador propaga directamente el token de arena de 64 bits (`origen.TokenArena`) y crea el contenedor con `tokenArena != 0L ? new ValueLINQRefStruct<ValueLINQStruct<T>>(tokenArena, cantidadChunks) : new ValueLINQRefStruct<ValueLINQStruct<T>>(cantidadChunks)`. Esto reserva un array temporal de structs en el StateManager, sin alocar memoria en el heap.
+3.  **Renta de Sub-Buffers**: Se itera sobre la colección de origen en bloques de tamaño $S$. Para cada bloque, se crea una nueva estructura `ValueLINQStruct<T>` con la capacidad exacta requerida, igualmente en la arena del origen mediante `tokenArena != 0L ? new(tokenArena, chunkSize) : new(chunkSize)`. El StateManager asigna el slot en la `TablaSesiones` correspondiente a esa arena y renta un buffer físico desde el `ArrayPool<T>`.
 4.  **Copia en Bloque**: Los elementos correspondientes al fragmento se copian vectorialmente en un solo paso mediante `Span.CopyTo` directo desde el buffer de origen al sub-buffer rentado. La estructura del chunk se añade al array del contenedor.
 5.  **Procesamiento y Liberación en Pipeline (`ProcesarChunks`)**: `ProcesarChunks` recorre el contenedor externo. Para cada fragmento, ejecuta el procesador estructurado bajo un bloque `using` (`using (var c = array[i])`). El método `Dispose` de cada chunk devuelve su buffer al `ArrayPool<T>` inmediatamente después de ser procesado.
 6.  **Garantía de Limpieza en Errores**: Si ocurre una excepción durante la creación de los chunks o durante su procesamiento, el bloque `finally` de los operadores intercepta el error, recorre las sesiones creadas activas y ejecuta `Dispose` en cada una de ellas antes de liberar la sesión contenedora, eliminando cualquier riesgo de fugas de memoria o buffers huérfanos en el `ArrayPool`.
 
-> **Nota — Propagación de arena**: el ciclo de vida de la sesión contenedora y de las sesiones de cada chunk queda gobernado por la arena de la consulta de origen; si dicha arena ya no está activa al crear u operar sobre las sesiones, el StateManager lanza `ValueLinqArenaInactivaException` ([ValueLINQStateManager.cs](../../../JCarrillo.AOT.Core/ValueLINQ/ValueLINQStateManager.cs)). Un token de origen `0` (consulta vacía/default) no impone arena y las sesiones se crean en la arena por defecto (arena 0). Consulta [Arenas.md](../Core/Arenas.md) para el detalle del sistema de arenas.
+> **Nota — Propagación de arena**: el ciclo de vida de la sesión contenedora y de las sesiones de cada chunk queda gobernado por el `TokenArena` de 64 bits (que encapsula `arena_id` y `arena_gen`) de la consulta de origen; si dicha arena ya no está activa al crear u operar sobre las sesiones, el StateManager lanza `ValueLinqArenaInactivaException` ([ValueLINQStateManager.cs](../../../JCarrillo.AOT.Core/ValueLINQ/ValueLINQStateManager.cs)). Un token de arena `0L` (consulta sin arena explícita o default) adscribe las sesiones a la arena ambiente (arena 0). Consulta [Arenas.md](../Core/Arenas.md) para el detalle del sistema de arenas.
 
 ---
 

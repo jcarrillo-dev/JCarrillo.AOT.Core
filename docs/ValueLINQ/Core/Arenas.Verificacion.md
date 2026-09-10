@@ -16,7 +16,9 @@ No es documentación de uso. Quien quiera saber **cómo usar arenas** o **por qu
 |---|---|
 | Motor perezoso | liberación en bloque del buffer de `Chunk`, herencia desde la consulta eager, invariancia de la ruta ambiente, arena ya dispuesta, arenas cruzadas entre receptor y argumentos y solo entre argumentos, conservación de la arena del receptor, rechazo de reasignación y las dos formas encadenadas |
 | Reaper | recolección de una arena vacía, respeto de las sesiones vivas, exclusión de las persistentes, respaldo por `UltimoUso` en una arena nunca usada, espera a que se vacíe la última tabla y aislamiento por umbral propio |
-| Motor eager | admisión de la ambiente junto a una explícita, y conservación de la arena del receptor a lo largo de toda la cadena |
+| Motor eager | admisión de la ambiente junto a una explícita, conservación de la arena del receptor a lo largo de toda la cadena, sobrecargas de entrada de colecciones (`Span`, `ReadOnlySpan`, `Memory`, `PooledList`, `PooledArray`), sobrecargas simétricas de `PooledArray` y alias retrocompatible `ProcessChunks` |
+| Blindaje de aislamiento | validación estricta de `arena.IsViva` en `ToValueQuery` y `ToValueRefQuery`, rechazo de `default(ValueLINQArena)` con `ValueLinqArenaInactivaException` previniendo degradación silenciosa a la arena 0, y rechazo de tokens obsoletos por validación generacional en `StateManager` |
+| Contrato de igualdad y telemetría | implementación de `IEquatable<ValueLINQArena>`, operadores `==` y `!=`, `Equals(object?)` sin boxing, `GetHashCode()` uniforme y exposición pública de `Id` para telemetría |
 | Escotilla `Marshalling` | mezcla permitida, propagación a operadores posteriores, almacenamiento inalterado, validación de sesión intacta y reasignación de arena aún prohibida |
 | Excepciones | las cuatro remiten a su ficha JCE desde el mensaje |
 
@@ -31,6 +33,9 @@ Se comprobó que cada una de estas pruebas **falla** al revertir el comportamien
 - Rechazo en la sobrecarga variádica del eager (antes de retirarle la restricción).
 - En el reaper: uso de `Min` en vez de `Max` al agregar, respaldo por `UltimoUso` y filtro de arenas persistentes.
 - Conservación de la arena a lo largo de la cadena, propagando las opciones del argumento en vez de las del receptor.
+- Blindaje de inicializadores: lanzamiento de `ValueLinqArenaInactivaException` ante `default(ValueLINQArena)` o arenas inactivas en `ToValueQuery` / `ToValueRefQuery`.
+- Comprobación generacional estricta en `StateManager.ObtenerMetadatos(long, int)` y `ObtenerTabla(long)` contra encarnaciones de arenas recicladas.
+- Igualdad estructural de `ValueLINQArena`: fallo al contrastar handles con distinto token o generación, y funcionamiento de `==` y `Equals`.
 - Las cuatro precondiciones de la tabla de abajo.
 
 El resto de las pruebas son afirmaciones de estado en verde **sin contramuestra**.

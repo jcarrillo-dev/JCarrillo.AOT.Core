@@ -27,7 +27,7 @@ public static ValueLINQStruct<TResultado> Select<TOrigen, TPredicate, TResultado
 ```
 *(Disponible con firma homóloga para `ValueLINQRefStruct<T>`, donde el selector se recibe como `scoped in TPredicate selector`)*
 
-> **Nota — Propagación de arena**: si la consulta de origen pertenece a una arena (creada con `ToValueQuery(origen, arena)` o `ToValueRefQuery(origen, arena)`), el motor Eager de `Select` crea la sesión de resultado **en esa misma arena**, deducida del token de origen (véanse las variantes en [ValueLINQExtensions.cs](../../../JCarrillo.AOT.Core/Extensiones/ValueLINQ/ValueLINQExtensions.cs), líneas 438 y 496). De este modo, todas las sesiones intermedias de la cadena quedan adscritas a la arena y se liberan con su disposición en bloque, incluso cuando la proyección cambia el tipo de elemento (`TOrigen` → `TResultado`). Consulta [Arenas](../Core/Arenas.md) para el detalle del ámbito y la disposición en bloque.
+> **Nota — Propagación de arena**: si la consulta de origen pertenece a una arena (creada con `ToValueQuery(origen, arena)` o `ToValueRefQuery(origen, arena)`), el motor Eager de `Select` crea la sesión de resultado **en esa misma arena**, propagando el `TokenArena` de 64 bits del origen (`origen.TokenArena`, que incluye identificador y generación). De este modo, todas las sesiones intermedias de la cadena quedan adscritas a la arena y se liberan con su disposición en bloque, incluso cuando la proyección cambia el tipo de elemento (`TOrigen` → `TResultado`). Consulta [Arenas](../Core/Arenas.md) para el detalle del ámbito y la disposición en bloque.
 
 #### Sobrecarga Ergonómica (Func)
 ```csharp

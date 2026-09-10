@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using FluentAssertions;
+using JCarrillo.AOT.Core.Colecciones.Pooled;
 using JCarrillo.AOT.Core.Extensiones.ValueLINQ;
 using JCarrillo.AOT.Core.ValueLINQ;
 using JCarrillo.AOT.Core.ValueLINQ.Arena;
@@ -322,7 +323,7 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
             }
         }
 
-        #region Adversarial Empirical Probes
+        #region Pruebas Empíricas Adversariales
 
         [Fact]
         public void EmpiricalProbe1DefaultArenaNoPuedeAccederArena0NiAfectarAmbiente()
@@ -508,7 +509,7 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
 
         #endregion
 
-        #region Milestone 2: ValueLINQArena Value Equality, Hashing, Collections, and Telemetry (R2)
+        #region Igualdad por Valor, Hashing y Telemetría en ValueLINQArena
 
         [Fact]
         public void ValueLINQArenaImplementaIEquatableYEsBlittableDe8Bytes()
@@ -531,7 +532,7 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
             PropertyInfo? prop = typeof(ValueLINQArena).GetProperty("Id");
             prop.Should().NotBeNull();
             prop!.GetMethod.Should().NotBeNull();
-            prop.GetMethod!.IsPublic.Should().BeTrue("el hito 2 exige exponer public int Id para observabilidad y telemetría");
+            prop.GetMethod!.IsPublic.Should().BeTrue("se exige exponer public int Id para observabilidad y telemetría");
 
             // 2. Comprobación de valor con arena viva
             using ValueLINQArena arena = ValueLINQArena.Crear();
@@ -1359,6 +1360,872 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
                 }
             }
         }
+
+        #endregion
+
+        #region Sobrecargas de Colecciones con Arena y Alias de Compatibilidad
+
+        private readonly struct TestChunkCounter(int[] counter) : IProcesarChunkDelegado<int>
+        {
+            private readonly int[] _counter = counter;
+
+            public readonly void Ejecutar(ValueLINQStruct<int> listaChunk)
+            {
+                int count = 0;
+                foreach (int _ in listaChunk)
+                    count++;
+                _counter[0] += count;
+            }
+        }
+
+        private struct TestChunkThrowing : IProcesarChunkDelegado<int>
+        {
+            public readonly void Ejecutar(ValueLINQStruct<int> listaChunk)
+            {
+                foreach (int item in listaChunk)
+                    if (item == 3)
+                        throw new InvalidOperationException("Simulated error in chunk processor");
+            }
+        }
+
+        #region Sobrecargas con Arena Activa
+
+        [Fact]
+        public void SpanToValueQueryConArenaVivaRutaFelizYPropagacionTokenArena()
+        {
+            int[] buffer = [1, 2, 3, 4, 5];
+            Span<int> span = buffer.AsSpan(0, buffer.Length);
+            using ValueLINQArena arena = ValueLINQArena.Crear();
+
+            using ValueLINQStruct<int> query = span.ToValueQuery(arena);
+
+            _ = query.IsValido.Should().BeTrue();
+            _ = query.TokenArena.Should().Be(arena.TokenArena);
+
+            using ValueLINQStruct<int> filtrado = query.Where(2, new PredicadoMayorQue());
+            _ = filtrado.IsValido.Should().BeTrue();
+            _ = filtrado.TokenArena.Should().Be(arena.TokenArena);
+
+            int suma = 0;
+            foreach (int x in filtrado)
+                suma += x;
+
+            _ = suma.Should().Be(3 + 4 + 5);
+        }
+
+        [Fact]
+        public void SpanToValueRefQueryConArenaVivaRutaFelizYPropagacionTokenArena()
+        {
+            int[] buffer = [1, 2, 3, 4, 5];
+            Span<int> span = buffer.AsSpan(0, buffer.Length);
+            using ValueLINQArena arena = ValueLINQArena.Crear();
+
+            ValueLINQRefStruct<int> query = span.ToValueRefQuery(arena);
+
+            _ = query.IsValido.Should().BeTrue();
+            _ = query.TokenArena.Should().Be(arena.TokenArena);
+
+            ValueLINQRefStruct<int> filtrado = query.Where(2, new PredicadoMayorQue());
+            _ = filtrado.IsValido.Should().BeTrue();
+            _ = filtrado.TokenArena.Should().Be(arena.TokenArena);
+
+            int suma = 0;
+            foreach (ref int x in filtrado)
+                suma += x;
+
+            _ = suma.Should().Be(3 + 4 + 5);
+        }
+
+        [Fact]
+        public void ReadOnlySpanToValueQueryConArenaVivaRutaFelizYPropagacionTokenArena()
+        {
+            ReadOnlySpan<int> roSpan = [10, 20, 30, 40];
+            using ValueLINQArena arena = ValueLINQArena.Crear();
+
+            using ValueLINQStruct<int> query = roSpan.ToValueQuery(arena);
+
+            _ = query.IsValido.Should().BeTrue();
+            _ = query.TokenArena.Should().Be(arena.TokenArena);
+
+            int suma = 0;
+            foreach (int x in query)
+                suma += x;
+
+            _ = suma.Should().Be(10 + 20 + 30 + 40);
+        }
+
+        [Fact]
+        public void ReadOnlySpanToValueRefQueryConArenaVivaRutaFelizYPropagacionTokenArena()
+        {
+            ReadOnlySpan<int> roSpan = [10, 20, 30, 40];
+            using ValueLINQArena arena = ValueLINQArena.Crear();
+
+            ValueLINQRefStruct<int> query = roSpan.ToValueRefQuery(arena);
+
+            _ = query.IsValido.Should().BeTrue();
+            _ = query.TokenArena.Should().Be(arena.TokenArena);
+
+            int suma = 0;
+            foreach (ref int x in query)
+                suma += x;
+
+            _ = suma.Should().Be(10 + 20 + 30 + 40);
+        }
+
+        [Fact]
+        public void MemoryToValueQueryConArenaVivaRutaFelizYPropagacionTokenArena()
+        {
+            int[] buffer = [100, 200, 300];
+            Memory<int> memory = new(buffer);
+            using ValueLINQArena arena = ValueLINQArena.Crear();
+
+            Memory<int> localMemory = memory;
+            using ValueLINQStruct<int> query = localMemory.ToValueQuery(arena);
+
+            _ = query.IsValido.Should().BeTrue();
+            _ = query.TokenArena.Should().Be(arena.TokenArena);
+
+            int suma = 0;
+            foreach (int x in query)
+                suma += x;
+
+            _ = suma.Should().Be(600);
+        }
+
+        [Fact]
+        public void MemoryToValueRefQueryConArenaVivaRutaFelizYPropagacionTokenArena()
+        {
+            int[] buffer = [100, 200, 300];
+            Memory<int> memory = new(buffer);
+            using ValueLINQArena arena = ValueLINQArena.Crear();
+
+            Memory<int> localMemory = memory;
+            ValueLINQRefStruct<int> query = localMemory.ToValueRefQuery(arena);
+
+            _ = query.IsValido.Should().BeTrue();
+            _ = query.TokenArena.Should().Be(arena.TokenArena);
+
+            int suma = 0;
+            foreach (ref int x in query)
+                suma += x;
+
+            _ = suma.Should().Be(600);
+        }
+
+        [Fact]
+        public void PooledListToValueQueryConArenaVivaRutaFelizYPropagacionTokenArena()
+        {
+            using PooledList<int> list = new();
+            list.AddRange([5, 10, 15, 20]);
+            using ValueLINQArena arena = ValueLINQArena.Crear();
+
+            PooledList<int> localList = list;
+            using ValueLINQStruct<int> query = localList.ToValueQuery(arena);
+
+            _ = query.IsValido.Should().BeTrue();
+            _ = query.TokenArena.Should().Be(arena.TokenArena);
+
+            int suma = 0;
+            foreach (int x in query)
+                suma += x;
+
+            _ = suma.Should().Be(50);
+        }
+
+        [Fact]
+        public void PooledListToValueRefQueryConArenaVivaRutaFelizYPropagacionTokenArena()
+        {
+            using PooledList<int> list = new();
+            list.AddRange([5, 10, 15, 20]);
+            using ValueLINQArena arena = ValueLINQArena.Crear();
+
+            PooledList<int> localList = list;
+            ValueLINQRefStruct<int> query = localList.ToValueRefQuery(arena);
+
+            _ = query.IsValido.Should().BeTrue();
+            _ = query.TokenArena.Should().Be(arena.TokenArena);
+
+            int suma = 0;
+            foreach (ref int x in query)
+                suma += x;
+
+            _ = suma.Should().Be(50);
+        }
+
+        [Fact]
+        public void PooledArrayToValueQueryConArenaVivaRutaFelizYPropagacionTokenArena()
+        {
+            using PooledArray<int> array = new(4);
+            array.Span[0] = 7;
+            array.Span[1] = 14;
+            array.Span[2] = 21;
+            array.Span[3] = 28;
+            using ValueLINQArena arena = ValueLINQArena.Crear();
+
+            PooledArray<int> localArray = array;
+            using ValueLINQStruct<int> query = localArray.ToValueQuery(arena);
+
+            _ = query.IsValido.Should().BeTrue();
+            _ = query.TokenArena.Should().Be(arena.TokenArena);
+
+            int suma = 0;
+            foreach (int x in query)
+                suma += x;
+
+            _ = suma.Should().Be(70);
+        }
+
+        [Fact]
+        public void PooledArrayToValueRefQueryConArenaVivaRutaFelizYPropagacionTokenArena()
+        {
+            using PooledArray<int> array = new(4);
+            array.Span[0] = 7;
+            array.Span[1] = 14;
+            array.Span[2] = 21;
+            array.Span[3] = 28;
+            using ValueLINQArena arena = ValueLINQArena.Crear();
+
+            PooledArray<int> localArray = array;
+            ValueLINQRefStruct<int> query = localArray.ToValueRefQuery(arena);
+
+            _ = query.IsValido.Should().BeTrue();
+            _ = query.TokenArena.Should().Be(arena.TokenArena);
+
+            int suma = 0;
+            foreach (ref int x in query)
+                suma += x;
+
+            _ = suma.Should().Be(70);
+        }
+
+        #endregion
+
+        #region Sobrecargas con Arena Default
+
+        [Fact]
+        public void SpanToValueQueryConDefaultArenaLanzaValueLinqArenaInactivaException()
+        {
+            int[] buffer = [1, 2, 3];
+            Span<int> span = buffer.AsSpan(0, buffer.Length);
+
+            try
+            {
+                _ = span.ToValueQuery(default);
+                Assert.Fail("Debería haber lanzado ValueLinqArenaInactivaException");
+            }
+            catch (ValueLinqArenaInactivaException ex)
+            {
+                _ = ex.IdArena.Should().Be(0);
+            }
+        }
+
+        [Fact]
+        public void SpanToValueRefQueryConDefaultArenaLanzaValueLinqArenaInactivaException()
+        {
+            int[] buffer = [1, 2, 3];
+            Span<int> span = buffer.AsSpan(0, buffer.Length);
+
+            try
+            {
+                _ = span.ToValueRefQuery(default);
+                Assert.Fail("Debería haber lanzado ValueLinqArenaInactivaException");
+            }
+            catch (ValueLinqArenaInactivaException ex)
+            {
+                _ = ex.IdArena.Should().Be(0);
+            }
+        }
+
+        [Fact]
+        public void ReadOnlySpanToValueQueryConDefaultArenaLanzaValueLinqArenaInactivaException()
+        {
+            ReadOnlySpan<int> roSpan = [1, 2, 3];
+
+            try
+            {
+                _ = roSpan.ToValueQuery(default);
+                Assert.Fail("Debería haber lanzado ValueLinqArenaInactivaException");
+            }
+            catch (ValueLinqArenaInactivaException ex)
+            {
+                _ = ex.IdArena.Should().Be(0);
+            }
+        }
+
+        [Fact]
+        public void ReadOnlySpanToValueRefQueryConDefaultArenaLanzaValueLinqArenaInactivaException()
+        {
+            ReadOnlySpan<int> roSpan = [1, 2, 3];
+
+            try
+            {
+                _ = roSpan.ToValueRefQuery(default);
+                Assert.Fail("Debería haber lanzado ValueLinqArenaInactivaException");
+            }
+            catch (ValueLinqArenaInactivaException ex)
+            {
+                _ = ex.IdArena.Should().Be(0);
+            }
+        }
+
+        [Fact]
+        public void MemoryToValueQueryConDefaultArenaLanzaValueLinqArenaInactivaException()
+        {
+            int[] buffer = [1, 2, 3];
+            Memory<int> memory = new(buffer);
+            Memory<int> localMemory = memory;
+
+            try
+            {
+                _ = localMemory.ToValueQuery(default);
+                Assert.Fail("Debería haber lanzado ValueLinqArenaInactivaException");
+            }
+            catch (ValueLinqArenaInactivaException ex)
+            {
+                _ = ex.IdArena.Should().Be(0);
+            }
+        }
+
+        [Fact]
+        public void MemoryToValueRefQueryConDefaultArenaLanzaValueLinqArenaInactivaException()
+        {
+            int[] buffer = [1, 2, 3];
+            Memory<int> memory = new(buffer);
+            Memory<int> localMemory = memory;
+
+            try
+            {
+                _ = localMemory.ToValueRefQuery(default);
+                Assert.Fail("Debería haber lanzado ValueLinqArenaInactivaException");
+            }
+            catch (ValueLinqArenaInactivaException ex)
+            {
+                _ = ex.IdArena.Should().Be(0);
+            }
+        }
+
+        [Fact]
+        public void PooledListToValueQueryConDefaultArenaLanzaValueLinqArenaInactivaException()
+        {
+            using PooledList<int> list = new();
+            list.AddRange([1, 2, 3]);
+            PooledList<int> localList = list;
+
+            try
+            {
+                _ = localList.ToValueQuery(default);
+                Assert.Fail("Debería haber lanzado ValueLinqArenaInactivaException");
+            }
+            catch (ValueLinqArenaInactivaException ex)
+            {
+                _ = ex.IdArena.Should().Be(0);
+            }
+        }
+
+        [Fact]
+        public void PooledListToValueRefQueryConDefaultArenaLanzaValueLinqArenaInactivaException()
+        {
+            using PooledList<int> list = new();
+            list.AddRange([1, 2, 3]);
+            PooledList<int> localList = list;
+
+            try
+            {
+                _ = localList.ToValueRefQuery(default);
+                Assert.Fail("Debería haber lanzado ValueLinqArenaInactivaException");
+            }
+            catch (ValueLinqArenaInactivaException ex)
+            {
+                _ = ex.IdArena.Should().Be(0);
+            }
+        }
+
+        [Fact]
+        public void PooledArrayToValueQueryConDefaultArenaLanzaValueLinqArenaInactivaException()
+        {
+            using PooledArray<int> array = new(3);
+            PooledArray<int> localArray = array;
+
+            try
+            {
+                _ = localArray.ToValueQuery(default);
+                Assert.Fail("Debería haber lanzado ValueLinqArenaInactivaException");
+            }
+            catch (ValueLinqArenaInactivaException ex)
+            {
+                _ = ex.IdArena.Should().Be(0);
+            }
+        }
+
+        [Fact]
+        public void PooledArrayToValueRefQueryConDefaultArenaLanzaValueLinqArenaInactivaException()
+        {
+            using PooledArray<int> array = new(3);
+            PooledArray<int> localArray = array;
+
+            try
+            {
+                _ = localArray.ToValueRefQuery(default);
+                Assert.Fail("Debería haber lanzado ValueLinqArenaInactivaException");
+            }
+            catch (ValueLinqArenaInactivaException ex)
+            {
+                _ = ex.IdArena.Should().Be(0);
+            }
+        }
+
+        #endregion
+
+        #region Sobrecargas con Arena Dispuesta
+
+        [Fact]
+        public void SpanToValueQueryConArenaDispuestaLanzaValueLinqArenaInactivaException()
+        {
+            int[] buffer = [1, 2, 3];
+            Span<int> span = buffer.AsSpan(0, buffer.Length);
+            ValueLINQArena arena = ValueLINQArena.Crear();
+            int idEsperado = arena.Id;
+            arena.Dispose();
+
+            try
+            {
+                _ = span.ToValueQuery(arena);
+                Assert.Fail("Debería haber lanzado ValueLinqArenaInactivaException");
+            }
+            catch (ValueLinqArenaInactivaException ex)
+            {
+                _ = ex.IdArena.Should().Be(idEsperado);
+            }
+        }
+
+        [Fact]
+        public void SpanToValueRefQueryConArenaDispuestaLanzaValueLinqArenaInactivaException()
+        {
+            int[] buffer = [1, 2, 3];
+            Span<int> span = buffer.AsSpan(0, buffer.Length);
+            ValueLINQArena arena = ValueLINQArena.Crear();
+            int idEsperado = arena.Id;
+            arena.Dispose();
+
+            try
+            {
+                _ = span.ToValueRefQuery(arena);
+                Assert.Fail("Debería haber lanzado ValueLinqArenaInactivaException");
+            }
+            catch (ValueLinqArenaInactivaException ex)
+            {
+                _ = ex.IdArena.Should().Be(idEsperado);
+            }
+        }
+
+        [Fact]
+        public void ReadOnlySpanToValueQueryConArenaDispuestaLanzaValueLinqArenaInactivaException()
+        {
+            ReadOnlySpan<int> roSpan = [1, 2, 3];
+            ValueLINQArena arena = ValueLINQArena.Crear();
+            int idEsperado = arena.Id;
+            arena.Dispose();
+
+            try
+            {
+                _ = roSpan.ToValueQuery(arena);
+                Assert.Fail("Debería haber lanzado ValueLinqArenaInactivaException");
+            }
+            catch (ValueLinqArenaInactivaException ex)
+            {
+                _ = ex.IdArena.Should().Be(idEsperado);
+            }
+        }
+
+        [Fact]
+        public void ReadOnlySpanToValueRefQueryConArenaDispuestaLanzaValueLinqArenaInactivaException()
+        {
+            ReadOnlySpan<int> roSpan = [1, 2, 3];
+            ValueLINQArena arena = ValueLINQArena.Crear();
+            int idEsperado = arena.Id;
+            arena.Dispose();
+
+            try
+            {
+                _ = roSpan.ToValueRefQuery(arena);
+                Assert.Fail("Debería haber lanzado ValueLinqArenaInactivaException");
+            }
+            catch (ValueLinqArenaInactivaException ex)
+            {
+                _ = ex.IdArena.Should().Be(idEsperado);
+            }
+        }
+
+        [Fact]
+        public void MemoryToValueQueryConArenaDispuestaLanzaValueLinqArenaInactivaException()
+        {
+            int[] buffer = [1, 2, 3];
+            Memory<int> memory = new(buffer);
+            Memory<int> localMemory = memory;
+            ValueLINQArena arena = ValueLINQArena.Crear();
+            int idEsperado = arena.Id;
+            arena.Dispose();
+
+            try
+            {
+                _ = localMemory.ToValueQuery(arena);
+                Assert.Fail("Debería haber lanzado ValueLinqArenaInactivaException");
+            }
+            catch (ValueLinqArenaInactivaException ex)
+            {
+                _ = ex.IdArena.Should().Be(idEsperado);
+            }
+        }
+
+        [Fact]
+        public void MemoryToValueRefQueryConArenaDispuestaLanzaValueLinqArenaInactivaException()
+        {
+            int[] buffer = [1, 2, 3];
+            Memory<int> memory = new(buffer);
+            Memory<int> localMemory = memory;
+            ValueLINQArena arena = ValueLINQArena.Crear();
+            int idEsperado = arena.Id;
+            arena.Dispose();
+
+            try
+            {
+                _ = localMemory.ToValueRefQuery(arena);
+                Assert.Fail("Debería haber lanzado ValueLinqArenaInactivaException");
+            }
+            catch (ValueLinqArenaInactivaException ex)
+            {
+                _ = ex.IdArena.Should().Be(idEsperado);
+            }
+        }
+
+        [Fact]
+        public void PooledListToValueQueryConArenaDispuestaLanzaValueLinqArenaInactivaException()
+        {
+            using PooledList<int> list = new();
+            list.AddRange([1, 2, 3]);
+            PooledList<int> localList = list;
+            ValueLINQArena arena = ValueLINQArena.Crear();
+            int idEsperado = arena.Id;
+            arena.Dispose();
+
+            try
+            {
+                _ = localList.ToValueQuery(arena);
+                Assert.Fail("Debería haber lanzado ValueLinqArenaInactivaException");
+            }
+            catch (ValueLinqArenaInactivaException ex)
+            {
+                _ = ex.IdArena.Should().Be(idEsperado);
+            }
+        }
+
+        [Fact]
+        public void PooledListToValueRefQueryConArenaDispuestaLanzaValueLinqArenaInactivaException()
+        {
+            using PooledList<int> list = new();
+            list.AddRange([1, 2, 3]);
+            PooledList<int> localList = list;
+            ValueLINQArena arena = ValueLINQArena.Crear();
+            int idEsperado = arena.Id;
+            arena.Dispose();
+
+            try
+            {
+                _ = localList.ToValueRefQuery(arena);
+                Assert.Fail("Debería haber lanzado ValueLinqArenaInactivaException");
+            }
+            catch (ValueLinqArenaInactivaException ex)
+            {
+                _ = ex.IdArena.Should().Be(idEsperado);
+            }
+        }
+
+        [Fact]
+        public void PooledArrayToValueQueryConArenaDispuestaLanzaValueLinqArenaInactivaException()
+        {
+            using PooledArray<int> array = new(3);
+            PooledArray<int> localArray = array;
+            ValueLINQArena arena = ValueLINQArena.Crear();
+            int idEsperado = arena.Id;
+            arena.Dispose();
+
+            try
+            {
+                _ = localArray.ToValueQuery(arena);
+                Assert.Fail("Debería haber lanzado ValueLinqArenaInactivaException");
+            }
+            catch (ValueLinqArenaInactivaException ex)
+            {
+                _ = ex.IdArena.Should().Be(idEsperado);
+            }
+        }
+
+        [Fact]
+        public void PooledArrayToValueRefQueryConArenaDispuestaLanzaValueLinqArenaInactivaException()
+        {
+            using PooledArray<int> array = new(3);
+            PooledArray<int> localArray = array;
+            ValueLINQArena arena = ValueLINQArena.Crear();
+            int idEsperado = arena.Id;
+            arena.Dispose();
+
+            try
+            {
+                _ = localArray.ToValueRefQuery(arena);
+                Assert.Fail("Debería haber lanzado ValueLinqArenaInactivaException");
+            }
+            catch (ValueLinqArenaInactivaException ex)
+            {
+                _ = ex.IdArena.Should().Be(idEsperado);
+            }
+        }
+
+        #endregion
+
+        #region Alias Retrocompatibles para ProcessChunks
+
+        [Fact]
+        public void ProcessChunksRefStructProduceComportamientoIdenticoAProcesarChunks()
+        {
+            int[] array = [1, 2, 3, 4, 5];
+
+            // 1. Ejecución canónica con ProcesarChunks
+            int[] canonCounter = new int[1];
+            using (ValueLINQStruct<int> q1 = array.ToValueQuery())
+            using (ValueLINQRefStruct<ValueLINQStruct<int>> chunks1 = q1.Chunk(2))
+                chunks1.ProcesarChunks(new TestChunkCounter(canonCounter));
+
+            // 2. Ejecución con alias retrocompatible ProcessChunks
+            int[] aliasCounter = new int[1];
+            using (ValueLINQStruct<int> q2 = array.ToValueQuery())
+            using (ValueLINQRefStruct<ValueLINQStruct<int>> chunks2 = q2.Chunk(2))
+            {
+#pragma warning disable CS0618 // Type or member is obsolete
+                chunks2.ProcessChunks(new TestChunkCounter(aliasCounter));
+#pragma warning restore CS0618
+            }
+
+            _ = aliasCounter[0].Should().Be(5);
+            _ = aliasCounter[0].Should().Be(canonCounter[0]);
+        }
+
+        [Fact]
+        public void ProcessChunksStructProduceComportamientoIdenticoAProcesarChunks()
+        {
+            int[] array1 = [10, 20, 30];
+            int[] array2 = [40, 50, 60];
+
+            // 1. Ejecución canónica con ProcesarChunks en ValueLINQStruct
+            int[] canonCounter = new int[1];
+            ValueLINQStruct<int>[] structChunks1 = [array1.ToValueQuery(), array2.ToValueQuery()];
+            using (ValueLINQStruct<ValueLINQStruct<int>> queryChunks1 = structChunks1.ToValueQuery())
+                queryChunks1.ProcesarChunks(new TestChunkCounter(canonCounter));
+
+            // 2. Ejecución con alias retrocompatible ProcessChunks en ValueLINQStruct
+            int[] aliasCounter = new int[1];
+            ValueLINQStruct<int>[] structChunks2 = [array1.ToValueQuery(), array2.ToValueQuery()];
+            using (ValueLINQStruct<ValueLINQStruct<int>> queryChunks2 = structChunks2.ToValueQuery())
+            {
+#pragma warning disable CS0618 // Type or member is obsolete
+                queryChunks2.ProcessChunks(new TestChunkCounter(aliasCounter));
+#pragma warning restore CS0618
+            }
+
+            _ = aliasCounter[0].Should().Be(6);
+            _ = aliasCounter[0].Should().Be(canonCounter[0]);
+        }
+
+        [Fact]
+        public void ProcessChunksManejoDeExcepcionYRecuperacionDeBuffers()
+        {
+            int initialActive = ValueLINQConfig.TamañoTabla - ValueLINQStateManager<ValueLINQStruct<int>>.SlotsLibres;
+            int[] array = [1, 2, 3, 4, 5];
+            ValueLINQStruct<int> query = array.ToValueQuery();
+            ValueLINQRefStruct<ValueLINQStruct<int>> chunks = query.Chunk(2);
+
+            try
+            {
+#pragma warning disable CS0618 // Type or member is obsolete
+                chunks.ProcessChunks(new TestChunkThrowing());
+#pragma warning restore CS0618
+                Assert.Fail("Debería haber lanzado InvalidOperationException");
+            }
+            catch (InvalidOperationException ex) when (ex.Message == "Simulated error in chunk processor")
+            {
+                // Excepción esperada
+            }
+
+            int finalActive = ValueLINQConfig.TamañoTabla - ValueLINQStateManager<ValueLINQStruct<int>>.SlotsLibres;
+            _ = finalActive.Should().Be(initialActive, "todos los buffers alquilados de los fragmentos deben ser liberados al lanzar excepción");
+        }
+
+        [Fact]
+        public void ProcessChunksMetadatosObsoleteVerificacionReflexiva()
+        {
+            MethodInfo[] metodos = typeof(ValueLINQExtensions).GetMethods(BindingFlags.Public | BindingFlags.Static);
+            List<MethodInfo> processChunksMethods = [];
+            foreach (MethodInfo m in metodos)
+                if (m.Name == "ProcessChunks")
+                    processChunksMethods.Add(m);
+
+            _ = processChunksMethods.Should().HaveCount(2, "deben existir exactamente 2 sobrecargas públicas de ProcessChunks");
+
+            foreach (MethodInfo m in processChunksMethods)
+            {
+                ObsoleteAttribute? obsoleteAttr = m.GetCustomAttribute<ObsoleteAttribute>();
+                _ = obsoleteAttr.Should().NotBeNull("ProcessChunks debe estar marcado con [Obsolete]");
+                _ = obsoleteAttr!.Message.Should().Be("Use ProcesarChunks en su lugar");
+                _ = obsoleteAttr.IsError.Should().BeFalse("ProcessChunks no debe ser tratado como error de compilación");
+            }
+        }
+
+        #endregion
+
+        #region Casos de Borde y Pruebas Adversariales
+
+        [Fact]
+        public void ColeccionesVaciasConArenaVivaGeneranConsultasValidasYTokenPreservado()
+        {
+            using ValueLINQArena arena = ValueLINQArena.Crear();
+
+            // 1. Span vacío
+            Span<int> emptySpan = Span<int>.Empty;
+            using (ValueLINQStruct<int> qSpan = emptySpan.ToValueQuery(arena))
+            {
+                _ = qSpan.IsValido.Should().BeTrue();
+                _ = qSpan.TokenArena.Should().Be(arena.TokenArena);
+                int count = 0;
+                foreach (int _ in qSpan)
+                    count++;
+                _ = count.Should().Be(0);
+            }
+
+            // 2. ReadOnlySpan vacío
+            ReadOnlySpan<int> emptyRoSpan = ReadOnlySpan<int>.Empty;
+            using (ValueLINQStruct<int> qRo = emptyRoSpan.ToValueQuery(arena))
+            {
+                _ = qRo.IsValido.Should().BeTrue();
+                _ = qRo.TokenArena.Should().Be(arena.TokenArena);
+                int count = 0;
+                foreach (int _ in qRo)
+                    count++;
+                _ = count.Should().Be(0);
+            }
+
+            // 3. Memory vacía
+            Memory<int> emptyMemory = Memory<int>.Empty;
+            using (ValueLINQStruct<int> qMem = emptyMemory.ToValueQuery(arena))
+            {
+                _ = qMem.IsValido.Should().BeTrue();
+                _ = qMem.TokenArena.Should().Be(arena.TokenArena);
+                int count = 0;
+                foreach (int _ in qMem)
+                    count++;
+                _ = count.Should().Be(0);
+            }
+
+            // 4. PooledList vacía
+            using PooledList<int> emptyList = new();
+            PooledList<int> localList = emptyList;
+            using (ValueLINQStruct<int> qList = localList.ToValueQuery(arena))
+            {
+                _ = qList.IsValido.Should().BeTrue();
+                _ = qList.TokenArena.Should().Be(arena.TokenArena);
+                int count = 0;
+                foreach (int _ in qList)
+                    count++;
+                _ = count.Should().Be(0);
+            }
+        }
+
+        [Fact]
+        public void ColeccionesVaciasConDefaultArenaLanzanExcepcionSinOmitirValidacion()
+        {
+            Span<int> emptySpan = Span<int>.Empty;
+            try
+            {
+                _ = emptySpan.ToValueQuery(default);
+                Assert.Fail("Debería haber lanzado ValueLinqArenaInactivaException incluso con Span vacío");
+            }
+            catch (ValueLinqArenaInactivaException ex)
+            {
+                _ = ex.IdArena.Should().Be(0);
+            }
+
+            ReadOnlySpan<int> emptyRoSpan = ReadOnlySpan<int>.Empty;
+            try
+            {
+                _ = emptyRoSpan.ToValueQuery(default);
+                Assert.Fail("Debería haber lanzado ValueLinqArenaInactivaException incluso con ReadOnlySpan vacío");
+            }
+            catch (ValueLinqArenaInactivaException ex)
+            {
+                _ = ex.IdArena.Should().Be(0);
+            }
+
+            Memory<int> emptyMem = Memory<int>.Empty;
+            Memory<int> localMem = emptyMem;
+            try
+            {
+                _ = localMem.ToValueQuery(default);
+                Assert.Fail("Debería haber lanzado ValueLinqArenaInactivaException incluso con Memory vacía");
+            }
+            catch (ValueLinqArenaInactivaException ex)
+            {
+                _ = ex.IdArena.Should().Be(0);
+            }
+        }
+
+        [Fact]
+        public void ColeccionesAislamientoFisicoMutacionOrigenNoAfectaConsultaEnArena()
+        {
+            int[] backingArray = [100, 200, 300];
+            Span<int> span = backingArray.AsSpan(0, backingArray.Length);
+            using ValueLINQArena arena = ValueLINQArena.Crear();
+
+            using ValueLINQStruct<int> query = span.ToValueQuery(arena);
+
+            // Mutación posterior en el buffer original
+            backingArray[0] = 999;
+            backingArray[1] = 888;
+            backingArray[2] = 777;
+
+            // La consulta en la arena debe mantener los valores originales copiados
+            List<int> resultado = [];
+            foreach (int item in query)
+                resultado.Add(item);
+
+            _ = resultado.Should().Equal([100, 200, 300]);
+        }
+
+        [Fact]
+        public void PooledArrayToValueQueryYRefQuerySinArenaRutaFeliz()
+        {
+            using PooledArray<int> array = new(3);
+            array.Span[0] = 11;
+            array.Span[1] = 22;
+            array.Span[2] = 33;
+
+            PooledArray<int> localArray1 = array;
+            using (ValueLINQStruct<int> qStruct = localArray1.ToValueQuery())
+            {
+                _ = qStruct.IsValido.Should().BeTrue();
+                int suma = 0;
+                foreach (int x in qStruct)
+                    suma += x;
+                _ = suma.Should().Be(66);
+            }
+
+            PooledArray<int> localArray2 = array;
+            ValueLINQRefStruct<int> qRef = localArray2.ToValueRefQuery();
+            _ = qRef.IsValido.Should().BeTrue();
+            int sumaRef = 0;
+            foreach (ref int x in qRef)
+                sumaRef += x;
+            _ = sumaRef.Should().Be(66);
+        }
+
+        #endregion
 
         #endregion
     }
