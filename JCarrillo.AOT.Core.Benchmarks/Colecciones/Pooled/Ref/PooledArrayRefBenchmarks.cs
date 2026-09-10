@@ -1,14 +1,12 @@
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Engines;
-using JCarrillo.AOT.Core.Colecciones.Pooled;
+using JCarrillo.AOT.Core.Benchmarks.Infraestructura;
 using JCarrillo.AOT.Core.Colecciones.Pooled.Ref;
 
-namespace JCarrillo.AOT.Core.Benchmarks.Colecciones
+namespace JCarrillo.AOT.Core.Benchmarks.Colecciones.Pooled.Ref
 {
-    [MemoryDiagnoser]
-    [ThreadingDiagnoser]
-    [HtmlExporter]
-    public class PooledArrayBenchmarks
+    [Config(typeof(CoreBenchmarkConfig))]
+    public class PooledArrayRefBenchmarks
     {
         [Params(100, 1000)]
         public int Size { get; set; }
@@ -20,27 +18,9 @@ namespace JCarrillo.AOT.Core.Benchmarks.Colecciones
         {
             int[] arr = new int[Size];
             for (int i = 0; i < Size; i++)
-            {
                 arr[i] = i;
-            }
             for (int i = 0; i < Size; i++)
-            {
                 _consumer.Consume(arr[i]);
-            }
-        }
-
-        [Benchmark]
-        public void PooledArray()
-        {
-            using PooledArray<int> arr = new(Size);
-            for (int i = 0; i < Size; i++)
-            {
-                arr[i] = i;
-            }
-            for (int i = 0; i < Size; i++)
-            {
-                _consumer.Consume(arr[i]);
-            }
         }
 
         [Benchmark]
@@ -48,13 +28,9 @@ namespace JCarrillo.AOT.Core.Benchmarks.Colecciones
         {
             using PooledArrayRef<int> arr = new(Size);
             for (int i = 0; i < Size; i++)
-            {
                 arr[i] = i;
-            }
             for (int i = 0; i < Size; i++)
-            {
                 _consumer.Consume(arr[i]);
-            }
         }
     }
 }
