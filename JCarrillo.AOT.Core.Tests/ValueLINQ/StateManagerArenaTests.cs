@@ -1,6 +1,8 @@
 using FluentAssertions;
 using JCarrillo.AOT.Core.ValueLINQ;
+using JCarrillo.AOT.Core.ValueLINQ.Arena;
 using JCarrillo.AOT.Core.ValueLINQ.Excepciones;
+using System.Collections.Concurrent;
 using Xunit;
 
 namespace JCarrillo.AOT.Core.Tests.ValueLINQ
@@ -164,6 +166,139 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
             {
                 ValueLINQArenaManager.Liberar(tokenArenaManager);
             }
+        }
+
+        [Fact]
+        public void ObtenerMetadatosEnStateManagerConArenaDispuestaLanzaArenaInactiva()
+        {
+            ValueLINQArena arena = ValueLINQArena.Crear();
+            long tokenArena = arena.TokenArena;
+            int idArena = arena.Id;
+
+            arena.Dispose();
+
+            Action porToken = () => _ = ValueLINQStateManager<TipoVirgenTolerante>.ObtenerMetadatos(tokenArena, 4);
+            Action porId = () => _ = ValueLINQStateManager<TipoVirgenTolerante>.ObtenerMetadatos(idArena, 4);
+
+            _ = porToken.Should().Throw<ValueLinqArenaInactivaException>()
+                .Which.IdArena.Should().Be(idArena);
+            _ = porId.Should().Throw<ValueLinqArenaInactivaException>()
+                .Which.IdArena.Should().Be(idArena);
+
+            _ = ValueLINQStateManager<TipoVirgenTolerante>.IsTablaMaterializada(idArena).Should().BeFalse();
+        }
+
+        [Fact]
+        public async Task AdquisicionConcurrenteDuranteLiberacionDeArenaNoGeneraFugasNiCorrupcion()
+        {
+            const int iteraciones = 40;
+            const int hilosAdquisicion = 12;
+
+            for (int iter = 0; iter < iteraciones; iter++)
+            {
+                long tokenArena = ValueLINQArenaManager.Alquilar();
+                int idArena = TokenHelper.ObtenerIdTokenArena(tokenArena);
+
+                using Barrier barrera = new(hilosAdquisicion + 1);
+                ConcurrentBag<Exception> excepcionesInesperadas = [];
+                Task[] tareas = new Task[hilosAdquisicion + 1];
+
+                for (int t = 0; t < hilosAdquisicion; t++)
+                {
+                    int hiloId = t;
+                    tareas[t] = Task.Run(() =>
+                    {
+                        barrera.SignalAndWait();
+                        for (int i = 0; i < 20; i++)
+                        {
+                            long tokenSesion = 0L;
+                            try
+                            {
+                                ref MetadatosSesion<int> metadato = ref ValueLINQStateManager<int>.ObtenerMetadatos(idArena, 8);
+                                tokenSesion = metadato.Token;
+
+                                int[]? array = metadato.Array;
+                                if (array is not null)
+                                {
+                                    array[0] = hiloId * 100 + i;
+                                    metadato.TamañoActual = 1;
+                                }
+                            }
+                            catch (ValueLinqArenaInactivaException)
+                            {
+                                break;
+                            }
+                            catch (Exception ex)
+                            {
+                                excepcionesInesperadas.Add(ex);
+                                break;
+                            }
+                            finally
+                            {
+                                if (tokenSesion != 0L)
+                                    ValueLINQStateManager<int>.LiberarMetadatos(tokenSesion);
+                            }
+                        }
+                    });
+                }
+
+                tareas[hilosAdquisicion] = Task.Run(async () =>
+                {
+                    barrera.SignalAndWait();
+                    await Task.Yield();
+                    ValueLINQArenaManager.Liberar(tokenArena);
+                });
+
+                await Task.WhenAll(tareas);
+
+                _ = excepcionesInesperadas.Should().BeEmpty(
+                    "la contención concurrente entre adquisición y liberación de arena solo puede arrojar ValueLinqArenaInactivaException");
+                _ = ValueLINQArenaManager.IsArenaViva(tokenArena).Should().BeFalse();
+                _ = ValueLINQStateManager<int>.IsTablaMaterializada(idArena).Should().BeFalse();
+            }
+        }
+
+        [Fact]
+        public async Task LiberarMetadatosConcurrenteEnMultiplesSesionesTrasDesactivacionDeArena()
+        {
+            const int totalSesiones = 32;
+            long tokenArena = ValueLINQArenaManager.Alquilar();
+            int idArena = TokenHelper.ObtenerIdTokenArena(tokenArena);
+
+            long[] tokensSesion = new long[totalSesiones];
+            for (int i = 0; i < totalSesiones; i++)
+                tokensSesion[i] = ValueLINQStateManager<int>.ObtenerMetadatos(idArena, 8).Token;
+
+            ValueLINQArenaManager.Liberar(tokenArena);
+
+            using Barrier barrera = new(totalSesiones);
+            ConcurrentBag<Exception> excepciones = [];
+            Task[] tareas = new Task[totalSesiones];
+
+            for (int i = 0; i < totalSesiones; i++)
+            {
+                int indice = i;
+                tareas[i] = Task.Run(() =>
+                {
+                    barrera.SignalAndWait();
+                    try
+                    {
+                        ValueLINQStateManager<int>.LiberarMetadatos(tokensSesion[indice]);
+                    }
+                    catch (Exception ex)
+                    {
+                        excepciones.Add(ex);
+                    }
+                });
+            }
+
+            await Task.WhenAll(tareas);
+
+            _ = excepciones.Should().BeEmpty(
+                "ningún hilo debe experimentar excepciones al liberar sesiones de una arena desactivada");
+
+            foreach (long token in tokensSesion)
+                _ = ValueLINQStateManager<int>.IsMetadatoValido(token).Should().BeFalse();
         }
     }
 }

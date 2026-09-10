@@ -13,13 +13,23 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
         [Fact]
         public void PrimeraSesionCodificaElIndiceGlobalEnElToken()
         {
-            TablaSesiones<int> tabla = new(arenaId: 7);
+            long tokenArena = ValueLINQArenaManager.Alquilar();
+            int idArena = TokenHelper.ObtenerIdTokenArena(tokenArena);
+            long genArena = TokenHelper.ObtenerGeneracionTokenArena(tokenArena);
+            try
+            {
+                TablaSesiones<int> tabla = new(idArena, genArena);
 
-            long token = tabla.ObtenerMetadatos(4).Token;
+                long token = tabla.ObtenerMetadatos(4).Token;
 
-            _ = TokenHelper.ObtenerSlotIndex(token).Should().Be(ValueLINQConfig.Slots - 1);
-            _ = TokenHelper.ObtenerArenaId(token).Should().Be(7);
-            _ = TokenHelper.ObtenerVersion(token).Should().Be(1);
+                _ = TokenHelper.ObtenerSlotIndex(token).Should().Be(ValueLINQConfig.Slots - 1);
+                _ = TokenHelper.ObtenerArenaId(token).Should().Be(idArena);
+                _ = TokenHelper.ObtenerVersion(token).Should().Be(1);
+            }
+            finally
+            {
+                ValueLINQArenaManager.Liberar(tokenArena);
+            }
         }
 
         [Fact]
@@ -54,31 +64,41 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
         [Fact]
         public async Task ContencionCruzandoLaFronteraDeParticionProduceSesionesUnicas()
         {
-            TablaSesiones<int> tabla = new(1);
-            const int hilos = 16;
-            const int sesionesPorHilo = 40;
-            ConcurrentBag<long> tokens = [];
-            using Barrier barrera = new(hilos);
-
-            Task[] tareas = new Task[hilos];
-            for (int t = 0; t < hilos; t++)
+            long tokenArena = ValueLINQArenaManager.Alquilar();
+            int idArena = TokenHelper.ObtenerIdTokenArena(tokenArena);
+            long genArena = TokenHelper.ObtenerGeneracionTokenArena(tokenArena);
+            try
             {
-                tareas[t] = Task.Run(() =>
+                TablaSesiones<int> tabla = new(idArena, genArena);
+                const int hilos = 16;
+                const int sesionesPorHilo = 40;
+                ConcurrentBag<long> tokens = [];
+                using Barrier barrera = new(hilos);
+
+                Task[] tareas = new Task[hilos];
+                for (int t = 0; t < hilos; t++)
                 {
-                    barrera.SignalAndWait();
-                    for (int i = 0; i < sesionesPorHilo; i++)
-                        tokens.Add(tabla.ObtenerMetadatos(4).Token);
-                });
+                    tareas[t] = Task.Run(() =>
+                    {
+                        barrera.SignalAndWait();
+                        for (int i = 0; i < sesionesPorHilo; i++)
+                            tokens.Add(tabla.ObtenerMetadatos(4).Token);
+                    });
+                }
+
+                await Task.WhenAll(tareas);
+
+                int totalEsperado = hilos * sesionesPorHilo;
+                _ = tokens.Should().HaveCount(totalEsperado);
+                _ = tokens.Distinct().Should().HaveCount(totalEsperado);
+                _ = tokens.Select(TokenHelper.ObtenerSlotIndex).Distinct().Should().HaveCount(totalEsperado);
+                _ = tokens.Should().OnlyContain(token => TokenHelper.ObtenerArenaId(token) == idArena);
+                _ = tokens.Should().NotContain(0L);
             }
-
-            await Task.WhenAll(tareas);
-
-            int totalEsperado = hilos * sesionesPorHilo;
-            _ = tokens.Should().HaveCount(totalEsperado);
-            _ = tokens.Distinct().Should().HaveCount(totalEsperado);
-            _ = tokens.Select(TokenHelper.ObtenerSlotIndex).Distinct().Should().HaveCount(totalEsperado);
-            _ = tokens.Should().OnlyContain(token => TokenHelper.ObtenerArenaId(token) == 1);
-            _ = tokens.Should().NotContain(0L);
+            finally
+            {
+                ValueLINQArenaManager.Liberar(tokenArena);
+            }
         }
 
         [Fact]
@@ -123,15 +143,29 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
         [Fact]
         public void TablasDistintasSonIndependientes()
         {
-            TablaSesiones<int> tabla1 = new(1);
-            TablaSesiones<int> tabla2 = new(2);
+            long tokenArena1 = ValueLINQArenaManager.Alquilar();
+            long tokenArena2 = ValueLINQArenaManager.Alquilar();
+            int idArena1 = TokenHelper.ObtenerIdTokenArena(tokenArena1);
+            int idArena2 = TokenHelper.ObtenerIdTokenArena(tokenArena2);
+            long genArena1 = TokenHelper.ObtenerGeneracionTokenArena(tokenArena1);
+            long genArena2 = TokenHelper.ObtenerGeneracionTokenArena(tokenArena2);
+            try
+            {
+                TablaSesiones<int> tabla1 = new(idArena1, genArena1);
+                TablaSesiones<int> tabla2 = new(idArena2, genArena2);
 
-            long token1 = tabla1.ObtenerMetadatos(4).Token;
-            long token2 = tabla2.ObtenerMetadatos(4).Token;
+                long token1 = tabla1.ObtenerMetadatos(4).Token;
+                long token2 = tabla2.ObtenerMetadatos(4).Token;
 
-            _ = TokenHelper.ObtenerSlotIndex(token1).Should().Be(TokenHelper.ObtenerSlotIndex(token2));
-            _ = TokenHelper.ObtenerArenaId(token1).Should().NotBe(TokenHelper.ObtenerArenaId(token2));
-            _ = token1.Should().NotBe(token2);
+                _ = TokenHelper.ObtenerSlotIndex(token1).Should().Be(TokenHelper.ObtenerSlotIndex(token2));
+                _ = TokenHelper.ObtenerArenaId(token1).Should().NotBe(TokenHelper.ObtenerArenaId(token2));
+                _ = token1.Should().NotBe(token2);
+            }
+            finally
+            {
+                ValueLINQArenaManager.Liberar(tokenArena1);
+                ValueLINQArenaManager.Liberar(tokenArena2);
+            }
         }
 
         [Fact]
@@ -554,34 +588,80 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
         [Fact]
         public void DosEncarnacionesDeUnaArenaNoProducenTokensColisionados()
         {
-            TablaSesiones<int> encarnacion1 = new(5, arenaGen: 1L);
-            TablaSesiones<int> encarnacion2 = new(5, arenaGen: 2L);
+            long tokenArena1 = ValueLINQArenaManager.Alquilar();
+            int idArena = TokenHelper.ObtenerIdTokenArena(tokenArena1);
+            long gen1 = TokenHelper.ObtenerGeneracionTokenArena(tokenArena1);
 
+            TablaSesiones<int> encarnacion1 = new(idArena, gen1);
             long t1 = encarnacion1.ObtenerMetadatos(4).Token;
-            long t2 = encarnacion2.ObtenerMetadatos(4).Token;
 
-            _ = TokenHelper.ObtenerSlotIndex(t1).Should().Be(TokenHelper.ObtenerSlotIndex(t2));
-            _ = TokenHelper.ObtenerVersion(t1).Should().Be(TokenHelper.ObtenerVersion(t2));
-            _ = TokenHelper.ObtenerArenaId(t1).Should().Be(TokenHelper.ObtenerArenaId(t2));
-            _ = t1.Should().NotBe(t2, "la generación de arena debe desambiguar encarnaciones con mismo slot y versión");
+            ValueLINQArenaManager.Liberar(tokenArena1);
 
-            _ = encarnacion2.IsMetadatoValido(t1).Should().BeFalse();
-            _ = encarnacion2.IsMetadatoValido(t2).Should().BeTrue();
+            List<long> arenasTemporales = [];
+            long tokenArena2 = 0L;
+            try
+            {
+                while (true)
+                {
+                    long tok = ValueLINQArenaManager.Alquilar();
+                    if (TokenHelper.ObtenerIdTokenArena(tok) == idArena)
+                    {
+                        tokenArena2 = tok;
+                        break;
+                    }
+
+                    arenasTemporales.Add(tok);
+                }
+
+                long gen2 = TokenHelper.ObtenerGeneracionTokenArena(tokenArena2);
+                TablaSesiones<int> encarnacion2 = new(idArena, gen2);
+                long t2 = encarnacion2.ObtenerMetadatos(4).Token;
+
+                _ = TokenHelper.ObtenerSlotIndex(t1).Should().Be(TokenHelper.ObtenerSlotIndex(t2));
+                _ = TokenHelper.ObtenerVersion(t1).Should().Be(TokenHelper.ObtenerVersion(t2));
+                _ = TokenHelper.ObtenerArenaId(t1).Should().Be(TokenHelper.ObtenerArenaId(t2));
+                _ = t1.Should().NotBe(t2, "la generación de arena debe desambiguar encarnaciones con mismo slot y versión");
+
+                _ = encarnacion2.IsMetadatoValido(t1).Should().BeFalse();
+                _ = encarnacion2.IsMetadatoValido(t2).Should().BeTrue();
+            }
+            finally
+            {
+                if (tokenArena2 != 0L)
+                    ValueLINQArenaManager.Liberar(tokenArena2);
+
+                foreach (long tok in arenasTemporales)
+                    ValueLINQArenaManager.Liberar(tok);
+            }
         }
 
         [Fact]
         public void UnTokenDeOtraArenaSeRechazaAunqueElSlotCoincida()
         {
-            TablaSesiones<int> tablaArena1 = new(1);
-            TablaSesiones<int> tablaArena2 = new(2);
-            long tokenArena1 = tablaArena1.ObtenerMetadatos(4).Token;
-            _ = tablaArena2.ObtenerMetadatos(4).Token;
+            long tokenArena1 = ValueLINQArenaManager.Alquilar();
+            long tokenArena2 = ValueLINQArenaManager.Alquilar();
+            int id1 = TokenHelper.ObtenerIdTokenArena(tokenArena1);
+            int id2 = TokenHelper.ObtenerIdTokenArena(tokenArena2);
+            long gen1 = TokenHelper.ObtenerGeneracionTokenArena(tokenArena1);
+            long gen2 = TokenHelper.ObtenerGeneracionTokenArena(tokenArena2);
+            try
+            {
+                TablaSesiones<int> tablaArena1 = new(id1, gen1);
+                TablaSesiones<int> tablaArena2 = new(id2, gen2);
+                long tokenArena1Sesion = tablaArena1.ObtenerMetadatos(4).Token;
+                _ = tablaArena2.ObtenerMetadatos(4).Token;
 
-            Action presentarloEnTablaAjena = () => _ = tablaArena2.ObtenerMetadatos(tokenArena1).IsDisposed;
+                Action presentarloEnTablaAjena = () => _ = tablaArena2.ObtenerMetadatos(tokenArena1Sesion).IsDisposed;
 
-            _ = tablaArena2.IsMetadatoValido(tokenArena1).Should().BeFalse();
-            _ = presentarloEnTablaAjena.Should().Throw<ValueLinqSesionExpiradaException>();
-            _ = tablaArena1.IsMetadatoValido(tokenArena1).Should().BeTrue();
+                _ = tablaArena2.IsMetadatoValido(tokenArena1Sesion).Should().BeFalse();
+                _ = presentarloEnTablaAjena.Should().Throw<ValueLinqSesionExpiradaException>();
+                _ = tablaArena1.IsMetadatoValido(tokenArena1Sesion).Should().BeTrue();
+            }
+            finally
+            {
+                ValueLINQArenaManager.Liberar(tokenArena1);
+                ValueLINQArenaManager.Liberar(tokenArena2);
+            }
         }
 
         [Fact]
@@ -668,6 +748,148 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
             _ = liberarCero.Should().NotThrow();
             _ = liberarParticionInexistente.Should().NotThrow();
             _ = liberarSlotVirgen.Should().NotThrow();
+        }
+
+        [Fact]
+        public void ObtenerMetadatosEnArenaInactivaLanzaArenaInactivaYDevuelveSlotALaPila()
+        {
+            long tokenArena = ValueLINQArenaManager.Alquilar();
+            int idArena = TokenHelper.ObtenerIdTokenArena(tokenArena);
+            long genArena = TokenHelper.ObtenerGeneracionTokenArena(tokenArena);
+            TablaSesiones<int> tabla = new(idArena, genArena);
+
+            ValueLINQArenaManager.Liberar(tokenArena);
+
+            int slotsLibresAntes = tabla.IndicesLibres;
+
+            Action accion = () => _ = tabla.ObtenerMetadatos(4);
+
+            _ = accion.Should().Throw<ValueLinqArenaInactivaException>()
+                .Which.IdArena.Should().Be(idArena);
+
+            _ = tabla.IndicesLibres.Should().Be(slotsLibresAntes,
+                "el índice extraído debe reintegrarse inmediatamente a la pila sin fugas");
+            _ = tabla.HasSesionesVivas.Should().BeFalse(
+                "ninguna sesión debe quedar registrada como viva en una arena inactiva");
+        }
+
+        [Fact]
+        public void ObtenerMetadatosEnArenaInactivaRepetidamenteNoAgotaCapacidad()
+        {
+            long tokenArena = ValueLINQArenaManager.Alquilar();
+            int idArena = TokenHelper.ObtenerIdTokenArena(tokenArena);
+            long genArena = TokenHelper.ObtenerGeneracionTokenArena(tokenArena);
+            TablaSesiones<int> tabla = new(idArena, genArena);
+
+            ValueLINQArenaManager.Liberar(tokenArena);
+
+            const int intentos = ValueLINQConfig.Slots + 50;
+
+            for (int i = 0; i < intentos; i++)
+            {
+                Action accion = () => _ = tabla.ObtenerMetadatos(4);
+                _ = accion.Should().Throw<ValueLinqArenaInactivaException>();
+            }
+
+            _ = tabla.IndicesLibres.Should().Be(ValueLINQConfig.Slots,
+                "la totalidad de los índices debe permanecer disponible en la pila tras rechazos de arena inactiva");
+            _ = tabla.HasSesionesVivas.Should().BeFalse();
+        }
+
+        [Fact]
+        public void LiberarMetadatosTrasLiberacionDeArenaEsInofensivoEIdempotente()
+        {
+            long tokenArena = ValueLINQArenaManager.Alquilar();
+            int idArena = TokenHelper.ObtenerIdTokenArena(tokenArena);
+            long genArena = TokenHelper.ObtenerGeneracionTokenArena(tokenArena);
+            TablaSesiones<int> tabla = new(idArena, genArena);
+
+            ref MetadatosSesion<int> metadato = ref tabla.ObtenerMetadatos(16);
+            long tokenSesion = metadato.Token;
+
+            _ = tabla.IsMetadatoValido(tokenSesion).Should().BeTrue();
+
+            ValueLINQArenaManager.Liberar(tokenArena);
+            tabla.LiberarTodo();
+
+            _ = tabla.IsMetadatoValido(tokenSesion).Should().BeFalse();
+
+            Action primeraLiberacion = () => tabla.LiberarMetadatos(tokenSesion);
+            Action segundaLiberacion = () => tabla.LiberarMetadatos(tokenSesion);
+
+            _ = primeraLiberacion.Should().NotThrow(
+                "liberar una sesión cuya arena fue previamente desactivada o barrida debe completarse de forma segura");
+            _ = segundaLiberacion.Should().NotThrow(
+                "la liberación repetida sobre una sesión ya barrida debe ser estrictamente idempotente");
+
+            _ = tabla.IndicesLibres.Should().Be(ValueLINQConfig.Slots);
+            _ = tabla.HasSesionesVivas.Should().BeFalse();
+        }
+
+        [Fact]
+        public async Task ObtenerMetadatosConcurrenteConLiberarTodoEnTablaSesionesMantieneConsistencia()
+        {
+            const int iteraciones = 30;
+            const int hilos = 8;
+
+            for (int iter = 0; iter < iteraciones; iter++)
+            {
+                long tokenArena = ValueLINQArenaManager.Alquilar();
+                int idArena = TokenHelper.ObtenerIdTokenArena(tokenArena);
+                long genArena = TokenHelper.ObtenerGeneracionTokenArena(tokenArena);
+                TablaSesiones<int> tabla = new(idArena, genArena);
+
+                using Barrier barrera = new(hilos + 1);
+                ConcurrentBag<Exception> excepcionesInesperadas = [];
+                Task[] tareas = new Task[hilos + 1];
+
+                for (int t = 0; t < hilos; t++)
+                {
+                    tareas[t] = Task.Run(() =>
+                    {
+                        barrera.SignalAndWait();
+                        for (int i = 0; i < 25; i++)
+                        {
+                            long tokenSesion = 0L;
+                            try
+                            {
+                                ref MetadatosSesion<int> metadato = ref tabla.ObtenerMetadatos(4);
+                                tokenSesion = metadato.Token;
+                            }
+                            catch (ValueLinqArenaInactivaException)
+                            {
+                                break;
+                            }
+                            catch (Exception ex)
+                            {
+                                excepcionesInesperadas.Add(ex);
+                                break;
+                            }
+                            finally
+                            {
+                                if (tokenSesion != 0L)
+                                    tabla.LiberarMetadatos(tokenSesion);
+                            }
+                        }
+                    });
+                }
+
+                tareas[hilos] = Task.Run(async () =>
+                {
+                    barrera.SignalAndWait();
+                    await Task.Yield();
+                    ValueLINQArenaManager.Liberar(tokenArena);
+                    tabla.LiberarTodo();
+                });
+
+                await Task.WhenAll(tareas);
+
+                _ = excepcionesInesperadas.Should().BeEmpty(
+                    "la carrera entre adquisición de sesiones y barrido de tabla no debe arrojar excepciones no controladas");
+                _ = tabla.IndicesLibres.Should().Be(ValueLINQConfig.Slots,
+                    "tras completar la liberación y devolver todas las sesiones, el stack debe recuperar su capacidad íntegra");
+                _ = tabla.HasSesionesVivas.Should().BeFalse();
+            }
         }
     }
 }

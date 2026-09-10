@@ -131,6 +131,11 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
 
         [DoesNotReturn]
         [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void ThrowArenaInactiva(int idArena)
+            => throw new ValueLinqArenaInactivaException(idArena);
+
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowSesionExpirada(long idEsperado, long idObtenido, int indice)
             => throw new ValueLinqSesionExpiradaException(idEsperado, idObtenido, indice);
 
@@ -197,6 +202,9 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
         private ref MetadatosSesion<T> InicializarSlot(int particion, int index, int indice, int tamañoMinimo)
         {
             using ValueLINQSpinLock spinLock = new(ref _spinLocks[particion][index].Lock);
+
+            if (_arenaId != 0 && (!ValueLINQArenaManager.IsArenaViva(_arenaId) || ValueLINQArenaManager.ObtenerGeneracion(_arenaId) != _arenaGen))
+                ThrowArenaInactiva(_arenaId);
 
             ref MetadatosSesion<T> metadato = ref _datos[particion][index];
             long token;
