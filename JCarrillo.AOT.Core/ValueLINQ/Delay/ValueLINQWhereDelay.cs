@@ -33,7 +33,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
         /// Obtiene una referencia de solo lectura al elemento en la posición actual del enumerador.
         /// </summary>
         /// <value>Una referencia al elemento actual de tipo <typeparamref name="T"/>.</value>
-        public readonly ref readonly T Current
+        public ref readonly T Current
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get => ref _enumerator.Current;
@@ -46,11 +46,14 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool MoveNext()
         {
+            if (_enumerator is null)
+                return false;
+
             while (_enumerator.MoveNext())
-            {
                 if (_predicate.Ejecutar(_enumerator.Current, _state))
                     return true;
-            }
+
+            Dispose();
             return false;
         }
 
@@ -60,8 +63,11 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Dispose()
         {
-            _enumerator.Dispose();
-            _enumerator = default!;
+            if (_enumerator is not null)
+            {
+                _enumerator.Dispose();
+                _enumerator = default!;
+            }
         }
     }
 }

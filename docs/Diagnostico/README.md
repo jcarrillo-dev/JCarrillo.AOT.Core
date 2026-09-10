@@ -1,10 +1,11 @@
 [Volver al Sitemap de Documentación](../README.md)
 
-# Diagnósticos y Advertencias de Rendimiento
+# Diagnósticos y Excepciones
 
-El módulo de diagnósticos de `JCarrillo.AOT.Core` agrupa las reglas de análisis estático, analizadores Roslyn y advertencias personalizadas emitidas en tiempo de compilación.
+Este directorio centraliza la documentación de ingeniería y las guías de remediación de `JCarrillo.AOT.Core`, en dos catálogos que se reparten los dos momentos en que el framework avisa:
 
-Este directorio centraliza la documentación de ingeniería y las guías de remediación organizadas por categorías de diagnóstico (namespaces).
+*   **En compilación**, mediante reglas de análisis estático y advertencias personalizadas.
+*   **En ejecución**, mediante excepciones que remiten desde su propio mensaje a la ficha con las causas y las alternativas.
 
 ---
 
@@ -12,7 +13,8 @@ Este directorio centraliza la documentación de ingeniería y las guías de reme
 
 Para mantener un diseño modular y limpio, los diagnósticos se agrupan en subcarpetas específicas según su categoría y procedencia. Cada subcarpeta cuenta con su propio **README de índice** que cataloga las reglas pertenecientes a ese namespace:
 
-*   **[JCarrillo Allocation (JCA)](JCA/README.md)**: Reglas de análisis estático propietarias de la librería para optimización de CPU, prevención de allocations en heap y compatibilidad Native AOT.
+*   **[JCarrillo Allocation (JCA)](JCA/README.md)**: Reglas de análisis estático propietarias de la librería para optimización de CPU, prevención de allocations en heap y compatibilidad Native AOT. Se emiten en **compilación**.
+*   **[JCarrillo Exception (JCE)](JCE/README.md)**: Excepciones de **ejecución** del framework. Cada una añade a su mensaje la dirección de su ficha, donde se explica qué contrato se incumplió, cómo evitarlo de forma segura y, cuando existe escotilla en `Marshalling`, qué se compromete a garantizar quien la usa.
 
 ---
 

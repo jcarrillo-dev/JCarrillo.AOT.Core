@@ -40,16 +40,18 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
             bool hasNext = next < _span.Length;
             if (hasNext)
                 _index = next;
+            else
+                Dispose();
             return hasNext;
         }
 
         /// <summary>
-        /// Libera los recursos utilizados por el enumerador (operación sin efecto).
+        /// Libera los recursos utilizados por el enumerador.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly void Dispose()
+        public void Dispose()
         {
-            // no-op
+            _index = _span.Length;
         }
     }
 }

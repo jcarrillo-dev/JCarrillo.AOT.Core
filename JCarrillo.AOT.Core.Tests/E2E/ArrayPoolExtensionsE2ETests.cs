@@ -44,16 +44,16 @@ namespace JCarrillo.AOT.Core.Tests.E2E
             // Actuar y Aserción
             // Rentamos y liberamos. Para verificar que retorna al pool, rentamos un tamaño grande, lo liberamos,
             // y volver a rentarlo típicamente debería retornar un arreglo limpio o el mismo sin nuevas asignaciones.
-            // Como no podemos inspeccionar fácilmente el estado interno del pool, verificamos que establece EstaDisposed en true.
+            // Como no podemos inspeccionar fácilmente el estado interno del pool, verificamos que establece IsDisposed en true.
             PooledArray<int> array = arrayPool.ObtenerArreglo(100);
-            _ = array.EstaDisposed.Should().BeFalse();
+            _ = array.IsDisposed.Should().BeFalse();
             array.Dispose();
-            _ = array.EstaDisposed.Should().BeTrue();
+            _ = array.IsDisposed.Should().BeTrue();
 
             PooledList<int> list = arrayPool.ObtenerLista(100);
-            _ = list.EstaDisposed.Should().BeFalse();
+            _ = list.IsDisposed.Should().BeFalse();
             list.Dispose();
-            _ = list.EstaDisposed.Should().BeTrue();
+            _ = list.IsDisposed.Should().BeTrue();
         }
 
         [Fact]
@@ -190,7 +190,7 @@ namespace JCarrillo.AOT.Core.Tests.E2E
             // Para verificarlo sin depender de detalles internos inaccesibles,
             // podemos desempaquetar la estructura de la variable boxeada.
             PooledList<int> listaDesempaquetada = (PooledList<int>)boxedLista;
-            _ = listaDesempaquetada.EstaDisposed.Should().BeTrue();
+            _ = listaDesempaquetada.IsDisposed.Should().BeTrue();
         }
 
         [Fact]
@@ -212,7 +212,7 @@ namespace JCarrillo.AOT.Core.Tests.E2E
 
             // A pesar de la excepción, el pool debe haber recibido el arreglo y estar marcado como dispuesto.
             PooledArray<int> arregloDesempaquetado = (PooledArray<int>)boxedArreglo;
-            _ = arregloDesempaquetado.EstaDisposed.Should().BeTrue();
+            _ = arregloDesempaquetado.IsDisposed.Should().BeTrue();
         }
     }
 }

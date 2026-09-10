@@ -13,7 +13,7 @@ El framework ofrece cuatro variantes de colecciones con diferentes compromisos d
 
 | Colección | Tipo de Struct | ¿Es Ampliable? | Características Técnicas |
 | :--- | :--- | :---: | :--- |
-| **`PooledList<T>`** | `record struct` | **SÍ** | Lista dinámica mutable. Permite ser guardada en campos de clases (con precaución), pero cuenta con validación de no-boxing activa en su `Dispose()`. |
+| **`PooledList<T>`** | `record struct` | **SÍ** | Lista dinámica mutable, con validación de no-boxing activa en su `Dispose()`. El compilador permite guardarla en un campo de clase, pero hacerlo la copia y **corrompe el pool** (§3.4): para compartirla hay que aliasarla con `ref` o `in`. |
 | **`PooledArray<T>`** | `record struct` | **NO** | Wrapper inmutable no-ampliable sobre un array del pool. Ofrece acceso por índice y vista de memoria (`Memory<T>`). |
 | **`PooledListRef<T>`** | `ref struct` | **SÍ** | Variante de lista confinada estrictamente a la pila. Evita el boxing por diseño del compilador. No puede ser capturada en tareas asíncronas ni subirse al heap. |
 | **`PooledArrayRef<T>`** | `ref struct` | **NO** | Variante de array confinado estrictamente a la pila. Su inmutabilidad y confinamiento se resuelven en tiempo de compilación. |
@@ -77,6 +77,11 @@ Los benchmarks de las colecciones comparan la inicialización, inserción (`Add`
     *   **Ventaja**: Mantiene el perfil **zero-allocation** en el heap (0 bytes frente a los 16,600 bytes del baseline), reduciendo picos de latencia imprevistos de GC.
 3.  **Wrappers de Arrays**:
     *   La instanciación de `PooledArray` conlleva una penalización en CPU de hasta un **70.0% (medido)** en comparación con arrays tradicionales de .NET debido al alquiler de buffers y validación contra boxing. Solo se justifica para evitar allocations en flujos de alta frecuencia.
-4.  **Variantes basadas en pila (`ref struct` / `PooledListRef<T>`)**:
+4.  **Copia por valor de las variantes `struct` (`PooledList<T>`, `PooledArray<T>`)**:
+    *   **Desventaja (corrupción silenciosa)**: copiar la estructura produce dos valores que comparten el mismo búfer alquilado, mientras que `IsDisposed` es estado **por instancia**: cada copia tiene su propio indicador y la validación deja de proteger. Tras `var b = a; a.Dispose(); b.Dispose();`, dos llamadas independientes a `ArrayPool<T>.Shared.Rent` devuelven **el mismo array (medido)**, de modo que dos consumidores sin relación escriben sobre el mismo búfer.
+    *   No basta con copiar y disponer una sola vez: al ampliar, la lista devuelve el array anterior al pool y sustituye el suyo, así que una copia que crece deja a la otra apuntando a memoria ya devuelta.
+    *   `ValidarNoBoxeado` **no cubre este caso**, porque la copia ocurre en la pila y no hay boxing que detectar. Se generan copias al asignar a otra variable, al guardar en un campo o propiedad, al pasar por valor a un método y con expresiones `with`. La forma segura de compartir la instancia es aliasarla con `ref` o `in`, que mantiene una sola instancia y devuelve efectividad a `IsDisposed`.
+    *   Es la única situación conocida del proyecto en la que el uso incorrecto **no lanza**: falla en silencio y lejos del culpable. Está prevista una regla de análisis estático que lo marque en tiempo de compilación; hasta entonces es responsabilidad del consumidor.
+5.  **Variantes basadas en pila (`ref struct` / `PooledListRef<T>`)**:
     *   **Ventaja**: Reducen el tiempo de ejecución en CPU entre un **12.3% y 21.6% (medido)** en comparación con sus equivalentes `struct` tradicionales (ej. `PooledList<T>`). Esto ocurre porque se omite la validación de no-boxing en ejecución y el compilador JIT realiza optimizaciones locales en stack, operando con un layout de apenas 16 bytes.
     *   **Desventaja**: Restricciones de compilador de C#. No se pueden usar en métodos asíncronos (`async await`), no implementan interfaces, y no pueden escapar al heap (no se pueden declarar en campos de clases no-ref).

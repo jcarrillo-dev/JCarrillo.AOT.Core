@@ -7,6 +7,59 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
     public class PooledListRefTests
     {
         [Fact]
+        public void RemoveAtDesplazaLosPosterioresYReduceElTamaño()
+        {
+            // Preparar
+            using PooledListRef<int> lista = new(8);
+            lista.AddRange([10, 20, 30, 40]);
+
+            // Actuar
+            lista.RemoveAt(1);
+
+            // Verificar
+            _ = lista.Tamaño.Should().Be(3);
+            _ = lista.Span.ToArray().Should().Equal(10, 30, 40);
+        }
+
+        [Fact]
+        public void RemoveEliminaLaPrimeraApariciónYDevuelveSiExistia()
+        {
+            // Preparar
+            using PooledListRef<int> lista = new(8);
+            lista.AddRange([10, 20, 30, 20]);
+
+            // Actuar
+            bool eliminado = lista.Remove(20);
+            bool inexistente = lista.Remove(99);
+
+            // Verificar
+            _ = eliminado.Should().BeTrue();
+            _ = inexistente.Should().BeFalse();
+            _ = lista.Span.ToArray().Should().Equal(10, 30, 20);
+        }
+
+        [Fact]
+        public void RemoveAtFueraDeRangoLanza()
+        {
+            // Preparar: un ref struct no se puede capturar en un lambda, así que la aserción no puede
+            // construirse con Should().Throw().
+            using PooledListRef<int> lista = new(4);
+            lista.Add(1);
+
+            bool lanzoNegativo = false;
+            bool lanzoPasado = false;
+
+            // Actuar
+            try { lista.RemoveAt(-1); } catch (ArgumentOutOfRangeException) { lanzoNegativo = true; }
+            try { lista.RemoveAt(1); } catch (ArgumentOutOfRangeException) { lanzoPasado = true; }
+
+            // Verificar
+            _ = lanzoNegativo.Should().BeTrue();
+            _ = lanzoPasado.Should().BeTrue();
+            _ = lista.Tamaño.Should().Be(1, "un índice inválido no debe alterar la lista");
+        }
+
+        [Fact]
         public void ConstructorShouldInitializeCorrectly()
         {
             // Preparar y Actuar
@@ -15,7 +68,7 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
             // Verificar
             _ = list.Tamaño.Should().Be(0);
             _ = list.Span.Length.Should().Be(0);
-            _ = list.EsAmpliable.Should().BeTrue();
+            _ = list.IsAmpliable.Should().BeTrue();
         }
 
         [Fact]
@@ -85,7 +138,7 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
 
             // Actuar y Verificar
             list.Dispose();
-            _ = list.EstaDisposed.Should().BeTrue();
+            _ = list.IsDisposed.Should().BeTrue();
 
             // Llamar a Dispose de nuevo no debería lanzar una excepción
             list.Dispose();

@@ -45,6 +45,11 @@ namespace JCarrillo.AOT.Core.ValueLINQ
         internal ValueLINQStruct(int tamañoMinimo)
             => Token = TokenHelper.LeerToken(ref ValueLINQStateManager<T>.ObtenerMetadatos(tamañoMinimo).Token);
 
+        // Creacion en una arena concreta (propaga el ambito a las sesiones intermedias de los operadores)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal ValueLINQStruct(int idArena, int tamañoMinimo)
+            => Token = TokenHelper.LeerToken(ref ValueLINQStateManager<T>.ObtenerMetadatos(idArena, tamañoMinimo).Token);
+
         // Clonacion que apunta al mismo array (Nunca deberia usarse, solo esta para pruebas internas)
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal ValueLINQStruct(long token)

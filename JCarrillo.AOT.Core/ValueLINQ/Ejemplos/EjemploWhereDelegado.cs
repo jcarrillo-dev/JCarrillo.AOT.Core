@@ -1,9 +1,11 @@
+using System.Runtime.CompilerServices;
 using JCarrillo.AOT.Core.ValueLINQ.Interfaces;
 
 namespace JCarrillo.AOT.Core.ValueLINQ.Ejemplos
 {
     internal struct EjemploWhereDelegado<T> : IWhereDelegado<T, T>
     {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly bool Ejecutar(T objetoLista, T otro)
         {
             bool

@@ -12,7 +12,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ
 
         static ValueLINQGC()
         {
-            _timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
+            _timer = new PeriodicTimer(ValueLINQConfig.IntervaloGC);
             _cts = new CancellationTokenSource();
             _backgroundTask = Task.Run(RunLoopAsync);
         }
@@ -20,9 +20,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ
         public static void Registrar(Action cleanupAction)
         {
             if (cleanupAction != null)
-            {
                 _cleanupActions.Add(cleanupAction);
-            }
         }
 
         private static async Task RunLoopAsync()
@@ -30,9 +28,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ
             try
             {
                 while (await _timer.WaitForNextTickAsync(_cts.Token).ConfigureAwait(false))
-                {
                     EjecutarLimpieza();
-                }
             }
             catch (OperationCanceledException)
             {
@@ -47,7 +43,6 @@ namespace JCarrillo.AOT.Core.ValueLINQ
         private static void EjecutarLimpieza()
         {
             foreach (Action action in _cleanupActions)
-            {
                 try
                 {
                     action();
@@ -56,7 +51,6 @@ namespace JCarrillo.AOT.Core.ValueLINQ
                 {
                     Debug.WriteLine($"Error ejecutando acción de limpieza en ValueLINQGC: {ex}");
                 }
-            }
         }
 
         internal static async Task ShutdownAsync()

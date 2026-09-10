@@ -8,9 +8,9 @@ namespace JCarrillo.AOT.Core.Extensiones.SemaphoreSlim
     /// el recurso <see cref="SemaphoreSlim"/> asociado al ser desechado.
     /// Diseñado para optimizar el rendimiento mediante el patrón de cero asignaciones en el heap.
     /// </summary>
-    public readonly record struct SemaphoreLock : IDisposable, IAsyncDisposable
+    public struct SemaphoreLock : IDisposable, IAsyncDisposable
     {
-        private readonly System.Threading.SemaphoreSlim? _semaphore;
+        private System.Threading.SemaphoreSlim? _semaphore;
 
         /// <summary>
         /// Inicializa una nueva instancia de la estructura <see cref="SemaphoreLock"/> vinculada al semáforo especificado.
@@ -30,9 +30,9 @@ namespace JCarrillo.AOT.Core.Extensiones.SemaphoreSlim
         public void Dispose()
         {
             this.ValidarNoBoxeado();
-            System.Threading.SemaphoreSlim? sem = Interlocked.Exchange(ref Unsafe.AsRef(in _semaphore), null);
+            System.Threading.SemaphoreSlim? sem = Interlocked.Exchange(ref _semaphore, null);
             if (sem != null)
-                _ = _ = sem.Release();
+                _ = sem.Release();
         }
 
         /// <summary>
@@ -49,9 +49,9 @@ namespace JCarrillo.AOT.Core.Extensiones.SemaphoreSlim
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ValueTask DisposeAsync()
         {
-            System.Threading.SemaphoreSlim? sem = Interlocked.Exchange(ref Unsafe.AsRef(in _semaphore), null);
+            System.Threading.SemaphoreSlim? sem = Interlocked.Exchange(ref _semaphore, null);
             if (sem != null)
-                _ = _ = sem.Release();
+                _ = sem.Release();
             return ValueTask.CompletedTask;
         }
     }

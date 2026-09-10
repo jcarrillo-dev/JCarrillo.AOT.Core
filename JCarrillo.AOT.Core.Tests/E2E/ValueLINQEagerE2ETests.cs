@@ -65,12 +65,7 @@ namespace JCarrillo.AOT.Core.Tests.E2E
         }
 
         private static int GetActiveSlotsCount<TItem>()
-        {
-            int topStack = (int)typeof(ValueLINQStateManager<TItem>)
-                .GetField("_topStack", BindingFlags.Static | BindingFlags.NonPublic)!
-                .GetValue(null)!;
-            return 4096 - topStack;
-        }
+            => ValueLINQConfig.TamañoTabla - ValueLINQStateManager<TItem>.SlotsLibres;
 
         #endregion
 
@@ -575,7 +570,7 @@ namespace JCarrillo.AOT.Core.Tests.E2E
                 using ValueLINQStruct<LogEvent> events = errors.Select<string, LogParserSelector, LogEvent>(new LogParserSelector());
                 using ValueLINQRefStruct<ValueLINQStruct<LogEvent>> chunks = events.Chunk(100);
 
-                chunks.ProcessChunks(new LogBatchProcessor(semaphore));
+                chunks.ProcesarChunks(new LogBatchProcessor(semaphore));
             });
         }
 

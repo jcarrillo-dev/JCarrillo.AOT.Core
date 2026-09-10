@@ -1,6 +1,10 @@
 using JCarrillo.AOT.Core.Colecciones.Pooled;
 using JCarrillo.AOT.Core.Colecciones.Pooled.Ref;
 using JCarrillo.AOT.Core.ValueLINQ;
+using JCarrillo.AOT.Core.ValueLINQ.Arena;
+using JCarrillo.AOT.Core.ValueLINQ.Delegados;
+using JCarrillo.AOT.Core.ValueLINQ.Estados;
+using JCarrillo.AOT.Core.ValueLINQ.Excepciones;
 using JCarrillo.AOT.Core.ValueLINQ.Interfaces;
 using JCarrillo.AOT.Core.Diagnostico;
 using System.Buffers;
@@ -23,6 +27,22 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
     {
         #region ToValueQuery
 
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void CopiarOrigenSlow<T>(long token, scoped ReadOnlySpan<T> origen)
+        {
+            try
+            {
+                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
+                origen.CopyTo(metadatos.Array);
+                metadatos.TamañoActual = origen.Length;
+            }
+            catch
+            {
+                ValueLINQStateManager<T>.LiberarMetadatos(token);
+                throw;
+            }
+        }
+
         /// <summary>
         /// Converts an array to a <see cref="ValueLINQStruct{T}"/>.
         /// </summary>
@@ -36,18 +56,26 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 ThrowArgumentNullException(nameof(origen));
 
             ValueLINQStruct<T> query = new(origen.Length);
-            try
-            {
-                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(query.Token);
-                origen.AsSpan(0, origen.Length).CopyTo(metadatos.Array);
-                metadatos.TamañoActual = origen.Length;
-                return query;
-            }
-            catch
-            {
-                query.Dispose();
-                throw;
-            }
+            CopiarOrigenSlow<T>(query.Token, origen.AsSpan(0, origen.Length));
+            return query;
+        }
+
+        /// <summary>
+        /// Convierte un array en un <see cref="ValueLINQStruct{T}"/> cuya sesión vive en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos del array.</typeparam>
+        /// <param name="origen">El array de origen.</param>
+        /// <param name="arena">La arena propietaria de la consulta y de sus sesiones intermedias.</param>
+        /// <returns>Un <see cref="ValueLINQStruct{T}"/> con los elementos del array, adscrito a la arena.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQStruct<T> ToValueQuery<T>(this T[] origen, ValueLINQArena arena)
+        {
+            if (origen == null)
+                ThrowArgumentNullException(nameof(origen));
+
+            ValueLINQStruct<T> query = new(arena.Id, origen.Length);
+            CopiarOrigenSlow<T>(query.Token, origen.AsSpan(0, origen.Length));
+            return query;
         }
 
         /// <summary>
@@ -63,18 +91,26 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 ThrowArgumentNullException(nameof(origen));
 
             ValueLINQRefStruct<T> query = new(origen.Length);
-            try
-            {
-                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(query.Token);
-                origen.AsSpan(0, origen.Length).CopyTo(metadatos.Array);
-                metadatos.TamañoActual = origen.Length;
-                return query;
-            }
-            catch
-            {
-                query.Dispose();
-                throw;
-            }
+            CopiarOrigenSlow<T>(query.Token, origen.AsSpan(0, origen.Length));
+            return query;
+        }
+
+        /// <summary>
+        /// Convierte un array en un <see cref="ValueLINQRefStruct{T}"/> cuya sesión vive en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos del array.</typeparam>
+        /// <param name="origen">El array de origen.</param>
+        /// <param name="arena">La arena propietaria de la consulta y de sus sesiones intermedias.</param>
+        /// <returns>Un <see cref="ValueLINQRefStruct{T}"/> con los elementos del array, adscrito a la arena.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this T[] origen, ValueLINQArena arena)
+        {
+            if (origen == null)
+                ThrowArgumentNullException(nameof(origen));
+
+            ValueLINQRefStruct<T> query = new(arena.Id, origen.Length);
+            CopiarOrigenSlow<T>(query.Token, origen.AsSpan(0, origen.Length));
+            return query;
         }
 
         /// <summary>
@@ -87,18 +123,8 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         public static ValueLINQStruct<T> ToValueQuery<T>(this Span<T> origen)
         {
             ValueLINQStruct<T> query = new(origen.Length);
-            try
-            {
-                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(query.Token);
-                origen.CopyTo(metadatos.Array);
-                metadatos.TamañoActual = origen.Length;
-                return query;
-            }
-            catch
-            {
-                query.Dispose();
-                throw;
-            }
+            CopiarOrigenSlow<T>(query.Token, origen);
+            return query;
         }
 
         /// <summary>
@@ -111,18 +137,8 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this Span<T> origen)
         {
             ValueLINQRefStruct<T> query = new(origen.Length);
-            try
-            {
-                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(query.Token);
-                origen.CopyTo(metadatos.Array);
-                metadatos.TamañoActual = origen.Length;
-                return query;
-            }
-            catch
-            {
-                query.Dispose();
-                throw;
-            }
+            CopiarOrigenSlow<T>(query.Token, origen);
+            return query;
         }
 
         /// <summary>
@@ -135,18 +151,8 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         public static ValueLINQStruct<T> ToValueQuery<T>(this ReadOnlySpan<T> origen)
         {
             ValueLINQStruct<T> query = new(origen.Length);
-            try
-            {
-                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(query.Token);
-                origen.CopyTo(metadatos.Array);
-                metadatos.TamañoActual = origen.Length;
-                return query;
-            }
-            catch
-            {
-                query.Dispose();
-                throw;
-            }
+            CopiarOrigenSlow<T>(query.Token, origen);
+            return query;
         }
 
         /// <summary>
@@ -159,18 +165,8 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this ReadOnlySpan<T> origen)
         {
             ValueLINQRefStruct<T> query = new(origen.Length);
-            try
-            {
-                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(query.Token);
-                origen.CopyTo(metadatos.Array);
-                metadatos.TamañoActual = origen.Length;
-                return query;
-            }
-            catch
-            {
-                query.Dispose();
-                throw;
-            }
+            CopiarOrigenSlow<T>(query.Token, origen);
+            return query;
         }
 
         /// <summary>
@@ -218,6 +214,42 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         #region Where
 
         /// <summary>
+        /// Filtra un flujo de datos representado por una estructura de referencia de ValueLINQ basándose en un predicado struct sin estado.
+        /// </summary>
+        /// <typeparam name="TOrigen">El tipo de los elementos de origen.</typeparam>
+        /// <typeparam name="TPredicate">El tipo del predicado que implementa <see cref="IWhereDelegado{TOrigen}"/>.</typeparam>
+        /// <param name="origen">La estructura de origen.</param>
+        /// <param name="predicado">El predicado de filtro.</param>
+        /// <returns>Una estructura de referencia de ValueLINQ con los elementos filtrados.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQRefStruct<TOrigen> Where<TOrigen, TPredicate>(
+            this ValueLINQRefStruct<TOrigen> origen,
+            scoped in TPredicate predicado)
+            where TPredicate : struct, IWhereDelegado<TOrigen>
+        {
+            ValueLINQStatelessWherePredicate<TOrigen, TPredicate> adapter = new(in predicado);
+            return origen.Where<TOrigen, ValueLINQVoidState, ValueLINQStatelessWherePredicate<TOrigen, TPredicate>>(default, in adapter);
+        }
+
+        /// <summary>
+        /// Filtra un flujo de datos representado por una estructura de ValueLINQ basándose en un predicado struct sin estado.
+        /// </summary>
+        /// <typeparam name="TOrigen">El tipo de los elementos de origen.</typeparam>
+        /// <typeparam name="TPredicate">El tipo del predicado que implementa <see cref="IWhereDelegado{TOrigen}"/>.</typeparam>
+        /// <param name="origen">La estructura de origen.</param>
+        /// <param name="predicado">El predicado de filtro.</param>
+        /// <returns>Una estructura de ValueLINQ con los elementos filtrados.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQStruct<TOrigen> Where<TOrigen, TPredicate>(
+            this ValueLINQStruct<TOrigen> origen,
+            in TPredicate predicado)
+            where TPredicate : struct, IWhereDelegado<TOrigen>
+        {
+            ValueLINQStatelessWherePredicate<TOrigen, TPredicate> adapter = new(in predicado);
+            return origen.Where<TOrigen, ValueLINQVoidState, ValueLINQStatelessWherePredicate<TOrigen, TPredicate>>(default, in adapter);
+        }
+
+        /// <summary>
         /// Filtra un flujo de datos representado por una estructura de referencia de ValueLINQ basándose en un predicado struct.
         /// </summary>
         /// <typeparam name="TOrigen">El tipo de los elementos de origen.</typeparam>
@@ -231,9 +263,11 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         public static ValueLINQRefStruct<TOrigen> Where<TOrigen, TDato, TPredicate>(
             this ValueLINQRefStruct<TOrigen> origen,
             TDato dato,
-            in TPredicate predicado)
+            scoped in TPredicate predicado)
             where TPredicate : struct, IWhereDelegado<TOrigen, TDato>
         {
+            // La lectura de metadatos permanece en el wrapper, fuera de todo EH: si lanza, origen no se
+            // libera, igual que en el código original.
             int origenTamaño = 0;
             long origenToken = origen.Token;
             bool isTokenValido = origenToken != 0L;
@@ -243,11 +277,24 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 origenTamaño = metadatosOrigen.TamañoActual;
             }
 
+            return WhereSlow(origen, origenTamaño, dato, in predicado);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static ValueLINQRefStruct<TOrigen> WhereSlow<TOrigen, TDato, TPredicate>(
+            ValueLINQRefStruct<TOrigen> origen,
+            int origenTamaño,
+            TDato dato,
+            scoped in TPredicate predicado)
+            where TPredicate : struct, IWhereDelegado<TOrigen, TDato>
+        {
+            long origenToken = origen.Token;
+            bool isTokenValido = origenToken != 0L;
             ValueLINQRefStruct<TOrigen> destino = default;
             bool isExito = false;
             try
             {
-                destino = new ValueLINQRefStruct<TOrigen>(origenTamaño);
+                destino = new ValueLINQRefStruct<TOrigen>(TokenHelper.ObtenerArenaId(origenToken), origenTamaño);
                 if (isTokenValido)
                 {
                     ref MetadatosSesion<TOrigen> metadatosOrigen = ref ValueLINQStateManager<TOrigen>.ObtenerMetadatos(origenToken);
@@ -298,6 +345,8 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             in TPredicate predicado)
             where TPredicate : struct, IWhereDelegado<TOrigen, TDato>
         {
+            // La lectura de metadatos permanece en el wrapper, fuera de todo EH: si lanza, origen no se
+            // libera, igual que en el código original.
             int origenTamaño = 0;
             long origenToken = origen.Token;
             bool isTokenValido = origenToken != 0L;
@@ -307,11 +356,23 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 origenTamaño = metadatosOrigen.TamañoActual;
             }
 
+            return WhereSlow<TOrigen, TDato, TPredicate>(origenToken, origenTamaño, dato, in predicado);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static ValueLINQStruct<TOrigen> WhereSlow<TOrigen, TDato, TPredicate>(
+            long origenToken,
+            int origenTamaño,
+            TDato dato,
+            in TPredicate predicado)
+            where TPredicate : struct, IWhereDelegado<TOrigen, TDato>
+        {
+            bool isTokenValido = origenToken != 0L;
             ValueLINQStruct<TOrigen> destino = default;
             bool isExito = false;
             try
             {
-                destino = new ValueLINQStruct<TOrigen>(origenTamaño);
+                destino = new ValueLINQStruct<TOrigen>(TokenHelper.ObtenerArenaId(origenToken), origenTamaño);
                 if (isTokenValido)
                 {
                     ref MetadatosSesion<TOrigen> metadatosOrigen = ref ValueLINQStateManager<TOrigen>.ObtenerMetadatos(origenToken);
@@ -339,7 +400,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             }
             finally
             {
-                origen.Dispose();
+                ValueLINQStateManager<TOrigen>.LiberarMetadatos(origenToken);
                 if (!isExito)
                     destino.Dispose();
             }
@@ -361,7 +422,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueLINQRefStruct<TResultado> Select<TOrigen, TPredicate, TResultado>(
             this ValueLINQRefStruct<TOrigen> origen,
-            in TPredicate selector)
+            scoped in TPredicate selector)
             where TPredicate : struct, ISelectDelegado<TOrigen, TResultado>
         {
             int origenTamaño = 0;
@@ -373,11 +434,22 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 origenTamaño = metadatosOrigen.TamañoActual;
             }
 
+            return SelectSlow<TOrigen, TPredicate, TResultado>(origenToken, origenTamaño, isTokenValido, in selector);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static ValueLINQRefStruct<TResultado> SelectSlow<TOrigen, TPredicate, TResultado>(
+            long origenToken,
+            int origenTamaño,
+            bool isTokenValido,
+            scoped in TPredicate selector)
+            where TPredicate : struct, ISelectDelegado<TOrigen, TResultado>
+        {
             ValueLINQRefStruct<TResultado> destino = default;
             bool isExito = false;
             try
             {
-                destino = new ValueLINQRefStruct<TResultado>(origenTamaño);
+                destino = new ValueLINQRefStruct<TResultado>(TokenHelper.ObtenerArenaId(origenToken), origenTamaño);
                 if (isTokenValido)
                 {
                     ref MetadatosSesion<TOrigen> metadatosOrigen = ref ValueLINQStateManager<TOrigen>.ObtenerMetadatos(origenToken);
@@ -401,7 +473,8 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             }
             finally
             {
-                origen.Dispose();
+                // LiberarMetadatos(origenToken) es exactamente el cuerpo de origen.Dispose().
+                ValueLINQStateManager<TOrigen>.LiberarMetadatos(origenToken);
                 if (!isExito)
                     destino.Dispose();
             }
@@ -422,6 +495,8 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             in TPredicate selector)
             where TPredicate : struct, ISelectDelegado<TOrigen, TResultado>
         {
+            // La lectura de metadatos permanece en el wrapper, fuera de todo EH: si lanza, origen no se
+            // libera, igual que en el código original.
             int origenTamaño = 0;
             long origenToken = origen.Token;
             bool isTokenValido = origenToken != 0L;
@@ -431,11 +506,23 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 origenTamaño = metadatosOrigen.TamañoActual;
             }
 
+            return SelectSlow<TOrigen, TPredicate, TResultado>(origen, in selector, origenTamaño);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static ValueLINQStruct<TResultado> SelectSlow<TOrigen, TPredicate, TResultado>(
+            ValueLINQStruct<TOrigen> origen,
+            scoped in TPredicate selector,
+            int origenTamaño)
+            where TPredicate : struct, ISelectDelegado<TOrigen, TResultado>
+        {
+            long origenToken = origen.Token;
+            bool isTokenValido = origenToken != 0L;
             ValueLINQStruct<TResultado> destino = default;
             bool isExito = false;
             try
             {
-                destino = new ValueLINQStruct<TResultado>(origenTamaño);
+                destino = new ValueLINQStruct<TResultado>(TokenHelper.ObtenerArenaId(origenToken), origenTamaño);
                 if (isTokenValido)
                 {
                     ref MetadatosSesion<TOrigen> metadatosOrigen = ref ValueLINQStateManager<TOrigen>.ObtenerMetadatos(origenToken);
@@ -492,6 +579,8 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             if (tamaño <= 0)
                 ThrowArgumentOutOfRangeException(nameof(tamaño), "El tamaño del chunk debe ser mayor que cero.");
 
+            // La validación y la lectura de metadatos permanecen en el wrapper, fuera de todo EH:
+            // si lanzan, origen no se libera, igual que en el código original.
             int origenTamaño = 0;
             long origenToken = origen.Token;
             bool isTokenValido = origenToken != 0L;
@@ -502,12 +591,19 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             }
 
             int cantidadChunks = (origenTamaño + tamaño - 1) / tamaño;
+            return ChunkSlow<T>(origenToken, cantidadChunks, tamaño);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static ValueLINQRefStruct<ValueLINQStruct<T>> ChunkSlow<T>(long origenToken, int cantidadChunks, int tamaño)
+        {
+            bool isTokenValido = origenToken != 0L;
             ValueLINQRefStruct<ValueLINQStruct<T>> destino = default;
             int destinoIndex = 0;
             bool isExito = false;
             try
             {
-                destino = new ValueLINQRefStruct<ValueLINQStruct<T>>(cantidadChunks);
+                destino = new ValueLINQRefStruct<ValueLINQStruct<T>>(TokenHelper.ObtenerArenaId(origenToken), cantidadChunks);
                 if (isTokenValido)
                 {
                     ref MetadatosSesion<T> metadatosOrigen = ref ValueLINQStateManager<T>.ObtenerMetadatos(origenToken);
@@ -522,7 +618,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                         for (int i = 0; i < len; i += tamaño)
                         {
                             int chunkSize = Math.Min(tamaño, len - i);
-                            ValueLINQStruct<T> chunk = new(chunkSize);
+                            ValueLINQStruct<T> chunk = new(TokenHelper.ObtenerArenaId(origenToken), chunkSize);
 
                             ref MetadatosSesion<T> metadatosChunk = ref ValueLINQStateManager<T>.ObtenerMetadatos(chunk.Token);
                             origenArray!.AsSpan(i, chunkSize).CopyTo(metadatosChunk.Array!);
@@ -538,7 +634,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             }
             finally
             {
-                origen.Dispose();
+                ValueLINQStateManager<T>.LiberarMetadatos(origenToken);
                 if (!isExito)
                 {
                     long destToken = destino.Token;
@@ -569,6 +665,8 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             if (tamaño <= 0)
                 ThrowArgumentOutOfRangeException(nameof(tamaño), "El tamaño del chunk debe ser mayor que cero.");
 
+            // La validación y la lectura de metadatos permanecen en el wrapper, fuera de todo EH:
+            // si lanzan, origen no se libera, igual que en el código original.
             int origenTamaño = 0;
             long origenToken = origen.Token;
             bool isTokenValido = origenToken != 0L;
@@ -579,63 +677,12 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             }
 
             int cantidadChunks = (origenTamaño + tamaño - 1) / tamaño;
-            ValueLINQRefStruct<ValueLINQStruct<T>> destino = default;
-            int destinoIndex = 0;
-            bool isExito = false;
-            try
-            {
-                destino = new ValueLINQRefStruct<ValueLINQStruct<T>>(cantidadChunks);
-                if (isTokenValido)
-                {
-                    ref MetadatosSesion<T> metadatosOrigen = ref ValueLINQStateManager<T>.ObtenerMetadatos(origenToken);
-                    T[]? origenArray = metadatosOrigen.Array;
-                    int len = metadatosOrigen.TamañoActual;
-                    bool isArrayValido = origenArray != null && len > 0;
-                    if (isArrayValido)
-                    {
-                        ref MetadatosSesion<ValueLINQStruct<T>> metadatosDestino = ref ValueLINQStateManager<ValueLINQStruct<T>>.ObtenerMetadatos(destino.Token);
-                        ValueLINQStruct<T>[]? destinoArray = metadatosDestino.Array;
-
-                        for (int i = 0; i < len; i += tamaño)
-                        {
-                            int chunkSize = Math.Min(tamaño, len - i);
-                            ValueLINQStruct<T> chunk = new(chunkSize);
-
-                            ref MetadatosSesion<T> metadatosChunk = ref ValueLINQStateManager<T>.ObtenerMetadatos(chunk.Token);
-                            origenArray!.AsSpan(i, chunkSize).CopyTo(metadatosChunk.Array!);
-                            metadatosChunk.TamañoActual = chunkSize;
-
-                            destinoArray![destinoIndex++] = chunk;
-                        }
-                        metadatosDestino.TamañoActual = destinoIndex;
-                    }
-                }
-                isExito = true;
-                return destino;
-            }
-            finally
-            {
-                origen.Dispose();
-                if (!isExito)
-                {
-                    long destToken = destino.Token;
-                    bool isDestTokenValido = destToken != 0L;
-                    if (isDestTokenValido)
-                    {
-                        ref MetadatosSesion<ValueLINQStruct<T>> metadatosDestino = ref ValueLINQStateManager<ValueLINQStruct<T>>.ObtenerMetadatos(destToken);
-                        bool isDestArrayValido = metadatosDestino.Array != null;
-                        if (isDestArrayValido)
-                            for (int i = 0; i < destinoIndex; i++)
-                                metadatosDestino.Array![i].Dispose();
-                        destino.Dispose();
-                    }
-                }
-            }
+            return ChunkSlow<T>(origenToken, cantidadChunks, tamaño);
         }
 
         #endregion
 
-        #region ProcessChunks
+        #region ProcesarChunks
 
         /// <summary>
         /// Procesa de forma eficiente fragmentos de elementos en una estructura de referencia de ValueLINQ utilizando un procesador struct.
@@ -645,12 +692,16 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         /// <param name="listaChunks">La estructura de fragmentos de origen.</param>
         /// <param name="procesarChunk">El procesador de fragmentos.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void ProcessChunks<T, TProcessor>(
+        public static void ProcesarChunks<T, TProcessor>(
             this ValueLINQRefStruct<ValueLINQStruct<T>> listaChunks,
             TProcessor procesarChunk)
             where TProcessor : struct, IProcesarChunkDelegado<T>
+            => ProcesarChunksSlow<T, TProcessor>(listaChunks.Token, procesarChunk);
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void ProcesarChunksSlow<T, TProcessor>(long token, TProcessor procesarChunk)
+            where TProcessor : struct, IProcesarChunkDelegado<T>
         {
-            long token = listaChunks.Token;
             bool isExito = false;
             try
             {
@@ -683,7 +734,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                                 array![i].Dispose();
                     }
                 }
-                listaChunks.Dispose();
+                ValueLINQStateManager<ValueLINQStruct<T>>.LiberarMetadatos(token);
             }
         }
 
@@ -695,47 +746,11 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         /// <param name="listaChunks">La estructura de fragmentos de origen.</param>
         /// <param name="procesarChunk">El procesador de fragmentos.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void ProcessChunks<T, TProcessor>(
+        public static void ProcesarChunks<T, TProcessor>(
             this ValueLINQStruct<ValueLINQStruct<T>> listaChunks,
             TProcessor procesarChunk)
             where TProcessor : struct, IProcesarChunkDelegado<T>
-        {
-            long token = listaChunks.Token;
-            bool isExito = false;
-            try
-            {
-                bool isTokenValido = token != 0L;
-                if (isTokenValido)
-                {
-                    ref MetadatosSesion<ValueLINQStruct<T>> metadatos = ref ValueLINQStateManager<ValueLINQStruct<T>>.ObtenerMetadatos(token);
-                    ValueLINQStruct<T>[]? array = metadatos.Array;
-                    int len = metadatos.TamañoActual;
-                    bool isArrayValido = array != null && len > 0;
-                    if (isArrayValido)
-                        for (int i = 0; i < len; i++)
-                            using (ValueLINQStruct<T> c = array![i])
-                                procesarChunk.Ejecutar(c);
-                }
-                isExito = true;
-            }
-            finally
-            {
-                if (!isExito)
-                {
-                    bool isTokenValido = token != 0L;
-                    if (isTokenValido)
-                    {
-                        ref MetadatosSesion<ValueLINQStruct<T>> metadatos = ref ValueLINQStateManager<ValueLINQStruct<T>>.ObtenerMetadatos(token);
-                        ValueLINQStruct<T>[]? array = metadatos.Array;
-                        bool isArrayValido = array != null;
-                        if (isArrayValido)
-                            for (int i = 0; i < metadatos.TamañoActual; i++)
-                                array![i].Dispose();
-                    }
-                }
-                listaChunks.Dispose();
-            }
-        }
+            => ProcesarChunksSlow<T, TProcessor>(listaChunks.Token, procesarChunk);
 
         #endregion
 
@@ -752,49 +767,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         public static ValueLINQRefStruct<T> Concat<T>(
             this ValueLINQRefStruct<T> lista1,
             ValueLINQRefStruct<T> lista2)
-        {
-            ValueLINQRefStruct<T> destino = default;
-            bool isExito = false;
-            try
-            {
-                int len1 = 0, len2 = 0;
-                long token1 = lista1.Token;
-                long token2 = lista2.Token;
-
-                if (token1 != 0L) len1 = ValueLINQStateManager<T>.ObtenerMetadatos(token1).TamañoActual;
-                if (token2 != 0L) len2 = ValueLINQStateManager<T>.ObtenerMetadatos(token2).TamañoActual;
-
-                destino = new ValueLINQRefStruct<T>(len1 + len2);
-                ref MetadatosSesion<T> metadatosDestino = ref ValueLINQStateManager<T>.ObtenerMetadatos(destino.Token);
-                T[]? destinoArray = metadatosDestino.Array;
-
-                int offset = 0;
-                if (token1 != 0L && len1 > 0)
-                {
-                    ref MetadatosSesion<T> metadatos1 = ref ValueLINQStateManager<T>.ObtenerMetadatos(token1);
-                    metadatos1.Array.AsSpan(0, len1).CopyTo(destinoArray.AsSpan(offset));
-                    offset += len1;
-                }
-
-                if (token2 != 0L && len2 > 0)
-                {
-                    ref MetadatosSesion<T> metadatos2 = ref ValueLINQStateManager<T>.ObtenerMetadatos(token2);
-                    metadatos2.Array.AsSpan(0, len2).CopyTo(destinoArray.AsSpan(offset));
-                    offset += len2;
-                }
-
-                metadatosDestino.TamañoActual = len1 + len2;
-                isExito = true;
-                return destino;
-            }
-            finally
-            {
-                lista1.Dispose();
-                lista2.Dispose();
-                if (!isExito)
-                    destino.Dispose();
-            }
-        }
+            => ConcatRefSlow<T>(lista1.Token, lista2.Token, 0L, 0L);
 
         /// <summary>
         /// Concatenates three <see cref="ValueLINQRefStruct{T}"/> instances.
@@ -809,59 +782,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             this ValueLINQRefStruct<T> lista1,
             ValueLINQRefStruct<T> lista2,
             ValueLINQRefStruct<T> lista3)
-        {
-            ValueLINQRefStruct<T> destino = default;
-            bool isExito = false;
-            try
-            {
-                int len1 = 0, len2 = 0, len3 = 0;
-                long token1 = lista1.Token;
-                long token2 = lista2.Token;
-                long token3 = lista3.Token;
-
-                if (token1 != 0L) len1 = ValueLINQStateManager<T>.ObtenerMetadatos(token1).TamañoActual;
-                if (token2 != 0L) len2 = ValueLINQStateManager<T>.ObtenerMetadatos(token2).TamañoActual;
-                if (token3 != 0L) len3 = ValueLINQStateManager<T>.ObtenerMetadatos(token3).TamañoActual;
-
-                destino = new ValueLINQRefStruct<T>(len1 + len2 + len3);
-                ref MetadatosSesion<T> metadatosDestino = ref ValueLINQStateManager<T>.ObtenerMetadatos(destino.Token);
-                T[]? destinoArray = metadatosDestino.Array;
-
-                int offset = 0;
-                if (token1 != 0L && len1 > 0)
-                {
-                    ref MetadatosSesion<T> metadatos1 = ref ValueLINQStateManager<T>.ObtenerMetadatos(token1);
-                    metadatos1.Array.AsSpan(0, len1).CopyTo(destinoArray.AsSpan(offset));
-                    offset += len1;
-                }
-
-                if (token2 != 0L && len2 > 0)
-                {
-                    ref MetadatosSesion<T> metadatos2 = ref ValueLINQStateManager<T>.ObtenerMetadatos(token2);
-                    metadatos2.Array.AsSpan(0, len2).CopyTo(destinoArray.AsSpan(offset));
-                    offset += len2;
-                }
-
-                if (token3 != 0L && len3 > 0)
-                {
-                    ref MetadatosSesion<T> metadatos3 = ref ValueLINQStateManager<T>.ObtenerMetadatos(token3);
-                    metadatos3.Array.AsSpan(0, len3).CopyTo(destinoArray.AsSpan(offset));
-                    offset += len3;
-                }
-
-                metadatosDestino.TamañoActual = len1 + len2 + len3;
-                isExito = true;
-                return destino;
-            }
-            finally
-            {
-                lista1.Dispose();
-                lista2.Dispose();
-                lista3.Dispose();
-                if (!isExito)
-                    destino.Dispose();
-            }
-        }
+            => ConcatRefSlow<T>(lista1.Token, lista2.Token, lista3.Token, 0L);
 
         /// <summary>
         /// Concatenates four <see cref="ValueLINQRefStruct{T}"/> instances.
@@ -878,23 +799,24 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             ValueLINQRefStruct<T> lista2,
             ValueLINQRefStruct<T> lista3,
             ValueLINQRefStruct<T> lista4)
+            => ConcatRefSlow<T>(lista1.Token, lista2.Token, lista3.Token, lista4.Token);
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static ValueLINQRefStruct<T> ConcatRefSlow<T>(long token1, long token2, long token3, long token4)
         {
             ValueLINQRefStruct<T> destino = default;
             bool isExito = false;
             try
             {
                 int len1 = 0, len2 = 0, len3 = 0, len4 = 0;
-                long token1 = lista1.Token;
-                long token2 = lista2.Token;
-                long token3 = lista3.Token;
-                long token4 = lista4.Token;
 
                 if (token1 != 0L) len1 = ValueLINQStateManager<T>.ObtenerMetadatos(token1).TamañoActual;
                 if (token2 != 0L) len2 = ValueLINQStateManager<T>.ObtenerMetadatos(token2).TamañoActual;
                 if (token3 != 0L) len3 = ValueLINQStateManager<T>.ObtenerMetadatos(token3).TamañoActual;
                 if (token4 != 0L) len4 = ValueLINQStateManager<T>.ObtenerMetadatos(token4).TamañoActual;
 
-                destino = new ValueLINQRefStruct<T>(len1 + len2 + len3 + len4);
+                int arenaDestino = TokenHelper.ObtenerArenaId(token1);
+                destino = new ValueLINQRefStruct<T>(arenaDestino, len1 + len2 + len3 + len4);
                 ref MetadatosSesion<T> metadatosDestino = ref ValueLINQStateManager<T>.ObtenerMetadatos(destino.Token);
                 T[]? destinoArray = metadatosDestino.Array;
 
@@ -933,10 +855,10 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             }
             finally
             {
-                lista1.Dispose();
-                lista2.Dispose();
-                lista3.Dispose();
-                lista4.Dispose();
+                ValueLINQStateManager<T>.LiberarMetadatos(token1);
+                ValueLINQStateManager<T>.LiberarMetadatos(token2);
+                ValueLINQStateManager<T>.LiberarMetadatos(token3);
+                ValueLINQStateManager<T>.LiberarMetadatos(token4);
                 if (!isExito)
                     destino.Dispose();
             }
@@ -953,49 +875,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         public static ValueLINQStruct<T> Concat<T>(
             this ValueLINQStruct<T> lista1,
             ValueLINQStruct<T> lista2)
-        {
-            ValueLINQStruct<T> destino = default;
-            bool isExito = false;
-            try
-            {
-                int len1 = 0, len2 = 0;
-                long token1 = lista1.Token;
-                long token2 = lista2.Token;
-
-                if (token1 != 0L) len1 = ValueLINQStateManager<T>.ObtenerMetadatos(token1).TamañoActual;
-                if (token2 != 0L) len2 = ValueLINQStateManager<T>.ObtenerMetadatos(token2).TamañoActual;
-
-                destino = new ValueLINQStruct<T>(len1 + len2);
-                ref MetadatosSesion<T> metadatosDestino = ref ValueLINQStateManager<T>.ObtenerMetadatos(destino.Token);
-                T[]? destinoArray = metadatosDestino.Array;
-
-                int offset = 0;
-                if (token1 != 0L && len1 > 0)
-                {
-                    ref MetadatosSesion<T> metadatos1 = ref ValueLINQStateManager<T>.ObtenerMetadatos(token1);
-                    metadatos1.Array.AsSpan(0, len1).CopyTo(destinoArray.AsSpan(offset));
-                    offset += len1;
-                }
-
-                if (token2 != 0L && len2 > 0)
-                {
-                    ref MetadatosSesion<T> metadatos2 = ref ValueLINQStateManager<T>.ObtenerMetadatos(token2);
-                    metadatos2.Array.AsSpan(0, len2).CopyTo(destinoArray.AsSpan(offset));
-                    offset += len2;
-                }
-
-                metadatosDestino.TamañoActual = len1 + len2;
-                isExito = true;
-                return destino;
-            }
-            finally
-            {
-                lista1.Dispose();
-                lista2.Dispose();
-                if (!isExito)
-                    destino.Dispose();
-            }
-        }
+            => ConcatSlow<T>(lista1.Token, lista2.Token, 0L, 0L);
 
         /// <summary>
         /// Concatenates three <see cref="ValueLINQStruct{T}"/> instances.
@@ -1010,59 +890,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             this ValueLINQStruct<T> lista1,
             ValueLINQStruct<T> lista2,
             ValueLINQStruct<T> lista3)
-        {
-            ValueLINQStruct<T> destino = default;
-            bool isExito = false;
-            try
-            {
-                int len1 = 0, len2 = 0, len3 = 0;
-                long token1 = lista1.Token;
-                long token2 = lista2.Token;
-                long token3 = lista3.Token;
-
-                if (token1 != 0L) len1 = ValueLINQStateManager<T>.ObtenerMetadatos(token1).TamañoActual;
-                if (token2 != 0L) len2 = ValueLINQStateManager<T>.ObtenerMetadatos(token2).TamañoActual;
-                if (token3 != 0L) len3 = ValueLINQStateManager<T>.ObtenerMetadatos(token3).TamañoActual;
-
-                destino = new ValueLINQStruct<T>(len1 + len2 + len3);
-                ref MetadatosSesion<T> metadatosDestino = ref ValueLINQStateManager<T>.ObtenerMetadatos(destino.Token);
-                T[]? destinoArray = metadatosDestino.Array;
-
-                int offset = 0;
-                if (token1 != 0L && len1 > 0)
-                {
-                    ref MetadatosSesion<T> metadatos1 = ref ValueLINQStateManager<T>.ObtenerMetadatos(token1);
-                    metadatos1.Array.AsSpan(0, len1).CopyTo(destinoArray.AsSpan(offset));
-                    offset += len1;
-                }
-
-                if (token2 != 0L && len2 > 0)
-                {
-                    ref MetadatosSesion<T> metadatos2 = ref ValueLINQStateManager<T>.ObtenerMetadatos(token2);
-                    metadatos2.Array.AsSpan(0, len2).CopyTo(destinoArray.AsSpan(offset));
-                    offset += len2;
-                }
-
-                if (token3 != 0L && len3 > 0)
-                {
-                    ref MetadatosSesion<T> metadatos3 = ref ValueLINQStateManager<T>.ObtenerMetadatos(token3);
-                    metadatos3.Array.AsSpan(0, len3).CopyTo(destinoArray.AsSpan(offset));
-                    offset += len3;
-                }
-
-                metadatosDestino.TamañoActual = len1 + len2 + len3;
-                isExito = true;
-                return destino;
-            }
-            finally
-            {
-                lista1.Dispose();
-                lista2.Dispose();
-                lista3.Dispose();
-                if (!isExito)
-                    destino.Dispose();
-            }
-        }
+            => ConcatSlow<T>(lista1.Token, lista2.Token, lista3.Token, 0L);
 
         /// <summary>
         /// Concatenates four <see cref="ValueLINQStruct{T}"/> instances.
@@ -1079,23 +907,24 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             ValueLINQStruct<T> lista2,
             ValueLINQStruct<T> lista3,
             ValueLINQStruct<T> lista4)
+            => ConcatSlow<T>(lista1.Token, lista2.Token, lista3.Token, lista4.Token);
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static ValueLINQStruct<T> ConcatSlow<T>(long token1, long token2, long token3, long token4)
         {
             ValueLINQStruct<T> destino = default;
             bool isExito = false;
             try
             {
                 int len1 = 0, len2 = 0, len3 = 0, len4 = 0;
-                long token1 = lista1.Token;
-                long token2 = lista2.Token;
-                long token3 = lista3.Token;
-                long token4 = lista4.Token;
 
                 if (token1 != 0L) len1 = ValueLINQStateManager<T>.ObtenerMetadatos(token1).TamañoActual;
                 if (token2 != 0L) len2 = ValueLINQStateManager<T>.ObtenerMetadatos(token2).TamañoActual;
                 if (token3 != 0L) len3 = ValueLINQStateManager<T>.ObtenerMetadatos(token3).TamañoActual;
                 if (token4 != 0L) len4 = ValueLINQStateManager<T>.ObtenerMetadatos(token4).TamañoActual;
 
-                destino = new ValueLINQStruct<T>(len1 + len2 + len3 + len4);
+                int arenaDestino = TokenHelper.ObtenerArenaId(token1);
+                destino = new ValueLINQStruct<T>(arenaDestino, len1 + len2 + len3 + len4);
                 ref MetadatosSesion<T> metadatosDestino = ref ValueLINQStateManager<T>.ObtenerMetadatos(destino.Token);
                 T[]? destinoArray = metadatosDestino.Array;
 
@@ -1134,10 +963,10 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             }
             finally
             {
-                lista1.Dispose();
-                lista2.Dispose();
-                lista3.Dispose();
-                lista4.Dispose();
+                ValueLINQStateManager<T>.LiberarMetadatos(token1);
+                ValueLINQStateManager<T>.LiberarMetadatos(token2);
+                ValueLINQStateManager<T>.LiberarMetadatos(token3);
+                ValueLINQStateManager<T>.LiberarMetadatos(token4);
                 if (!isExito)
                     destino.Dispose();
             }
@@ -1158,16 +987,20 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         [EditorBrowsable(EditorBrowsableState.Never)]
         public static ValueLINQStruct<T> Concat<T>(this ValueLINQStruct<T> lista1, params ValueLINQStruct<T>[] listas)
 #endif
+            => ConcatParamsSlow<T>(lista1.Token, listas);
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static ValueLINQStruct<T> ConcatParamsSlow<T>(long token1, scoped ReadOnlySpan<ValueLINQStruct<T>> listas)
         {
             ValueLINQStruct<T> destino = default;
             bool isExito = false;
             try
             {
                 int len1 = 0;
-                long token1 = lista1.Token;
                 if (token1 != 0L)
                     len1 = ValueLINQStateManager<T>.ObtenerMetadatos(token1).TamañoActual;
 
+                int arenaDestino = TokenHelper.ObtenerArenaId(token1);
                 int tamañoTotal = len1;
                 foreach (ValueLINQStruct<T> lista in listas)
                 {
@@ -1176,7 +1009,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                         tamañoTotal += ValueLINQStateManager<T>.ObtenerMetadatos(token).TamañoActual;
                 }
 
-                destino = new ValueLINQStruct<T>(tamañoTotal);
+                destino = new ValueLINQStruct<T>(arenaDestino, tamañoTotal);
                 ref MetadatosSesion<T> metadatosDestino = ref ValueLINQStateManager<T>.ObtenerMetadatos(destino.Token);
                 T[]? destinoArray = metadatosDestino.Array;
                 int currentOffset = 0;
@@ -1209,7 +1042,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             }
             finally
             {
-                lista1.Dispose();
+                ValueLINQStateManager<T>.LiberarMetadatos(token1);
                 foreach (ValueLINQStruct<T> lista in listas)
                     lista.Dispose();
                 if (!isExito)
@@ -1220,6 +1053,139 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         #endregion
 
         #region Materializadores
+
+        #region Caminos fríos compartidos
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static PooledList<T> ToListSlow<T>(long token)
+        {
+            try
+            {
+                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
+                int tamaño = metadatos.TamañoActual;
+
+                if (tamaño == 0)
+                    return new PooledList<T>();
+
+                PooledList<T> lista = new(tamaño);
+                lista.AddRange(metadatos.Array.AsSpan(0, tamaño));
+                return lista;
+            }
+            finally
+            {
+                ValueLINQStateManager<T>.LiberarMetadatos(token);
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static PooledListRef<T> ToListRefSlow<T>(long token)
+        {
+            try
+            {
+                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
+                int tamaño = metadatos.TamañoActual;
+
+                if (tamaño == 0)
+                    return new PooledListRef<T>();
+
+                PooledListRef<T> lista = new(tamaño);
+                lista.AddRange(metadatos.Array.AsSpan(0, tamaño));
+                return lista;
+            }
+            finally
+            {
+                ValueLINQStateManager<T>.LiberarMetadatos(token);
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static PooledArray<T> ToArraySlow<T>(long token)
+        {
+            try
+            {
+                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
+                int tamaño = metadatos.TamañoActual;
+                T[] items = ArrayPool<T>.Shared.Rent(tamaño);
+
+                PooledArray<T> array = new(items, tamaño);
+
+                if (tamaño > 0)
+                    metadatos.Array.AsSpan(0, tamaño).CopyTo(array.Span);
+
+                return array;
+            }
+            finally
+            {
+                ValueLINQStateManager<T>.LiberarMetadatos(token);
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static PooledArrayRef<T> ToArrayRefSlow<T>(long token)
+        {
+            try
+            {
+                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
+                int tamaño = metadatos.TamañoActual;
+                T[] items = ArrayPool<T>.Shared.Rent(tamaño);
+
+                PooledArrayRef<T> array = new(items, tamaño);
+
+                if (tamaño > 0)
+                    metadatos.Array.AsSpan(0, tamaño).CopyTo(array.Span);
+
+                return array;
+            }
+            finally
+            {
+                ValueLINQStateManager<T>.LiberarMetadatos(token);
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static T[] ToArrayStandardSlow<T>(long token)
+        {
+            try
+            {
+                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
+                int tamaño = metadatos.TamañoActual;
+
+                if (tamaño == 0)
+                    return [];
+
+                T[] items = new T[tamaño];
+                metadatos.Array.AsSpan(0, tamaño).CopyTo(items);
+                return items;
+            }
+            finally
+            {
+                ValueLINQStateManager<T>.LiberarMetadatos(token);
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static List<T> ToListStandardSlow<T>(long token)
+        {
+            try
+            {
+                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
+                int tamaño = metadatos.TamañoActual;
+
+                if (tamaño == 0)
+                    return [];
+
+                List<T> lista = new(tamaño);
+                CollectionsMarshal.SetCount(lista, tamaño);
+                metadatos.Array.AsSpan(0, tamaño).CopyTo(CollectionsMarshal.AsSpan(lista));
+                return lista;
+            }
+            finally
+            {
+                ValueLINQStateManager<T>.LiberarMetadatos(token);
+            }
+        }
+
+        #endregion
 
         #region Materializadores para ValueLINQRefStruct
 
@@ -1241,22 +1207,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 return new PooledList<T>();
             }
 
-            try
-            {
-                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
-                int tamaño = metadatos.TamañoActual;
-
-                if (tamaño == 0)
-                    return new PooledList<T>();
-
-                PooledList<T> lista = new(tamaño);
-                lista.AddRange(metadatos.Array.AsSpan(0, tamaño));
-                return lista;
-            }
-            finally
-            {
-                origen.Dispose();
-            }
+            return ToListSlow<T>(token);
         }
 
         /// <summary>
@@ -1277,22 +1228,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 return new PooledListRef<T>();
             }
 
-            try
-            {
-                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
-                int tamaño = metadatos.TamañoActual;
-
-                if (tamaño == 0)
-                    return new PooledListRef<T>();
-
-                PooledListRef<T> lista = new(tamaño);
-                lista.AddRange(metadatos.Array.AsSpan(0, tamaño));
-                return lista;
-            }
-            finally
-            {
-                origen.Dispose();
-            }
+            return ToListRefSlow<T>(token);
         }
 
         /// <summary>
@@ -1314,23 +1250,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 return new PooledArray<T>(itemsVacios, 0);
             }
 
-            try
-            {
-                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
-                int tamaño = metadatos.TamañoActual;
-                T[] items = ArrayPool<T>.Shared.Rent(tamaño);
-
-                PooledArray<T> array = new(items, tamaño);
-
-                if (tamaño > 0)
-                    metadatos.Array.AsSpan(0, tamaño).CopyTo(array.Span);
-
-                return array;
-            }
-            finally
-            {
-                origen.Dispose();
-            }
+            return ToArraySlow<T>(token);
         }
 
         /// <summary>
@@ -1352,23 +1272,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 return new PooledArrayRef<T>(itemsVacios, 0);
             }
 
-            try
-            {
-                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
-                int tamaño = metadatos.TamañoActual;
-                T[] items = ArrayPool<T>.Shared.Rent(tamaño);
-
-                PooledArrayRef<T> array = new(items, tamaño);
-
-                if (tamaño > 0)
-                    metadatos.Array.AsSpan(0, tamaño).CopyTo(array.Span);
-
-                return array;
-            }
-            finally
-            {
-                origen.Dispose();
-            }
+            return ToArrayRefSlow<T>(token);
         }
 
         /// <summary>
@@ -1390,22 +1294,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 return [];
             }
 
-            try
-            {
-                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
-                int tamaño = metadatos.TamañoActual;
-
-                if (tamaño == 0)
-                    return [];
-
-                T[] items = new T[tamaño];
-                metadatos.Array.AsSpan(0, tamaño).CopyTo(items);
-                return items;
-            }
-            finally
-            {
-                origen.Dispose();
-            }
+            return ToArrayStandardSlow<T>(token);
         }
 
         /// <summary>
@@ -1427,23 +1316,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 return [];
             }
 
-            try
-            {
-                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
-                int tamaño = metadatos.TamañoActual;
-
-                if (tamaño == 0)
-                    return [];
-
-                List<T> lista = new(tamaño);
-                CollectionsMarshal.SetCount(lista, tamaño);
-                metadatos.Array.AsSpan(0, tamaño).CopyTo(CollectionsMarshal.AsSpan(lista));
-                return lista;
-            }
-            finally
-            {
-                origen.Dispose();
-            }
+            return ToListStandardSlow<T>(token);
         }
 
         #endregion
@@ -1468,22 +1341,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 return new PooledList<T>();
             }
 
-            try
-            {
-                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
-                int tamaño = metadatos.TamañoActual;
-
-                if (tamaño == 0)
-                    return new PooledList<T>();
-
-                PooledList<T> lista = new(tamaño);
-                lista.AddRange(metadatos.Array.AsSpan(0, tamaño));
-                return lista;
-            }
-            finally
-            {
-                origen.Dispose();
-            }
+            return ToListSlow<T>(token);
         }
 
         /// <summary>
@@ -1504,22 +1362,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 return new PooledListRef<T>();
             }
 
-            try
-            {
-                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
-                int tamaño = metadatos.TamañoActual;
-
-                if (tamaño == 0)
-                    return new PooledListRef<T>();
-
-                PooledListRef<T> lista = new(tamaño);
-                lista.AddRange(metadatos.Array.AsSpan(0, tamaño));
-                return lista;
-            }
-            finally
-            {
-                origen.Dispose();
-            }
+            return ToListRefSlow<T>(token);
         }
 
         /// <summary>
@@ -1541,23 +1384,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 return new PooledArray<T>(itemsVacios, 0);
             }
 
-            try
-            {
-                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
-                int tamaño = metadatos.TamañoActual;
-                T[] items = ArrayPool<T>.Shared.Rent(tamaño);
-
-                PooledArray<T> array = new(items, tamaño);
-
-                if (tamaño > 0)
-                    metadatos.Array.AsSpan(0, tamaño).CopyTo(array.Span);
-
-                return array;
-            }
-            finally
-            {
-                origen.Dispose();
-            }
+            return ToArraySlow<T>(token);
         }
 
         /// <summary>
@@ -1579,23 +1406,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 return new PooledArrayRef<T>(itemsVacios, 0);
             }
 
-            try
-            {
-                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
-                int tamaño = metadatos.TamañoActual;
-                T[] items = ArrayPool<T>.Shared.Rent(tamaño);
-
-                PooledArrayRef<T> array = new(items, tamaño);
-
-                if (tamaño > 0)
-                    metadatos.Array.AsSpan(0, tamaño).CopyTo(array.Span);
-
-                return array;
-            }
-            finally
-            {
-                origen.Dispose();
-            }
+            return ToArrayRefSlow<T>(token);
         }
 
         /// <summary>
@@ -1617,22 +1428,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 return [];
             }
 
-            try
-            {
-                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
-                int tamaño = metadatos.TamañoActual;
-
-                if (tamaño == 0)
-                    return [];
-
-                T[] items = new T[tamaño];
-                metadatos.Array.AsSpan(0, tamaño).CopyTo(items);
-                return items;
-            }
-            finally
-            {
-                origen.Dispose();
-            }
+            return ToArrayStandardSlow<T>(token);
         }
 
         /// <summary>
@@ -1654,23 +1450,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 return [];
             }
 
-            try
-            {
-                ref MetadatosSesion<T> metadatos = ref ValueLINQStateManager<T>.ObtenerMetadatos(token);
-                int tamaño = metadatos.TamañoActual;
-
-                if (tamaño == 0)
-                    return [];
-
-                List<T> lista = new(tamaño);
-                CollectionsMarshal.SetCount(lista, tamaño);
-                metadatos.Array.AsSpan(0, tamaño).CopyTo(CollectionsMarshal.AsSpan(lista));
-                return lista;
-            }
-            finally
-            {
-                origen.Dispose();
-            }
+            return ToListStandardSlow<T>(token);
         }
 
         #endregion
@@ -1688,7 +1468,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         public static ValueLINQDelayStruct<T, ValueLINQSessionEnumerator<T>> Delay<T>(this ValueLINQStruct<T> query)
         {
             ValueLINQSessionEnumerator<T> sessionEnumerator = new(query.Token);
-            return new ValueLINQDelayStruct<T, ValueLINQSessionEnumerator<T>>(sessionEnumerator);
+            return new ValueLINQDelayStruct<T, ValueLINQSessionEnumerator<T>>(sessionEnumerator, ValueLINQDelayOptions.Ambiente.DesdeSesion(query.Token));
         }
 
         /// <summary>
@@ -1701,7 +1481,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         public static ValueLINQDelayStruct<T, ValueLINQSessionEnumerator<T>> Delay<T>(this ValueLINQRefStruct<T> query)
         {
             ValueLINQSessionEnumerator<T> sessionEnumerator = new(query.Token);
-            return new ValueLINQDelayStruct<T, ValueLINQSessionEnumerator<T>>(sessionEnumerator);
+            return new ValueLINQDelayStruct<T, ValueLINQSessionEnumerator<T>>(sessionEnumerator, ValueLINQDelayOptions.Ambiente.DesdeSesion(query.Token));
         }
 #endif
     }

@@ -17,7 +17,7 @@ namespace JCarrillo.AOT.Core.Diagnostico
             /// <summary>
             /// Mensaje de advertencia del diagnóstico JCA0002.
             /// </summary>
-            public const string Mensaje = "Este método realiza la materialización a una colección estándar e induce asignaciones en el Heap (Allocations). Considere el uso de materializadores pooled (ToList, ToArray) para preservar el perfil zero-allocation.";
+            public const string Mensaje = "Este método realiza la materialización a una colección estándar e induce asignaciones en el Heap (Allocations). Considere el uso de materializadores pooled (ToList, ToListRef, ToArray, ToArrayRef) para preservar el perfil zero-allocation.";
             
             /// <summary>
             /// URL de ayuda en la wiki para el diagnóstico JCA0002.
