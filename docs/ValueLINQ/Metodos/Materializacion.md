@@ -173,7 +173,7 @@ public static List<T> ToListStandard<T>(this ValueLINQStruct<T> origen)
 
 ## 6. Rendimiento y Mediciones Empíricas (Medido)
 
-Las mediciones empíricas de rendimiento se registraron con BenchmarkDotNet en un procesador AMD Ryzen 9 3950X, SDK de .NET 10.0.301, en configuración Release. El harness completo está disponible en [ValueLINQBenchmarks.cs](../../../JCarrillo.AOT.Core.Benchmarks/Extensiones/ValueLINQBenchmarks.cs).
+Las mediciones empíricas de rendimiento se registraron con BenchmarkDotNet en un procesador AMD Ryzen 9 3950X, SDK de .NET 10.0.301, en configuración Release. El harness completo está disponible en [ValueLINQMaterializacionBenchmarks.cs](../../../JCarrillo.AOT.Core.Benchmarks/ValueLINQ/Metodos/ValueLINQMaterializacionBenchmarks.cs).
 
 ### Resultados a Escala N = 100 (Medido)
 | Runtime / Engine | Método | Latencia Media (Mean) | Heap Allocated | Notas |

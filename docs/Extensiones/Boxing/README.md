@@ -35,3 +35,26 @@ Para resolver esto sin perder rendimiento, se implementó un diseño híbrido:
 
 *   **Necesidad**: En C#, las interfaces y expresiones lambda con capturas de contexto pueden boxear structs de forma silenciosa. Esta utilidad diagnostica estas violaciones de forma proactiva en tiempo de ejecución.
 *   **Costo de CPU (Medido)**: El método está optimizado con inlining en su fast-path y almacena los límites de pila en una variable estática por hilo (`[ThreadStatic]`), lo que reduce su costo a un valor de apenas nanosegundos por llamada. La llamada al lanzamiento de excepciones se delega a métodos auxiliares no-inlineables (`ThrowBoxingDetected`) para no contaminar la caché de instrucciones del procesador.
+
+---
+
+## 4. Métricas Comparativas de Rendimiento (Medidas con los 6 Runtimes en BenchmarkDotNet)
+
+*   **Harness**: BenchmarkDotNet v0.15.8 con `MemoryDiagnoser` y `ThreadingDiagnoser`.
+*   **Suite**: `JCarrillo.AOT.Core.Benchmarks.Extensiones.BoxingBenchmarks` (Baseline = `BoxingHeap`).
+
+| Runtime / Engine | Método | Latencia Media (Mean) | Heap Allocated | Ratio | Notas |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+| **NativeAOT 10.0** | `ValidarNoBoxeadoStack` | **1.52 ns** | **0 B** | **0.75** | Cero asignación y máxima velocidad en AOT nativo. |
+| **NativeAOT 10.0** | `BoxingHeap` (Baseline) | 2.02 ns | 24 B | 1.00 | Boxing estándar BCL en heap. |
+| **NativeAOT 10.0** | `BoxingInterfaceHeap` | 3.45 ns | 24 B | 1.71 | Boxing de dispatch por interfaz BCL. |
+| **.NET 10.0 JIT** | `ValidarNoBoxeadoStack` | **2.18 ns** | **0 B** | **0.49** | RyuJIT 10 con inlining completo y cero allocations. |
+| **.NET 10.0 JIT** | `BoxingHeap` (Baseline) | 4.46 ns | 24 B | 1.00 | Boxing estándar BCL en heap. |
+| **.NET 10.0 JIT** | `BoxingInterfaceHeap` | 4.68 ns | 24 B | 1.05 | Despacho de interfaz con boxing. |
+| **.NET 9.0 JIT** | `ValidarNoBoxeadoStack` | **1.74 ns** | **0 B** | **0.30** | Optimización de stack en .NET 9. |
+| **.NET 9.0 JIT** | `BoxingHeap` (Baseline) | 5.77 ns | 24 B | 1.00 | Boxing estándar BCL en heap. |
+| **.NET 9.0 JIT** | `BoxingInterfaceHeap` | 5.83 ns | 24 B | 1.01 | Despacho de interfaz con boxing. |
+| **.NET 8.0 JIT** | `ValidarNoBoxeadoStack` | **2.29 ns** | **0 B** | **0.48** | Evaluación en .NET 8 LTS. |
+| **.NET 8.0 JIT** | `BoxingHeap` (Baseline) | 4.80 ns | 24 B | 1.00 | Boxing estándar BCL en heap. |
+| **.NET 8.0 JIT** | `BoxingInterfaceHeap` | 5.46 ns | 24 B | 1.14 | Despacho de interfaz con boxing. |
+

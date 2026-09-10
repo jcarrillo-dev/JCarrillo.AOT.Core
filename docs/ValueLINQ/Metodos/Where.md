@@ -152,52 +152,45 @@ Véase [Arenas.md](../Core/Arenas.md) para el ciclo de vida completo de las aren
 
 ## 5. Análisis de Rendimiento (Mediciones)
 
-Los datos corresponden a una prueba combinada de filtrado y proyección (`Where` + `Select`) con un tamaño de muestra $N = 1000$ (medido).
+Los datos corresponden a una prueba combinada de filtrado y proyección (`Where` + `Select`) con un tamaño de muestra $N = 1000$ (medido) ejecutada en el harness centralizado.
 
-*   **Entorno de Medición**: Windows 11, CPU AMD Ryzen 9 3950X (3.50GHz, 32 cores lógicos, 16 físicos) (medido).
-*   **Harness**: BenchmarkDotNet v0.15.8, compilación en modo Release (medido).
+*   **Harness**: BenchmarkDotNet v0.15.8 con `MemoryDiagnoser` y `ThreadingDiagnoser`.
+*   **Suite**: `JCarrillo.AOT.Core.Benchmarks.ValueLINQ.Secuencias.SecuenciaWhereSelectBenchmarks`.
 
 ### Tabla Comparativa de Rendimiento (Size = 1000)
 
-| Runtime / Entorno | Método | Latencia Media (Mean) | Heap Allocated | Notas |
-| :--- | :--- | :---: | :---: | :--- |
-| **.NET 10.0 (JIT)** | `StandardLINQWhereSelect` (Baseline Realista) | 2,047.17 ns | 104 B | LINQ estándar del runtime. |
-| **.NET 10.0 (JIT)** | `ValueLINQDelayWhereSelect` | 728.80 ns | 0 B | Motor Delay con structs puros. |
-| **.NET 10.0 (JIT)** | `ValueLINQDelayWhereSelectStaticLambda` | 858.15 ns | 0 B | Motor Delay con lambdas estáticas. |
-| **.NET 10.0 (JIT)** | `ValueLINQDelayWhereSelectNoStaticLambda` | 1,000.53 ns | 152 B | Motor Delay con clausura en lambda. |
-| **.NET 10.0 (JIT)** | `ValueLINQStructWhereSelectStaticLambda` | 1,746.49 ns | 0 B | Motor Eager con lambda estática. |
-| **.NET 10.0 (JIT)** | `ValueLINQStructWhereSelectNoStaticLambda` | 1,689.44 ns | 24 B | Motor Eager con optimización de escape RyuJIT. |
-| **.NET 9.0 (JIT)** | `StandardLINQWhereSelect` (Baseline Realista) | 2,092.05 ns | 104 B | LINQ estándar del runtime. |
-| **.NET 9.0 (JIT)** | `ValueLINQDelayWhereSelect` | 1,066.04 ns | 0 B | Motor Delay con structs puros. |
-| **.NET 9.0 (JIT)** | `ValueLINQDelayWhereSelectStaticLambda` | 1,313.88 ns | 0 B | Motor Delay con lambdas estáticas. |
-| **.NET 9.0 (JIT)** | `ValueLINQDelayWhereSelectNoStaticLambda` | 1,632.67 ns | 152 B | Motor Delay con clausura en lambda. |
-| **.NET 8.0 (JIT)** | `StandardLINQWhereSelect` (Baseline Realista) | 2,144.24 ns | 104 B | LINQ estándar del runtime. |
-| **.NET 8.0 (JIT)** | `ValueLINQDelayWhereSelect` | PNSE | N/A | PNSE lanzada por el stub del benchmark: la API Delay no existe en este TFM (exclusión por compilación condicional). |
-| **.NET 8.0 (JIT)** | `ValueLINQStructWhereSelectStaticLambda` | 1,581.47 ns | 0 B | Motor Eager con lambda estática. |
-| **.NET 8.0 (JIT)** | `ValueLINQStructWhereSelectNoStaticLambda` | 2,229.00 ns | 152 B | Motor Eager con clausura en lambda. |
-| **NativeAOT 10.0** | `StandardLINQWhereSelect` (Baseline Realista) | 14,379.39 ns | 144 B | LINQ estándar en compilación nativa. |
-| **NativeAOT 10.0** | `ValueLINQDelayWhereSelect` | 626.07 ns | 0 B | Motor Delay con structs puros. |
-| **NativeAOT 10.0** | `ValueLINQDelayWhereSelectStaticLambda` | 2,077.39 ns | 0 B | Motor Delay con lambdas estáticas. |
-| **NativeAOT 10.0** | `ValueLINQDelayWhereSelectNoStaticLambda` | 2,101.68 ns | 120 B | Motor Delay con clausura (Native AOT runtime). |
-| **NativeAOT 10.0** | `ValueLINQStructWhereSelectStaticLambda` | 2,871.53 ns | 0 B | Motor Eager con lambda estática. |
-| **NativeAOT 10.0** | `ValueLINQStructWhereSelectNoStaticLambda` | 3,145.85 ns | 120 B | Motor Eager con clausura (Native AOT runtime). |
-| **NativeAOT 9.0** | `StandardLINQWhereSelect` (Baseline Realista) | 4,693.87 ns | 104 B | LINQ estándar en compilación nativa. |
-| **NativeAOT 9.0** | `ValueLINQDelayWhereSelect` | 931.69 ns | 0 B | Motor Delay con structs puros. |
-| **NativeAOT 9.0** | `ValueLINQDelayWhereSelectStaticLambda` | 2,325.43 ns | 0 B | Motor Delay con lambdas estáticas. |
-| **NativeAOT 9.0** | `ValueLINQDelayWhereSelectNoStaticLambda` | 2,343.98 ns | 120 B | Motor Delay con clausura (Native AOT runtime). |
-| **NativeAOT 8.0** | `StandardLINQWhereSelect` (Baseline Realista) | 4,467.78 ns | 104 B | LINQ estándar en compilación nativa. |
-| **NativeAOT 8.0** | `ValueLINQDelayWhereSelect` | PNSE | N/A | PNSE lanzada por el stub del benchmark: la API Delay no existe en este TFM (exclusión por compilación condicional). |
-| **NativeAOT 8.0** | `ValueLINQStructWhereSelectStaticLambda` | 2,996.83 ns | 0 B | Motor Eager con lambda estática. |
-| **NativeAOT 8.0** | `ValueLINQStructWhereSelectNoStaticLambda` | 3,069.94 ns | 120 B | Motor Eager con clausura (Native AOT runtime). |
+| Runtime / Entorno | Método | Latencia Media (Mean) | Heap Allocated | Ratio | Notas |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+| **NativeAOT 10.0** | `ValueLINQStructWhereSelectDelegados` | **1,447.0 ns** | **0 B** | **0.12** | **8.7x más rápido que BCL** con inlining estático de struct y cero GC. |
+| **NativeAOT 10.0** | `ValueLINQRefStructWhereSelectDelegados` | **1,490.1 ns** | **0 B** | **0.12** | Variante stack ref struct: paridad de velocidad y 0 B. |
+| **NativeAOT 10.0** | `ValueLINQStructWhereSelectLambdas` | 3,757.9 ns | **0 B** | 0.30 | 3.4x más rápido que BCL con lambdas estáticas. |
+| **NativeAOT 10.0** | `ValueLINQRefStructWhereSelectLambdas` | 4,212.7 ns | **0 B** | 0.34 | 3.0x más rápido que BCL con lambdas estáticas. |
+| **NativeAOT 10.0** | `StandardLINQWhereSelect` (Baseline) | 12,635.2 ns | 144 B | 1.00 | BCL en Native AOT: penalizado por despacho dinámico de interfaz. |
+| **.NET 10.0 JIT** | `ValueLINQRefStructWhereSelectDelegados` | **1,275.3 ns** | **0 B** | **0.60** | **40% más rápido que BCL** con delegados struct en stack. |
+| **.NET 10.0 JIT** | `ValueLINQStructWhereSelectDelegados` | **1,550.8 ns** | **0 B** | **0.73** | 27% más rápido que BCL con cero asignación en heap. |
+| **.NET 10.0 JIT** | `StandardLINQWhereSelect` (Baseline) | 2,114.2 ns | 104 B | 1.00 | LINQ estándar en RyuJIT 10. |
+| **.NET 10.0 JIT** | `ValueLINQRefStructWhereSelectLambdas` | 2,336.0 ns | **0 B** | 1.11 | Lambdas estáticas con cero asignación en heap. |
+| **.NET 10.0 JIT** | `ValueLINQStructWhereSelectLambdas` | 2,585.8 ns | **0 B** | 1.22 | Lambdas estáticas en struct con cero asignación en heap. |
+| **.NET 9.0 JIT** | `ValueLINQStructWhereSelectDelegados` | **1,572.3 ns** | **0 B** | **0.78** | 22% más rápido que BCL en .NET 9. |
+| **.NET 9.0 JIT** | `ValueLINQRefStructWhereSelectDelegados` | **1,575.9 ns** | **0 B** | **0.79** | 21% más rápido que BCL en .NET 9. |
+| **.NET 9.0 JIT** | `ValueLINQRefStructWhereSelectLambdas` | 1,700.5 ns | **0 B** | 0.85 | 15% más rápido que BCL con lambdas estáticas. |
+| **.NET 9.0 JIT** | `ValueLINQStructWhereSelectLambdas` | 1,811.7 ns | **0 B** | 0.90 | 10% más rápido que BCL con lambdas estáticas. |
+| **.NET 9.0 JIT** | `StandardLINQWhereSelect` (Baseline) | 2,006.4 ns | 104 B | 1.00 | LINQ estándar en .NET 9. |
+| **.NET 8.0 JIT** | `ValueLINQRefStructWhereSelectDelegados` | **1,449.7 ns** | **0 B** | **0.66** | **34% más rápido que BCL** en .NET 8 LTS. |
+| **.NET 8.0 JIT** | `ValueLINQStructWhereSelectDelegados` | **1,580.6 ns** | **0 B** | **0.72** | 28% más rápido que BCL en .NET 8 LTS. |
+| **.NET 8.0 JIT** | `ValueLINQRefStructWhereSelectLambdas` | 1,781.2 ns | **0 B** | 0.81 | 19% más rápido que BCL en .NET 8 LTS. |
+| **.NET 8.0 JIT** | `ValueLINQStructWhereSelectLambdas` | 2,177.8 ns | **0 B** | 0.99 | Paridad de velocidad con BCL y cero alocaciones. |
+| **.NET 8.0 JIT** | `StandardLINQWhereSelect` (Baseline) | 2,209.1 ns | 104 B | 1.00 | LINQ estándar en .NET 8 LTS. |
 
 ---
 
 ## 6. Interpretación de los Datos
 
-1. **Eficiencia en Pila (Delay pure structs)**: La combinación de `ToValueDelayQuery()` con predicados de struct puros (`ValueLINQDelayWhereSelect`) registra **0 B (medido)** asignados en heap. Su latencia en .NET 10.0 JIT es de 728.80 ns **(medido)**, frente a los 2,047.17 ns del LINQ estándar (un factor de velocidad de ~2.8x).
-2. **Optimizaciones de Escape del Compilador**: Bajo .NET 10.0 JIT, `ValueLINQStructWhereSelectNoStaticLambda` aloca únicamente 24 B **(medido)** en heap frente a los 152 B del motor Delay equivalente. Esto es resultado de la optimización del análisis de escape en RyuJIT 10, que reduce la asignación del objeto closure a un espacio mínimo en heap para el motor Eager, mientras que en Native AOT se estabiliza en 120 B **(medido)**.
-3. **Escenario Native AOT**: En NativeAOT 10.0, el coste de despacho dinámico en el baseline LINQ eleva su latencia a 14,379.39 ns **(medido)**. El motor diferido `ValueLINQDelayWhereSelect` opera en 626.07 ns **(medido)** con **0 B (medido)** asignados, resultando ~23 veces más rápido debido al inlining estático completo soportado por el compilador AOT.
+1. **Eficiencia en Pila y Cero Asignaciones**: Tanto `ValueLINQStruct` como `ValueLINQRefStruct` con delegados estructurados (`IWhereDelegado`, `ISelectDelegado`) registran **0 B (medido)** asignados en heap en todos los runtimes probados (.NET 8, 9, 10 y NativeAOT), frente a los 104 B / 144 B del LINQ estándar de la BCL.
+2. **Ventaja de CPU con Delegados Struct**: En .NET 10.0 JIT, `ValueLINQRefStructWhereSelectDelegados` alcanza **1,275.3 ns (medido)** frente a los 2,114.2 ns del LINQ estándar (un factor de aceleración de 1.66x / ratio 0.60x), eliminando la barrera de inlining.
+3. **Escenario Native AOT**: En NativeAOT 10.0, el coste de despacho dinámico en el baseline LINQ eleva su latencia a 12,635.2 ns **(medido)**. Las variantes con delegados operan entre 1,447.0 ns y 1,490.1 ns **(medido)** con **0 B (medido)** asignados, resultando hasta **8.7 veces más rápidas** debido al inlining estático completo soportado por el compilador AOT.
 
 ---
 [Volver a Métodos y Extensiones](README.md)
+
 

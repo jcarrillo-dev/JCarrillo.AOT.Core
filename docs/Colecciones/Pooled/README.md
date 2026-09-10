@@ -27,43 +27,69 @@ Los benchmarks de las colecciones comparan la inicialización, inserción (`Add`
 *   **Entorno de Medición**: Windows 11 (10.0.26200.8655), CPU AMD Ryzen 9 3950X, .NET SDK 10.0.301, runtime .NET 10.0.9 (medido).
 *   **Harness**: BenchmarkDotNet v0.14.0, compilación en modo Release.
 
-### Tabla 1: List\<T\> vs PooledList\<T\> (Medidos)
-| Método de Prueba | Tipo | Tamaño (N) | Latencia (Mean) | Heap Allocated | Ratio de Latencia |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **List_Int_Dynamic** (Baseline) | `int` | 100 | 248.25 ns | 1,184 B | 1.00 |
-| **List_Int_Fixed** | `int` | 100 | 197.43 ns | 456 B | 0.80 |
-| **PooledList_Int_Dynamic** | `int` | 100 | 124.62 ns | **0 B** | **0.50** |
-| **PooledList_Int_Fixed** | `int` | 100 | 122.55 ns | **0 B** | **0.49** |
-| **PooledListRef_Int_Dynamic** | `int` | 100 | 102.11 ns | **0 B** | **0.41** |
-| **PooledListRef_Int_Fixed** | `int` | 100 | 96.92 ns | **0 B** | **0.39** |
-| | | | | | |
-| **List_Int_Dynamic** (Baseline) | `int` | 1000 | 2,087.96 ns | 8,424 B | 1.00 |
-| **List_Int_Fixed** | `int` | 1000 | 1,850.63 ns | 4,056 B | 0.89 |
-| **PooledList_Int_Dynamic** | `int` | 1000 | 1,155.92 ns | **0 B** | **0.55** |
-| **PooledList_Int_Fixed** | `int` | 1000 | 1,058.28 ns | **0 B** | **0.51** |
-| **PooledListRef_Int_Dynamic** | `int` | 1000 | 1,013.29 ns | **0 B** | **0.49** |
-| **PooledListRef_Int_Fixed** | `int` | 1000 | 829.59 ns | **0 B** | **0.40** |
-| | | | | | |
-| **List_String_Dynamic** (Baseline) | `string` | 100 | 384.88 ns | 2,192 B | 1.00 |
-| **List_String_Fixed** | `string` | 100 | 262.39 ns | 856 B | 0.68 |
-| **PooledList_String_Dynamic** | `string` | 100 | 430.05 ns | **0 B** | 1.12 |
-| **PooledListRef_String_Dynamic**| `string` | 100 | 437.35 ns | **0 B** | 1.14 |
-| | | | | | |
-| **List_String_Dynamic** (Baseline) | `string` | 1000 | 2,720.72 ns | 16,600 B | 1.00 |
-| **List_String_Fixed** | `string` | 1000 | 2,282.80 ns | 8,056 B | 0.84 |
-| **PooledList_String_Dynamic** | `string` | 1000 | 4,223.16 ns | **0 B** | 1.55 |
-| **PooledListRef_String_Dynamic**| `string` | 1000 | 4,533.38 ns | **0 B** | 1.67 |
+### Tabla 1: List\<int\> vs PooledList\<int\> (Medidos Multi-Runtime)
+*   **Harness**: BenchmarkDotNet v0.15.8 con `MemoryDiagnoser` y `ThreadingDiagnoser`.
+*   **Suite**: `JCarrillo.AOT.Core.Benchmarks.Colecciones.Pooled.PooledListIntBenchmarks`.
 
-### Tabla 2: StandardArray vs PooledArray (Medidos)
-| Método de Prueba | Tamaño (N) | Latencia (Mean) | Heap Allocated | Ratio de Latencia |
-| :--- | :---: | :---: | :---: | :---: |
-| **StandardArray** (Baseline) | 100 | 53.75 ns | 424 B | 1.00 |
-| **PooledArray** | 100 | 77.23 ns | **0 B** | 1.44 |
-| **PooledArrayRef** | 100 | 66.63 ns | **0 B** | 1.24 |
-| | | | | |
-| **StandardArray** (Baseline) | 1000 | 364.27 ns | 4,024 B | 1.00 |
-| **PooledArray** | 1000 | 619.42 ns | **0 B** | 1.70 |
-| **PooledArrayRef** | 1000 | 505.45 ns | **0 B** | 1.39 |
+| Runtime / Engine | Método de Prueba | Tamaño (N) | Latencia (Mean) | Heap Allocated | Ratio | Notas |
+| :--- | :--- | :---: | :---: | :---: | :---: | :--- |
+| **NativeAOT 10.0** | `ListIntFixed` | 100 | 267.3 ns | 456 B | 0.76 | Precapacidad BCL en AOT nativo. |
+| **NativeAOT 10.0** | `PooledListIntFixed` | 100 | 270.6 ns | **0 B** | 0.77 | Búfer prealquilado del pool, cero alocaciones. |
+| **NativeAOT 10.0** | `ListIntDynamic` (Baseline) | 100 | 352.6 ns | 1,184 B | 1.00 | Lista dinámica BCL con redimensionado en heap. |
+| **NativeAOT 10.0** | `PooledListIntDynamic` | 100 | 353.6 ns | **0 B** | 1.00 | Redimensionado automático en pool sin GC. |
+| **.NET 10.0 JIT** | `PooledListIntFixed` | 100 | **266.7 ns** | **0 B** | **0.71** | **29% más rápido que BCL dinámica**, 0 B en heap. |
+| **.NET 10.0 JIT** | `PooledListIntDynamic` | 100 | **269.0 ns** | **0 B** | **0.71** | Cero impacto en GC en RyuJIT 10. |
+| **.NET 10.0 JIT** | `ListIntFixed` | 100 | 298.3 ns | 456 B | 0.79 | Capacidad inicial fija BCL. |
+| **.NET 10.0 JIT** | `ListIntDynamic` (Baseline) | 100 | 376.7 ns | 1,184 B | 1.00 | Lista estándar BCL dinámica. |
+| **.NET 9.0 JIT** | `PooledListIntFixed` | 100 | 265.0 ns | **0 B** | 0.71 | Optimización en .NET 9. |
+| **.NET 9.0 JIT** | `PooledListIntDynamic` | 100 | 272.5 ns | **0 B** | 0.73 | Cero asignación en .NET 9. |
+| **.NET 9.0 JIT** | `ListIntFixed` | 100 | 279.1 ns | 456 B | 0.74 | Capacidad fija BCL en .NET 9. |
+| **.NET 9.0 JIT** | `ListIntDynamic` (Baseline) | 100 | 375.5 ns | 1,184 B | 1.00 | Lista dinámica BCL en .NET 9. |
+| **.NET 8.0 JIT** | `PooledListIntFixed` | 100 | 269.6 ns | **0 B** | 0.74 | Evaluación en .NET 8 LTS. |
+| **.NET 8.0 JIT** | `PooledListIntDynamic` | 100 | 292.2 ns | **0 B** | 0.80 | Cero asignación en heap. |
+| **.NET 8.0 JIT** | `ListIntFixed` | 100 | 297.8 ns | 456 B | 0.81 | Capacidad fija BCL en .NET 8. |
+| **.NET 8.0 JIT** | `ListIntDynamic` (Baseline) | 100 | 367.0 ns | 1,184 B | 1.00 | Lista dinámica BCL en .NET 8. |
+| | | | | | | |
+| **NativeAOT 10.0** | `PooledListIntFixed` | 1000 | **2,369.5 ns** | **0 B** | **0.83** | **17% más rápido que BCL**, cero GC en AOT. |
+| **NativeAOT 10.0** | `ListIntFixed` | 1000 | 2,582.0 ns | 4,056 B | 0.90 | Precapacidad BCL (4 KB en heap). |
+| **NativeAOT 10.0** | `ListIntDynamic` (Baseline) | 1000 | 2,867.4 ns | 8,424 B | 1.00 | Lista BCL con 8.4 KB en heap. |
+| **NativeAOT 10.0** | `PooledListIntDynamic` | 1000 | 2,982.4 ns | **0 B** | 1.04 | **0 B en heap** (ahorro total de 8.4 KB). |
+| **.NET 10.0 JIT** | `PooledListIntFixed` | 1000 | **2,366.1 ns** | **0 B** | **0.81** | **19% más rápido que BCL**, 0 B en heap. |
+| **.NET 10.0 JIT** | `PooledListIntDynamic` | 1000 | **2,555.7 ns** | **0 B** | **0.87** | **13% más rápido que BCL dinámica**, 0 B en heap. |
+| **.NET 10.0 JIT** | `ListIntFixed` | 1000 | 2,627.0 ns | 4,056 B | 0.90 | Precapacidad BCL (4 KB en heap). |
+| **.NET 10.0 JIT** | `ListIntDynamic` (Baseline) | 1000 | 2,932.0 ns | 8,424 B | 1.00 | Redimensionamiento BCL con 8.4 KB en heap. |
+| **.NET 9.0 JIT** | `PooledListIntFixed` | 1000 | **2,350.2 ns** | **0 B** | **0.79** | **21% más rápido que BCL**, 0 B en heap. |
+| **.NET 9.0 JIT** | `PooledListIntDynamic` | 1000 | **2,506.2 ns** | **0 B** | **0.84** | **16% más rápido que BCL**, 0 B en heap. |
+| **.NET 9.0 JIT** | `ListIntFixed` | 1000 | 2,652.8 ns | 4,056 B | 0.89 | Precapacidad BCL en .NET 9. |
+| **.NET 9.0 JIT** | `ListIntDynamic` (Baseline) | 1000 | 2,982.8 ns | 8,424 B | 1.00 | Lista dinámica BCL en .NET 9. |
+| **.NET 8.0 JIT** | `ListIntFixed` | 1000 | 2,671.2 ns | 4,056 B | 0.88 | Precapacidad BCL en .NET 8. |
+| **.NET 8.0 JIT** | `PooledListIntFixed` | 1000 | 2,696.9 ns | **0 B** | 0.89 | 11% más rápido que BCL dinámica, 0 B en heap. |
+| **.NET 8.0 JIT** | `PooledListIntDynamic` | 1000 | 2,782.9 ns | **0 B** | 0.92 | 8% más rápido que BCL dinámica, 0 B en heap. |
+| **.NET 8.0 JIT** | `ListIntDynamic` (Baseline) | 1000 | 3,040.7 ns | 8,424 B | 1.00 | Lista dinámica BCL en .NET 8. |
+
+### Tabla 2: StandardArray vs PooledArray (Medidos Multi-Runtime)
+*   **Harness**: BenchmarkDotNet v0.15.8 con `MemoryDiagnoser` y `ThreadingDiagnoser`.
+*   **Suite**: `JCarrillo.AOT.Core.Benchmarks.Colecciones.Pooled.PooledArrayIntBenchmarks`.
+
+| Runtime / Engine | Método de Prueba | Tamaño (N) | Latencia (Mean) | Heap Allocated | Ratio | Notas |
+| :--- | :--- | :---: | :---: | :---: | :---: | :--- |
+| **NativeAOT 10.0** | `StandardArray` (Baseline) | 100 | 104.9 ns | 424 B | 1.00 | Asignación en heap BCL. |
+| **NativeAOT 10.0** | `PooledArray` | 100 | 196.2 ns | **0 B** | 1.87 | Búfer alquilado de pool, cero GC. |
+| **.NET 10.0 JIT** | `StandardArray` (Baseline) | 100 | 113.2 ns | 424 B | 1.00 | Array primitivo en RyuJIT 10. |
+| **.NET 10.0 JIT** | `PooledArray` | 100 | 199.1 ns | **0 B** | 1.76 | Cero asignación en heap. |
+| **.NET 9.0 JIT** | `StandardArray` (Baseline) | 100 | 125.1 ns | 424 B | 1.00 | Array primitivo en .NET 9. |
+| **.NET 9.0 JIT** | `PooledArray` | 100 | 193.1 ns | **0 B** | 1.54 | Cero asignación en heap. |
+| **.NET 8.0 JIT** | `StandardArray` (Baseline) | 100 | 124.3 ns | 424 B | 1.00 | Array primitivo en .NET 8 LTS. |
+| **.NET 8.0 JIT** | `PooledArray` | 100 | 204.6 ns | **0 B** | 1.65 | Cero asignación en heap. |
+| | | | | | | |
+| **NativeAOT 10.0** | `StandardArray` (Baseline) | 1000 | 806.7 ns | 4,024 B | 1.00 | Asignación en heap de 4 KB. |
+| **NativeAOT 10.0** | `PooledArray` | 1000 | 1,885.3 ns | **0 B** | 2.34 | **0 B de impacto en GC**. |
+| **.NET 10.0 JIT** | `StandardArray` (Baseline) | 1000 | 841.7 ns | 4,024 B | 1.00 | 4 KB en heap BCL. |
+| **.NET 10.0 JIT** | `PooledArray` | 1000 | 1,661.9 ns | **0 B** | 1.97 | **0 B de impacto en GC**. |
+| **.NET 9.0 JIT** | `StandardArray` (Baseline) | 1000 | 993.6 ns | 4,024 B | 1.00 | 4 KB en heap BCL. |
+| **.NET 9.0 JIT** | `PooledArray` | 1000 | 1,644.0 ns | **0 B** | 1.66 | **0 B de impacto en GC**. |
+| **.NET 8.0 JIT** | `StandardArray` (Baseline) | 1000 | 1,003.2 ns | 4,024 B | 1.00 | 4 KB en heap BCL. |
+| **.NET 8.0 JIT** | `PooledArray` | 1000 | 1,903.2 ns | **0 B** | 1.90 | **0 B de impacto en GC**. |
 
 ---
 
