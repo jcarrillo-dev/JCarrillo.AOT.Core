@@ -89,7 +89,25 @@ namespace JCarrillo.AOT.Core.ValueLINQ
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static TablaSesiones<T>? IntentarObtenerTabla(long token)
-            => ValueLINQArenaManager.IsArenaViva(TokenHelper.ObtenerArenaId(token)) ? _tablas[TokenHelper.ObtenerArenaId(token)] : null;
+        {
+            int idArena = TokenHelper.ObtenerArenaId(token);
+
+            if (!ValueLINQArenaManager.IsArenaViva(idArena))
+                return null;
+
+            if (idArena != 0)
+            {
+                long generacion = ValueLINQArenaManager.ObtenerGeneracion(idArena);
+                if (generacion == 0L || (int)(generacion & ValueLINQConfig.ArenaGenMask) != TokenHelper.ObtenerArenaGen(token))
+                    return null;
+            }
+
+            TablaSesiones<T>? tbl = _tablas[idArena];
+            if (tbl is null || (idArena != 0 && (int)(tbl.ArenaGen & ValueLINQConfig.ArenaGenMask) != TokenHelper.ObtenerArenaGen(token)))
+                return null;
+
+            return tbl;
+        }
 
         [DoesNotReturn]
         [MethodImpl(MethodImplOptions.NoInlining)]
@@ -109,10 +127,20 @@ namespace JCarrillo.AOT.Core.ValueLINQ
             if (!ValueLINQArenaManager.IsArenaViva(idArena))
                 ThrowArenaInactiva(idArena);
 
-            TablaSesiones<T>? tbl = IntentarObtenerTabla(token);
+            if (idArena != 0)
+            {
+                long generacion = ValueLINQArenaManager.ObtenerGeneracion(idArena);
+                if (generacion == 0L || (int)(generacion & ValueLINQConfig.ArenaGenMask) != TokenHelper.ObtenerArenaGen(token))
+                    ThrowArenaInactiva(idArena);
+            }
+
+            TablaSesiones<T>? tbl = _tablas[idArena];
 
             if (tbl == null)
                 ThrowSesionNoEncontrada(token);
+
+            if (idArena != 0 && (int)(tbl.ArenaGen & ValueLINQConfig.ArenaGenMask) != TokenHelper.ObtenerArenaGen(token))
+                ThrowArenaInactiva(idArena);
 
             return tbl;
         }
@@ -145,6 +173,23 @@ namespace JCarrillo.AOT.Core.ValueLINQ
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool IsTablaMaterializada(int idArena)
             => Volatile.Read(ref _tablas[idArena]) is not null;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static ref MetadatosSesion<T> ObtenerMetadatos(long tokenArena, int tamañoMinimo)
+        {
+            int idArena = TokenHelper.ObtenerIdTokenArena(tokenArena);
+            long generacion = TokenHelper.ObtenerGeneracionTokenArena(tokenArena);
+
+            if (!ValueLINQArenaManager.IsArenaViva(tokenArena))
+                ThrowArenaInactiva(idArena);
+
+            TablaSesiones<T> tabla = ObtenerOCrearTabla(idArena);
+
+            if (tabla.ArenaGen != generacion)
+                ThrowArenaInactiva(idArena);
+
+            return ref tabla.ObtenerMetadatos(tamañoMinimo);
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static ref MetadatosSesion<T> ObtenerMetadatos(int idArena, int tamañoMinimo)

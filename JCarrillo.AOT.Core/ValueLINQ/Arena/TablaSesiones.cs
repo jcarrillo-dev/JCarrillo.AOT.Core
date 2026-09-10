@@ -24,6 +24,8 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
         private int _topStack;
         private long _vaciaDesde;
 
+        internal long ArenaGen => _arenaGen;
+
         internal int IndicesLibres
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
