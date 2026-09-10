@@ -1,6 +1,8 @@
+using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
 using BenchmarkDotNet.Exporters;
+using BenchmarkDotNet.Loggers;
 using BenchmarkDotNet.Order;
 
 namespace JCarrillo.AOT.Core.Benchmarks.Infraestructura
@@ -13,9 +15,10 @@ namespace JCarrillo.AOT.Core.Benchmarks.Infraestructura
     {
         public CoreBenchmarkConfig()
         {
+            AddLogger(ConsoleLogger.Default);
+            AddColumnProvider(DefaultColumnProviders.Instance);
             AddDiagnoser(MemoryDiagnoser.Default);
             AddDiagnoser(ThreadingDiagnoser.Default);
-            AddExporter(HtmlExporter.Default);
             WithOrderer(new DefaultOrderer(SummaryOrderPolicy.FastestToSlowest));
             WithOptions(ConfigOptions.DisableLogFile);
         }
