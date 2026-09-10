@@ -144,7 +144,7 @@ public static void EjecutarFiltro(int[] datos)
 
 El motor eager de `Where` **consume la consulta de origen**: la libera siempre en un bloque `finally` (`origen.Dispose()`, [ValueLINQExtensions.cs](../../../JCarrillo.AOT.Core/Extensiones/ValueLINQ/ValueLINQExtensions.cs), líneas 336 y 400), tanto si la operación tiene éxito como si lanza una excepción. Por tanto, la consulta de origen no debe reutilizarse ni disponerse manualmente después de la llamada, y en un pipeline encadenado solo la consulta final necesita `using`/`Dispose` (como muestra el ejemplo de la sección 3).
 
-La consulta resultado se crea **en la misma arena que el origen**: el identificador de arena se deduce del token de la consulta de entrada mediante `TokenHelper.ObtenerArenaId` (líneas 308 y 372), de modo que una cadena iniciada con `ToValueQuery(array, arena)` o `ToValueRefQuery(array, arena)` mantiene todas sus sesiones intermedias dentro de esa arena y la disposición en bloque de la arena las alcanza todas; sin arena explícita, la cadena opera en la arena ambiente 0.
+La consulta resultado se crea **en la misma arena que el origen**: el token de arena de 64 bits (`origen.TokenArena`) se propaga directamente a la nueva sesión mediante el constructor `new ValueLINQStruct<T>(origen.TokenArena, capacidad)` (o `ValueLINQRefStruct<T>`), de modo que una cadena iniciada con `ToValueQuery(..., arena)` o `ToValueRefQuery(..., arena)` mantiene todas sus sesiones intermedias ligadas al ámbito y a la generación de esa arena; la disposición en bloque de la arena las alcanza todas, y las consultas creadas sin arena explícita operan en la arena ambiente 0.
 
 Véase [Arenas.md](../Core/Arenas.md) para el ciclo de vida completo de las arenas y la propagación en los operadores eager.
 

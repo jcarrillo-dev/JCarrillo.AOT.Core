@@ -1,5 +1,6 @@
 using JCarrillo.AOT.Core.ValueLINQ.Arena;
 using JCarrillo.AOT.Core.ValueLINQ.Excepciones;
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
@@ -12,6 +13,8 @@ namespace JCarrillo.AOT.Core.ValueLINQ
     /// <typeparam name="T">El tipo de los elementos gestionados en el estado.</typeparam>
     public sealed class ValueLINQStateManager<T>
     {
+        private const int CapacidadMaximaPool = 32;
+        private static readonly ConcurrentQueue<TablaSesiones<T>> _poolTablas = new();
         private static readonly TablaSesiones<T>?[] _tablas = new TablaSesiones<T>[ValueLINQConfig.Arenas];
 
         static ValueLINQStateManager()
@@ -21,6 +24,9 @@ namespace JCarrillo.AOT.Core.ValueLINQ
             ValueLINQGC.Registrar(LimpiarExpirados);
             ValueLINQArenaManager.Registrar(LiberarTablasDeArena, EstadoEnArena);
         }
+
+        internal static int TablasEnPool => _poolTablas.Count;
+        internal static void VaciarPool() => _poolTablas.Clear();
 
         #region Limpieza
 
@@ -70,26 +76,65 @@ namespace JCarrillo.AOT.Core.ValueLINQ
             if (generacion == 0L)
                 ThrowArenaInactiva(idArena);
 
-            TablaSesiones<T> nueva = new(idArena, generacion);
-            TablaSesiones<T>? previo = Interlocked.CompareExchange(ref _tablas[idArena], nueva, null);
+            TablaSesiones<T> candidata;
+            bool isReciclada = _poolTablas.TryDequeue(out TablaSesiones<T>? reciclada);
+
+            if (isReciclada)
+            {
+                reciclada!.Reiniciar(idArena, generacion);
+                candidata = reciclada;
+            }
+            else
+            {
+                candidata = new(idArena, generacion);
+            }
+
+            TablaSesiones<T>? previo = Interlocked.CompareExchange(ref _tablas[idArena], candidata, null);
 
             if (previo != null)
+            {
+                if (isReciclada && _poolTablas.Count < CapacidadMaximaPool)
+                    _poolTablas.Enqueue(candidata);
+
                 return previo;
+            }
 
             if (ValueLINQArenaManager.ObtenerGeneracion(idArena) != generacion)
             {
-                if (ReferenceEquals(Interlocked.CompareExchange(ref _tablas[idArena], null, nueva), nueva))
-                    nueva.LiberarTodo();
+                if (ReferenceEquals(Interlocked.CompareExchange(ref _tablas[idArena], null, candidata), candidata))
+                {
+                    candidata.LiberarTodo();
+                    if (_poolTablas.Count < CapacidadMaximaPool)
+                        _poolTablas.Enqueue(candidata);
+                }
 
                 ThrowArenaInactiva(idArena);
             }
 
-            return nueva;
+            return candidata;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static TablaSesiones<T>? IntentarObtenerTabla(long token)
-            => ValueLINQArenaManager.IsArenaViva(TokenHelper.ObtenerArenaId(token)) ? _tablas[TokenHelper.ObtenerArenaId(token)] : null;
+        {
+            int idArena = TokenHelper.ObtenerArenaId(token);
+
+            if (!ValueLINQArenaManager.IsArenaViva(idArena))
+                return null;
+
+            if (idArena != 0)
+            {
+                long generacion = ValueLINQArenaManager.ObtenerGeneracion(idArena);
+                if (generacion == 0L || (int)(generacion & ValueLINQConfig.ArenaGenMask) != TokenHelper.ObtenerArenaGen(token))
+                    return null;
+            }
+
+            TablaSesiones<T>? tbl = _tablas[idArena];
+            if (tbl is null || (idArena != 0 && (int)(tbl.ArenaGen & ValueLINQConfig.ArenaGenMask) != TokenHelper.ObtenerArenaGen(token)))
+                return null;
+
+            return tbl;
+        }
 
         [DoesNotReturn]
         [MethodImpl(MethodImplOptions.NoInlining)]
@@ -109,10 +154,20 @@ namespace JCarrillo.AOT.Core.ValueLINQ
             if (!ValueLINQArenaManager.IsArenaViva(idArena))
                 ThrowArenaInactiva(idArena);
 
-            TablaSesiones<T>? tbl = IntentarObtenerTabla(token);
+            if (idArena != 0)
+            {
+                long generacion = ValueLINQArenaManager.ObtenerGeneracion(idArena);
+                if (generacion == 0L || (int)(generacion & ValueLINQConfig.ArenaGenMask) != TokenHelper.ObtenerArenaGen(token))
+                    ThrowArenaInactiva(idArena);
+            }
+
+            TablaSesiones<T>? tbl = _tablas[idArena];
 
             if (tbl == null)
                 ThrowSesionNoEncontrada(token);
+
+            if (idArena != 0 && (int)(tbl.ArenaGen & ValueLINQConfig.ArenaGenMask) != TokenHelper.ObtenerArenaGen(token))
+                ThrowArenaInactiva(idArena);
 
             return tbl;
         }
@@ -137,7 +192,19 @@ namespace JCarrillo.AOT.Core.ValueLINQ
         }
 
         internal static void LiberarTablasDeArena(int id)
-            => Interlocked.Exchange(ref _tablas[id], null)?.LiberarTodo();
+        {
+            if ((uint)id >= (uint)_tablas.Length || id == 0)
+                return;
+
+            TablaSesiones<T>? tabla = Interlocked.Exchange(ref _tablas[id], null);
+            if (tabla is null)
+                return;
+
+            tabla.LiberarTodo();
+
+            if (_poolTablas.Count < CapacidadMaximaPool)
+                _poolTablas.Enqueue(tabla);
+        }
 
         internal static EstadoTabla EstadoEnArena(int id)
             => _tablas[id]?.Estado ?? default;
@@ -145,6 +212,23 @@ namespace JCarrillo.AOT.Core.ValueLINQ
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool IsTablaMaterializada(int idArena)
             => Volatile.Read(ref _tablas[idArena]) is not null;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static ref MetadatosSesion<T> ObtenerMetadatos(long tokenArena, int tamañoMinimo)
+        {
+            int idArena = TokenHelper.ObtenerIdTokenArena(tokenArena);
+            long generacion = TokenHelper.ObtenerGeneracionTokenArena(tokenArena);
+
+            if (!ValueLINQArenaManager.IsArenaViva(tokenArena))
+                ThrowArenaInactiva(idArena);
+
+            TablaSesiones<T> tabla = ObtenerOCrearTabla(idArena);
+
+            if (tabla.ArenaGen != generacion)
+                ThrowArenaInactiva(idArena);
+
+            return ref tabla.ObtenerMetadatos(tamañoMinimo);
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static ref MetadatosSesion<T> ObtenerMetadatos(int idArena, int tamañoMinimo)

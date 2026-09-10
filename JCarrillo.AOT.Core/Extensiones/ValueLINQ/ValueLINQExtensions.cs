@@ -73,7 +73,10 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             if (origen == null)
                 ThrowArgumentNullException(nameof(origen));
 
-            ValueLINQStruct<T> query = new(arena.Id, origen.Length);
+            if (!arena.IsViva)
+                ThrowArenaInactiva(arena.Id);
+
+            ValueLINQStruct<T> query = new(arena.TokenArena, origen.Length);
             CopiarOrigenSlow<T>(query.Token, origen.AsSpan(0, origen.Length));
             return query;
         }
@@ -108,7 +111,10 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             if (origen == null)
                 ThrowArgumentNullException(nameof(origen));
 
-            ValueLINQRefStruct<T> query = new(arena.Id, origen.Length);
+            if (!arena.IsViva)
+                ThrowArenaInactiva(arena.Id);
+
+            ValueLINQRefStruct<T> query = new(arena.TokenArena, origen.Length);
             CopiarOrigenSlow<T>(query.Token, origen.AsSpan(0, origen.Length));
             return query;
         }
@@ -128,6 +134,24 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         }
 
         /// <summary>
+        /// Convierte un span en un <see cref="ValueLINQStruct{T}"/> cuya sesión vive en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos del span.</typeparam>
+        /// <param name="origen">El span de origen.</param>
+        /// <param name="arena">La arena propietaria de la consulta y de sus sesiones intermedias.</param>
+        /// <returns>Un <see cref="ValueLINQStruct{T}"/> con los elementos del span, adscrito a la arena.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQStruct<T> ToValueQuery<T>(this Span<T> origen, ValueLINQArena arena)
+        {
+            if (!arena.IsViva)
+                ThrowArenaInactiva(arena.Id);
+
+            ValueLINQStruct<T> query = new(arena.TokenArena, origen.Length);
+            CopiarOrigenSlow<T>(query.Token, origen);
+            return query;
+        }
+
+        /// <summary>
         /// Converts a span to a <see cref="ValueLINQRefStruct{T}"/>.
         /// </summary>
         /// <typeparam name="T">The type of the elements in the span.</typeparam>
@@ -137,6 +161,24 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this Span<T> origen)
         {
             ValueLINQRefStruct<T> query = new(origen.Length);
+            CopiarOrigenSlow<T>(query.Token, origen);
+            return query;
+        }
+
+        /// <summary>
+        /// Convierte un span en un <see cref="ValueLINQRefStruct{T}"/> cuya sesión vive en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos del span.</typeparam>
+        /// <param name="origen">El span de origen.</param>
+        /// <param name="arena">La arena propietaria de la consulta y de sus sesiones intermedias.</param>
+        /// <returns>Un <see cref="ValueLINQRefStruct{T}"/> con los elementos del span, adscrito a la arena.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this Span<T> origen, ValueLINQArena arena)
+        {
+            if (!arena.IsViva)
+                ThrowArenaInactiva(arena.Id);
+
+            ValueLINQRefStruct<T> query = new(arena.TokenArena, origen.Length);
             CopiarOrigenSlow<T>(query.Token, origen);
             return query;
         }
@@ -156,6 +198,24 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         }
 
         /// <summary>
+        /// Convierte un span de solo lectura en un <see cref="ValueLINQStruct{T}"/> cuya sesión vive en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos del span de solo lectura.</typeparam>
+        /// <param name="origen">El span de solo lectura de origen.</param>
+        /// <param name="arena">La arena propietaria de la consulta y de sus sesiones intermedias.</param>
+        /// <returns>Un <see cref="ValueLINQStruct{T}"/> con los elementos del span de solo lectura, adscrito a la arena.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQStruct<T> ToValueQuery<T>(this ReadOnlySpan<T> origen, ValueLINQArena arena)
+        {
+            if (!arena.IsViva)
+                ThrowArenaInactiva(arena.Id);
+
+            ValueLINQStruct<T> query = new(arena.TokenArena, origen.Length);
+            CopiarOrigenSlow<T>(query.Token, origen);
+            return query;
+        }
+
+        /// <summary>
         /// Converts a read-only span to a <see cref="ValueLINQRefStruct{T}"/>.
         /// </summary>
         /// <typeparam name="T">The type of the elements in the read-only span.</typeparam>
@@ -165,6 +225,24 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this ReadOnlySpan<T> origen)
         {
             ValueLINQRefStruct<T> query = new(origen.Length);
+            CopiarOrigenSlow<T>(query.Token, origen);
+            return query;
+        }
+
+        /// <summary>
+        /// Convierte un span de solo lectura en un <see cref="ValueLINQRefStruct{T}"/> cuya sesión vive en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos del span de solo lectura.</typeparam>
+        /// <param name="origen">El span de solo lectura de origen.</param>
+        /// <param name="arena">La arena propietaria de la consulta y de sus sesiones intermedias.</param>
+        /// <returns>Un <see cref="ValueLINQRefStruct{T}"/> con los elementos del span de solo lectura, adscrito a la arena.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this ReadOnlySpan<T> origen, ValueLINQArena arena)
+        {
+            if (!arena.IsViva)
+                ThrowArenaInactiva(arena.Id);
+
+            ValueLINQRefStruct<T> query = new(arena.TokenArena, origen.Length);
             CopiarOrigenSlow<T>(query.Token, origen);
             return query;
         }
@@ -180,6 +258,17 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             => origen.Span.ToValueQuery();
 
         /// <summary>
+        /// Convierte una referencia a memoria en un <see cref="ValueLINQStruct{T}"/> cuya sesión vive en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos en la memoria.</typeparam>
+        /// <param name="origen">La referencia a memoria de origen.</param>
+        /// <param name="arena">La arena propietaria de la consulta y de sus sesiones intermedias.</param>
+        /// <returns>Un <see cref="ValueLINQStruct{T}"/> con los elementos de la memoria, adscrito a la arena.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQStruct<T> ToValueQuery<T>(this ref Memory<T> origen, ValueLINQArena arena)
+            => origen.Span.ToValueQuery(arena);
+
+        /// <summary>
         /// Converts a memory reference to a <see cref="ValueLINQRefStruct{T}"/>.
         /// </summary>
         /// <typeparam name="T">The type of the elements in the memory.</typeparam>
@@ -188,6 +277,17 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this ref Memory<T> origen)
             => origen.Span.ToValueRefQuery();
+
+        /// <summary>
+        /// Convierte una referencia a memoria en un <see cref="ValueLINQRefStruct{T}"/> cuya sesión vive en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos en la memoria.</typeparam>
+        /// <param name="origen">La referencia a memoria de origen.</param>
+        /// <param name="arena">La arena propietaria de la consulta y de sus sesiones intermedias.</param>
+        /// <returns>Un <see cref="ValueLINQRefStruct{T}"/> con los elementos de la memoria, adscrito a la arena.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this ref Memory<T> origen, ValueLINQArena arena)
+            => origen.Span.ToValueRefQuery(arena);
 
         /// <summary>
         /// Converts a pooled list reference to a <see cref="ValueLINQStruct{T}"/>.
@@ -200,6 +300,17 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             => origen.Span.ToValueQuery();
 
         /// <summary>
+        /// Convierte una referencia a una lista del pool en un <see cref="ValueLINQStruct{T}"/> cuya sesión vive en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos en la lista del pool.</typeparam>
+        /// <param name="origen">La referencia a la lista del pool de origen.</param>
+        /// <param name="arena">La arena propietaria de la consulta y de sus sesiones intermedias.</param>
+        /// <returns>Un <see cref="ValueLINQStruct{T}"/> con los elementos de la lista del pool, adscrito a la arena.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQStruct<T> ToValueQuery<T>(this ref PooledList<T> origen, ValueLINQArena arena)
+            => origen.Span.ToValueQuery(arena);
+
+        /// <summary>
         /// Converts a pooled list reference to a <see cref="ValueLINQRefStruct{T}"/>.
         /// </summary>
         /// <typeparam name="T">The type of the elements in the pooled list.</typeparam>
@@ -208,6 +319,59 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this ref PooledList<T> origen)
             => origen.Span.ToValueRefQuery();
+
+        /// <summary>
+        /// Convierte una referencia a una lista del pool en un <see cref="ValueLINQRefStruct{T}"/> cuya sesión vive en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos en la lista del pool.</typeparam>
+        /// <param name="origen">La referencia a la lista del pool de origen.</param>
+        /// <param name="arena">La arena propietaria de la consulta y de sus sesiones intermedias.</param>
+        /// <returns>Un <see cref="ValueLINQRefStruct{T}"/> con los elementos de la lista del pool, adscrito a la arena.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this ref PooledList<T> origen, ValueLINQArena arena)
+            => origen.Span.ToValueRefQuery(arena);
+
+        /// <summary>
+        /// Convierte una referencia a un arreglo del pool en un <see cref="ValueLINQStruct{T}"/>.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos en el arreglo del pool.</typeparam>
+        /// <param name="origen">La referencia al arreglo del pool de origen.</param>
+        /// <returns>Un <see cref="ValueLINQStruct{T}"/> con los elementos del arreglo del pool.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQStruct<T> ToValueQuery<T>(this ref PooledArray<T> origen)
+            => origen.Span.ToValueQuery();
+
+        /// <summary>
+        /// Convierte una referencia a un arreglo del pool en un <see cref="ValueLINQStruct{T}"/> cuya sesión vive en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos en el arreglo del pool.</typeparam>
+        /// <param name="origen">La referencia al arreglo del pool de origen.</param>
+        /// <param name="arena">La arena propietaria de la consulta y de sus sesiones intermedias.</param>
+        /// <returns>Un <see cref="ValueLINQStruct{T}"/> con los elementos del arreglo del pool, adscrito a la arena.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQStruct<T> ToValueQuery<T>(this ref PooledArray<T> origen, ValueLINQArena arena)
+            => origen.Span.ToValueQuery(arena);
+
+        /// <summary>
+        /// Convierte una referencia a un arreglo del pool en un <see cref="ValueLINQRefStruct{T}"/>.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos en el arreglo del pool.</typeparam>
+        /// <param name="origen">La referencia al arreglo del pool de origen.</param>
+        /// <returns>Un <see cref="ValueLINQRefStruct{T}"/> con los elementos del arreglo del pool.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this ref PooledArray<T> origen)
+            => origen.Span.ToValueRefQuery();
+
+        /// <summary>
+        /// Convierte una referencia a un arreglo del pool en un <see cref="ValueLINQRefStruct{T}"/> cuya sesión vive en la arena indicada.
+        /// </summary>
+        /// <typeparam name="T">El tipo de los elementos en el arreglo del pool.</typeparam>
+        /// <param name="origen">La referencia al arreglo del pool de origen.</param>
+        /// <param name="arena">La arena propietaria de la consulta y de sus sesiones intermedias.</param>
+        /// <returns>Un <see cref="ValueLINQRefStruct{T}"/> con los elementos del arreglo del pool, adscrito a la arena.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueLINQRefStruct<T> ToValueRefQuery<T>(this ref PooledArray<T> origen, ValueLINQArena arena)
+            => origen.Span.ToValueRefQuery(arena);
 
         #endregion
 
@@ -294,7 +458,9 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             bool isExito = false;
             try
             {
-                destino = new ValueLINQRefStruct<TOrigen>(TokenHelper.ObtenerArenaId(origenToken), origenTamaño);
+                destino = origen.TokenArena != 0L
+                    ? new ValueLINQRefStruct<TOrigen>(origen.TokenArena, origenTamaño)
+                    : new ValueLINQRefStruct<TOrigen>(origenTamaño);
                 if (isTokenValido)
                 {
                     ref MetadatosSesion<TOrigen> metadatosOrigen = ref ValueLINQStateManager<TOrigen>.ObtenerMetadatos(origenToken);
@@ -356,23 +522,26 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 origenTamaño = metadatosOrigen.TamañoActual;
             }
 
-            return WhereSlow<TOrigen, TDato, TPredicate>(origenToken, origenTamaño, dato, in predicado);
+            return WhereSlow<TOrigen, TDato, TPredicate>(origen, origenTamaño, dato, in predicado);
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static ValueLINQStruct<TOrigen> WhereSlow<TOrigen, TDato, TPredicate>(
-            long origenToken,
+            ValueLINQStruct<TOrigen> origen,
             int origenTamaño,
             TDato dato,
             in TPredicate predicado)
             where TPredicate : struct, IWhereDelegado<TOrigen, TDato>
         {
+            long origenToken = origen.Token;
             bool isTokenValido = origenToken != 0L;
             ValueLINQStruct<TOrigen> destino = default;
             bool isExito = false;
             try
             {
-                destino = new ValueLINQStruct<TOrigen>(TokenHelper.ObtenerArenaId(origenToken), origenTamaño);
+                destino = origen.TokenArena != 0L
+                    ? new ValueLINQStruct<TOrigen>(origen.TokenArena, origenTamaño)
+                    : new ValueLINQStruct<TOrigen>(origenTamaño);
                 if (isTokenValido)
                 {
                     ref MetadatosSesion<TOrigen> metadatosOrigen = ref ValueLINQStateManager<TOrigen>.ObtenerMetadatos(origenToken);
@@ -434,22 +603,25 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 origenTamaño = metadatosOrigen.TamañoActual;
             }
 
-            return SelectSlow<TOrigen, TPredicate, TResultado>(origenToken, origenTamaño, isTokenValido, in selector);
+            return SelectSlow<TOrigen, TPredicate, TResultado>(origen, origenTamaño, isTokenValido, in selector);
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static ValueLINQRefStruct<TResultado> SelectSlow<TOrigen, TPredicate, TResultado>(
-            long origenToken,
+            ValueLINQRefStruct<TOrigen> origen,
             int origenTamaño,
             bool isTokenValido,
             scoped in TPredicate selector)
             where TPredicate : struct, ISelectDelegado<TOrigen, TResultado>
         {
+            long origenToken = origen.Token;
             ValueLINQRefStruct<TResultado> destino = default;
             bool isExito = false;
             try
             {
-                destino = new ValueLINQRefStruct<TResultado>(TokenHelper.ObtenerArenaId(origenToken), origenTamaño);
+                destino = origen.TokenArena != 0L
+                    ? new ValueLINQRefStruct<TResultado>(origen.TokenArena, origenTamaño)
+                    : new ValueLINQRefStruct<TResultado>(origenTamaño);
                 if (isTokenValido)
                 {
                     ref MetadatosSesion<TOrigen> metadatosOrigen = ref ValueLINQStateManager<TOrigen>.ObtenerMetadatos(origenToken);
@@ -522,7 +694,9 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             bool isExito = false;
             try
             {
-                destino = new ValueLINQStruct<TResultado>(TokenHelper.ObtenerArenaId(origenToken), origenTamaño);
+                destino = origen.TokenArena != 0L
+                    ? new ValueLINQStruct<TResultado>(origen.TokenArena, origenTamaño)
+                    : new ValueLINQStruct<TResultado>(origenTamaño);
                 if (isTokenValido)
                 {
                     ref MetadatosSesion<TOrigen> metadatosOrigen = ref ValueLINQStateManager<TOrigen>.ObtenerMetadatos(origenToken);
@@ -566,6 +740,11 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         private static void ThrowArgumentNullException(string paramName)
             => throw new ArgumentNullException(paramName);
 
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void ThrowArenaInactiva(int idArena)
+            => throw new ValueLinqArenaInactivaException(idArena);
+
         /// <summary>
         /// Splits a <see cref="ValueLINQRefStruct{T}"/> into chunks of a specified size.
         /// </summary>
@@ -591,11 +770,11 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             }
 
             int cantidadChunks = (origenTamaño + tamaño - 1) / tamaño;
-            return ChunkSlow<T>(origenToken, cantidadChunks, tamaño);
+            return ChunkSlow<T>(origenToken, origen.TokenArena, cantidadChunks, tamaño);
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static ValueLINQRefStruct<ValueLINQStruct<T>> ChunkSlow<T>(long origenToken, int cantidadChunks, int tamaño)
+        private static ValueLINQRefStruct<ValueLINQStruct<T>> ChunkSlow<T>(long origenToken, long tokenArena, int cantidadChunks, int tamaño)
         {
             bool isTokenValido = origenToken != 0L;
             ValueLINQRefStruct<ValueLINQStruct<T>> destino = default;
@@ -603,7 +782,9 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             bool isExito = false;
             try
             {
-                destino = new ValueLINQRefStruct<ValueLINQStruct<T>>(TokenHelper.ObtenerArenaId(origenToken), cantidadChunks);
+                destino = tokenArena != 0L
+                    ? new ValueLINQRefStruct<ValueLINQStruct<T>>(tokenArena, cantidadChunks)
+                    : new ValueLINQRefStruct<ValueLINQStruct<T>>(cantidadChunks);
                 if (isTokenValido)
                 {
                     ref MetadatosSesion<T> metadatosOrigen = ref ValueLINQStateManager<T>.ObtenerMetadatos(origenToken);
@@ -618,7 +799,9 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                         for (int i = 0; i < len; i += tamaño)
                         {
                             int chunkSize = Math.Min(tamaño, len - i);
-                            ValueLINQStruct<T> chunk = new(TokenHelper.ObtenerArenaId(origenToken), chunkSize);
+                            ValueLINQStruct<T> chunk = tokenArena != 0L
+                                ? new(tokenArena, chunkSize)
+                                : new(chunkSize);
 
                             ref MetadatosSesion<T> metadatosChunk = ref ValueLINQStateManager<T>.ObtenerMetadatos(chunk.Token);
                             origenArray!.AsSpan(i, chunkSize).CopyTo(metadatosChunk.Array!);
@@ -677,7 +860,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             }
 
             int cantidadChunks = (origenTamaño + tamaño - 1) / tamaño;
-            return ChunkSlow<T>(origenToken, cantidadChunks, tamaño);
+            return ChunkSlow<T>(origenToken, origen.TokenArena, cantidadChunks, tamaño);
         }
 
         #endregion
@@ -697,6 +880,24 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             TProcessor procesarChunk)
             where TProcessor : struct, IProcesarChunkDelegado<T>
             => ProcesarChunksSlow<T, TProcessor>(listaChunks.Token, procesarChunk);
+
+        /// <summary>
+        /// Procesa de forma eficiente fragmentos de elementos en una estructura de referencia de ValueLINQ utilizando un procesador struct.
+        /// </summary>
+        /// <remarks>
+        /// Alias retrocompatible para <see cref="ProcesarChunks{T, TProcessor}(ValueLINQRefStruct{ValueLINQStruct{T}}, TProcessor)"/>.
+        /// </remarks>
+        /// <typeparam name="T">El tipo de los elementos dentro del fragmento.</typeparam>
+        /// <typeparam name="TProcessor">El tipo del procesador que implementa <see cref="IProcesarChunkDelegado{T}"/>.</typeparam>
+        /// <param name="listaChunks">La estructura de fragmentos de origen.</param>
+        /// <param name="procesarChunk">El procesador de fragmentos.</param>
+        [Obsolete("Use ProcesarChunks en su lugar", false)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void ProcessChunks<T, TProcessor>(
+            this ValueLINQRefStruct<ValueLINQStruct<T>> listaChunks,
+            TProcessor procesarChunk)
+            where TProcessor : struct, IProcesarChunkDelegado<T>
+            => ProcesarChunks(listaChunks, procesarChunk);
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ProcesarChunksSlow<T, TProcessor>(long token, TProcessor procesarChunk)
@@ -752,6 +953,24 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             where TProcessor : struct, IProcesarChunkDelegado<T>
             => ProcesarChunksSlow<T, TProcessor>(listaChunks.Token, procesarChunk);
 
+        /// <summary>
+        /// Procesa de forma eficiente fragmentos de elementos en una estructura de ValueLINQ utilizando un procesador struct.
+        /// </summary>
+        /// <remarks>
+        /// Alias retrocompatible para <see cref="ProcesarChunks{T, TProcessor}(ValueLINQStruct{ValueLINQStruct{T}}, TProcessor)"/>.
+        /// </remarks>
+        /// <typeparam name="T">El tipo de los elementos dentro del fragmento.</typeparam>
+        /// <typeparam name="TProcessor">El tipo del procesador que implementa <see cref="IProcesarChunkDelegado{T}"/>.</typeparam>
+        /// <param name="listaChunks">La estructura de fragmentos de origen.</param>
+        /// <param name="procesarChunk">El procesador de fragmentos.</param>
+        [Obsolete("Use ProcesarChunks en su lugar", false)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void ProcessChunks<T, TProcessor>(
+            this ValueLINQStruct<ValueLINQStruct<T>> listaChunks,
+            TProcessor procesarChunk)
+            where TProcessor : struct, IProcesarChunkDelegado<T>
+            => ProcesarChunks(listaChunks, procesarChunk);
+
         #endregion
 
         #region Concat
@@ -767,7 +986,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         public static ValueLINQRefStruct<T> Concat<T>(
             this ValueLINQRefStruct<T> lista1,
             ValueLINQRefStruct<T> lista2)
-            => ConcatRefSlow<T>(lista1.Token, lista2.Token, 0L, 0L);
+            => ConcatRefSlow<T>(lista1.Token, lista1.TokenArena, lista2.Token, 0L, 0L);
 
         /// <summary>
         /// Concatenates three <see cref="ValueLINQRefStruct{T}"/> instances.
@@ -782,7 +1001,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             this ValueLINQRefStruct<T> lista1,
             ValueLINQRefStruct<T> lista2,
             ValueLINQRefStruct<T> lista3)
-            => ConcatRefSlow<T>(lista1.Token, lista2.Token, lista3.Token, 0L);
+            => ConcatRefSlow<T>(lista1.Token, lista1.TokenArena, lista2.Token, lista3.Token, 0L);
 
         /// <summary>
         /// Concatenates four <see cref="ValueLINQRefStruct{T}"/> instances.
@@ -799,10 +1018,10 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             ValueLINQRefStruct<T> lista2,
             ValueLINQRefStruct<T> lista3,
             ValueLINQRefStruct<T> lista4)
-            => ConcatRefSlow<T>(lista1.Token, lista2.Token, lista3.Token, lista4.Token);
+            => ConcatRefSlow<T>(lista1.Token, lista1.TokenArena, lista2.Token, lista3.Token, lista4.Token);
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static ValueLINQRefStruct<T> ConcatRefSlow<T>(long token1, long token2, long token3, long token4)
+        private static ValueLINQRefStruct<T> ConcatRefSlow<T>(long token1, long tokenArena1, long token2, long token3, long token4)
         {
             ValueLINQRefStruct<T> destino = default;
             bool isExito = false;
@@ -815,8 +1034,9 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 if (token3 != 0L) len3 = ValueLINQStateManager<T>.ObtenerMetadatos(token3).TamañoActual;
                 if (token4 != 0L) len4 = ValueLINQStateManager<T>.ObtenerMetadatos(token4).TamañoActual;
 
-                int arenaDestino = TokenHelper.ObtenerArenaId(token1);
-                destino = new ValueLINQRefStruct<T>(arenaDestino, len1 + len2 + len3 + len4);
+                destino = tokenArena1 != 0L
+                    ? new ValueLINQRefStruct<T>(tokenArena1, len1 + len2 + len3 + len4)
+                    : new ValueLINQRefStruct<T>(TokenHelper.ObtenerArenaId(token1), len1 + len2 + len3 + len4);
                 ref MetadatosSesion<T> metadatosDestino = ref ValueLINQStateManager<T>.ObtenerMetadatos(destino.Token);
                 T[]? destinoArray = metadatosDestino.Array;
 
@@ -875,7 +1095,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         public static ValueLINQStruct<T> Concat<T>(
             this ValueLINQStruct<T> lista1,
             ValueLINQStruct<T> lista2)
-            => ConcatSlow<T>(lista1.Token, lista2.Token, 0L, 0L);
+            => ConcatSlow<T>(lista1.Token, lista1.TokenArena, lista2.Token, 0L, 0L);
 
         /// <summary>
         /// Concatenates three <see cref="ValueLINQStruct{T}"/> instances.
@@ -890,7 +1110,7 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             this ValueLINQStruct<T> lista1,
             ValueLINQStruct<T> lista2,
             ValueLINQStruct<T> lista3)
-            => ConcatSlow<T>(lista1.Token, lista2.Token, lista3.Token, 0L);
+            => ConcatSlow<T>(lista1.Token, lista1.TokenArena, lista2.Token, lista3.Token, 0L);
 
         /// <summary>
         /// Concatenates four <see cref="ValueLINQStruct{T}"/> instances.
@@ -907,10 +1127,10 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
             ValueLINQStruct<T> lista2,
             ValueLINQStruct<T> lista3,
             ValueLINQStruct<T> lista4)
-            => ConcatSlow<T>(lista1.Token, lista2.Token, lista3.Token, lista4.Token);
+            => ConcatSlow<T>(lista1.Token, lista1.TokenArena, lista2.Token, lista3.Token, lista4.Token);
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static ValueLINQStruct<T> ConcatSlow<T>(long token1, long token2, long token3, long token4)
+        private static ValueLINQStruct<T> ConcatSlow<T>(long token1, long tokenArena1, long token2, long token3, long token4)
         {
             ValueLINQStruct<T> destino = default;
             bool isExito = false;
@@ -923,8 +1143,9 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 if (token3 != 0L) len3 = ValueLINQStateManager<T>.ObtenerMetadatos(token3).TamañoActual;
                 if (token4 != 0L) len4 = ValueLINQStateManager<T>.ObtenerMetadatos(token4).TamañoActual;
 
-                int arenaDestino = TokenHelper.ObtenerArenaId(token1);
-                destino = new ValueLINQStruct<T>(arenaDestino, len1 + len2 + len3 + len4);
+                destino = tokenArena1 != 0L
+                    ? new ValueLINQStruct<T>(tokenArena1, len1 + len2 + len3 + len4)
+                    : new ValueLINQStruct<T>(TokenHelper.ObtenerArenaId(token1), len1 + len2 + len3 + len4);
                 ref MetadatosSesion<T> metadatosDestino = ref ValueLINQStateManager<T>.ObtenerMetadatos(destino.Token);
                 T[]? destinoArray = metadatosDestino.Array;
 
@@ -987,10 +1208,10 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
         [EditorBrowsable(EditorBrowsableState.Never)]
         public static ValueLINQStruct<T> Concat<T>(this ValueLINQStruct<T> lista1, params ValueLINQStruct<T>[] listas)
 #endif
-            => ConcatParamsSlow<T>(lista1.Token, listas);
+            => ConcatParamsSlow<T>(lista1.Token, lista1.TokenArena, listas);
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static ValueLINQStruct<T> ConcatParamsSlow<T>(long token1, scoped ReadOnlySpan<ValueLINQStruct<T>> listas)
+        private static ValueLINQStruct<T> ConcatParamsSlow<T>(long token1, long tokenArena1, scoped ReadOnlySpan<ValueLINQStruct<T>> listas)
         {
             ValueLINQStruct<T> destino = default;
             bool isExito = false;
@@ -1000,7 +1221,6 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                 if (token1 != 0L)
                     len1 = ValueLINQStateManager<T>.ObtenerMetadatos(token1).TamañoActual;
 
-                int arenaDestino = TokenHelper.ObtenerArenaId(token1);
                 int tamañoTotal = len1;
                 foreach (ValueLINQStruct<T> lista in listas)
                 {
@@ -1009,7 +1229,9 @@ namespace JCarrillo.AOT.Core.Extensiones.ValueLINQ
                         tamañoTotal += ValueLINQStateManager<T>.ObtenerMetadatos(token).TamañoActual;
                 }
 
-                destino = new ValueLINQStruct<T>(arenaDestino, tamañoTotal);
+                destino = tokenArena1 != 0L
+                    ? new ValueLINQStruct<T>(tokenArena1, tamañoTotal)
+                    : new ValueLINQStruct<T>(TokenHelper.ObtenerArenaId(token1), tamañoTotal);
                 ref MetadatosSesion<T> metadatosDestino = ref ValueLINQStateManager<T>.ObtenerMetadatos(destino.Token);
                 T[]? destinoArray = metadatosDestino.Array;
                 int currentOffset = 0;

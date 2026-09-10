@@ -16,6 +16,12 @@ namespace JCarrillo.AOT.Core.ValueLINQ
             get;
         }
 
+        internal readonly long TokenArena
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get;
+        }
+
         #endregion
 
         #region EsValido
@@ -38,22 +44,48 @@ namespace JCarrillo.AOT.Core.ValueLINQ
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ValueLINQRefStruct()
-            => Token = 0L;
+        {
+            Token = 0L;
+            TokenArena = 0L;
+        }
 
         // Creacion de los resultados, donde solo sabemos el resultado final (Solo deberia usarse este constructor)
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal ValueLINQRefStruct(int tamañoMinimo)
-            => Token = TokenHelper.LeerToken(ref ValueLINQStateManager<T>.ObtenerMetadatos(tamañoMinimo).Token);
+        {
+            Token = TokenHelper.LeerToken(ref ValueLINQStateManager<T>.ObtenerMetadatos(tamañoMinimo).Token);
+            TokenArena = 0L;
+        }
 
         // Creacion en una arena concreta (propaga el ambito a las sesiones intermedias de los operadores)
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal ValueLINQRefStruct(int idArena, int tamañoMinimo)
-            => Token = TokenHelper.LeerToken(ref ValueLINQStateManager<T>.ObtenerMetadatos(idArena, tamañoMinimo).Token);
+        {
+            Token = TokenHelper.LeerToken(ref ValueLINQStateManager<T>.ObtenerMetadatos(idArena, tamañoMinimo).Token);
+            TokenArena = ValueLINQArenaManager.TokenArenaDesdeSesion(Token);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal ValueLINQRefStruct(long tokenArena, int tamañoMinimo)
+        {
+            Token = TokenHelper.LeerToken(ref ValueLINQStateManager<T>.ObtenerMetadatos(tokenArena, tamañoMinimo).Token);
+            TokenArena = tokenArena;
+        }
 
         // Clonacion que apunta al mismo array (Nunca deberia usarse, solo esta para pruebas internas)
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal ValueLINQRefStruct(long token)
-            => Token = token;
+        {
+            Token = token;
+            TokenArena = ValueLINQArenaManager.TokenArenaDesdeSesion(token);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal ValueLINQRefStruct(long token, long tokenArena)
+        {
+            Token = token;
+            TokenArena = tokenArena;
+        }
 
         #endregion
 

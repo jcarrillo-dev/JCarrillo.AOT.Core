@@ -32,7 +32,8 @@ Para acceder a la arquitectura y especificaciones detalladas de cada módulo, co
 ### 1. ValueLINQ: Consultas Fluent en Pila
 Motor de consultas síncrono diseñado para entornos Native AOT.
 *   **Abstracción en Stack**: Sustituye delegados y lambdas tradicionales (`Func<T, bool>`) por estructuras genéricas que implementan interfaces específicas (`IWhereDelegado`, `ISelectDelegado`), facilitando al compilador el inlining del código del usuario directamente en el bucle de iteración.
-*   **Gestión de Estados**: Utiliza `ValueLINQStateManager<T>` para rentar buffers en una tabla estática global de 4096 ranuras concurrentes, protegida por un modelo de bloqueos segmentados (Lock Striping 1 a 1 por slot).
+*   **Motores Eager y Delay**: Proporciona dos motores de procesamiento: el motor ansioso (`ValueLINQStruct<T>`, `ValueLINQRefStruct<T>`) respaldado por `ValueLINQStateManager<T>` y arenas de memoria, y el motor perezoso (`ValueLINQDelayStruct<T, TEnumerator>` en .NET 9+) que evalúa la canalización directamente sobre la pila. Ambos motores disponen de materializadores públicos (`ToList`, `ToArray`, `ToListStandard`, `ToArrayStandard`) que aseguran la liberación determinista de recursos en bloques `finally`.
+*   **Gestión de Estados y Arenas**: En el motor eager, administra buffers en tablas particionadas por (tipo `T`, arena) con asignación en $O(1)$, aislamiento multihilo mediante `SpinLock` por ranura y reciclaje automático de tablas en pool para eliminar asignaciones en heap (0 B medido en régimen estacionario).
 *   **Devolución Segura**: Todos los operadores están encapsulados en bloques `try-finally` que aseguran la devolución automática de los buffers al `ArrayPool` en caso de excepciones durante la iteración.
 
 ### 2. Colecciones Rentadas (Pooled Collections)

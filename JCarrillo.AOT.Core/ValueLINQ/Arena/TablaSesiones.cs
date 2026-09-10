@@ -9,8 +9,8 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
 {
     internal sealed class TablaSesiones<T>
     {
-        private readonly int _arenaId;
-        private readonly long _arenaGen;
+        private int _arenaId;
+        private long _arenaGen;
         private readonly int _capacidadMaxima;
 
         private readonly MetadatosSesion<T>[][] _datos = new MetadatosSesion<T>[ValueLINQConfig.Particiones][];
@@ -23,6 +23,9 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
         private readonly int[] _indicesLibresStack = new int[ValueLINQConfig.Slots];
         private int _topStack;
         private long _vaciaDesde;
+
+        internal long ArenaGen => Volatile.Read(ref _arenaGen);
+        internal int ArenaId => Volatile.Read(ref _arenaId);
 
         internal int IndicesLibres
         {
@@ -129,6 +132,11 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
 
         [DoesNotReturn]
         [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void ThrowArenaInactiva(int idArena)
+            => throw new ValueLinqArenaInactivaException(idArena);
+
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static void ThrowSesionExpirada(long idEsperado, long idObtenido, int indice)
             => throw new ValueLinqSesionExpiradaException(idEsperado, idObtenido, indice);
 
@@ -195,6 +203,9 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
         private ref MetadatosSesion<T> InicializarSlot(int particion, int index, int indice, int tamañoMinimo)
         {
             using ValueLINQSpinLock spinLock = new(ref _spinLocks[particion][index].Lock);
+
+            if (_arenaId != 0 && (!ValueLINQArenaManager.IsArenaViva(_arenaId) || ValueLINQArenaManager.ObtenerGeneracion(_arenaId) != _arenaGen))
+                ThrowArenaInactiva(_arenaId);
 
             ref MetadatosSesion<T> metadato = ref _datos[particion][index];
             long token;
@@ -382,6 +393,53 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
 
                     if (arrayADevolver != null)
                         ArrayPool<T>.Shared.Return(arrayADevolver, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+                }
+            }
+        }
+
+        #endregion
+
+        #region Reiniciar
+
+        internal void Reiniciar(int nuevoIdArena, long nuevaArenaGen)
+        {
+            using (new ValueLINQSpinLock(ref _spinLockStack))
+            {
+                Volatile.Write(ref _arenaId, nuevoIdArena);
+                Volatile.Write(ref _arenaGen, nuevaArenaGen);
+
+                for (int i = _capacidadMaxima - 1; i >= 0; i--)
+                    _indicesLibresStack[i] = i;
+
+                _topStack = _capacidadMaxima;
+                Volatile.Write(ref _vaciaDesde, 0L);
+
+                for (int particion = 0; particion < ValueLINQConfig.Particiones; particion++)
+                {
+                    MetadatosSesion<T>[]? datosParticion = _datos[particion];
+                    if (datosParticion is null)
+                        continue;
+
+                    SpinLockSlot[]? spinLocksParticion = _spinLocks[particion];
+
+                    for (int index = 0; index < ValueLINQConfig.SlotsEnParticion; index++)
+                    {
+                        ref MetadatosSesion<T> metadato = ref datosParticion[index];
+
+                        if (metadato.Array is not null)
+                        {
+                            ArrayPool<T>.Shared.Return(metadato.Array, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+                            metadato.Array = null;
+                        }
+
+                        metadato.TamañoActual = 0;
+                        metadato.IsDisposed = true;
+                        metadato.UltimoAcceso = -1;
+                        TokenHelper.EscribirToken(ref metadato.Token, 0L);
+
+                        if (spinLocksParticion is not null)
+                            spinLocksParticion[index].Lock = new SpinLock(enableThreadOwnerTracking: false);
+                    }
                 }
             }
         }
