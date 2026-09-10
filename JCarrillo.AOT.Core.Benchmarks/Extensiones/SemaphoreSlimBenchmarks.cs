@@ -1,11 +1,10 @@
 using BenchmarkDotNet.Attributes;
+using JCarrillo.AOT.Core.Benchmarks.Infraestructura;
 using JCarrillo.AOT.Core.Extensiones.SemaphoreSlim;
 
 namespace JCarrillo.AOT.Core.Benchmarks.Extensiones
 {
-    [MemoryDiagnoser]
-    [ThreadingDiagnoser]
-    [HtmlExporter]
+    [Config(typeof(CoreBenchmarkConfig))]
     public class SemaphoreSlimBenchmarks : IDisposable
     {
         private SemaphoreSlim? _semaphore;
