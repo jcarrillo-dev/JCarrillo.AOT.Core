@@ -84,7 +84,7 @@ namespace JCarrillo.AOT.Core.Extensiones.Boxing
             {
                 try
                 {
-                    byte* attr = stackalloc byte[64];
+                    void* attr = stackalloc long[8];
                     nint thread = pthread_self();
                     if (pthread_getattr_np(thread, attr) == 0)
                     {
@@ -135,22 +135,22 @@ namespace JCarrillo.AOT.Core.Extensiones.Boxing
         [LibraryImport("kernel32.dll")]
         private static unsafe partial void GetCurrentThreadStackLimits(nuint* lowLimit, nuint* highLimit);
 
-        [LibraryImport("pthread", EntryPoint = "pthread_self")]
+        [LibraryImport("libc", EntryPoint = "pthread_self")]
         private static partial nint pthread_self();
 
-        [LibraryImport("pthread", EntryPoint = "pthread_getattr_np")]
-        private static unsafe partial int pthread_getattr_np(nint thread, byte* attr);
+        [LibraryImport("libc", EntryPoint = "pthread_getattr_np")]
+        private static unsafe partial int pthread_getattr_np(nint thread, void* attr);
 
-        [LibraryImport("pthread", EntryPoint = "pthread_attr_getstack")]
-        private static unsafe partial int pthread_attr_getstack(byte* attr, void** stackaddr, nuint* stacksize);
+        [LibraryImport("libc", EntryPoint = "pthread_attr_getstack")]
+        private static unsafe partial int pthread_attr_getstack(void* attr, void** stackaddr, nuint* stacksize);
 
-        [LibraryImport("pthread", EntryPoint = "pthread_attr_destroy")]
-        private static unsafe partial int pthread_attr_destroy(byte* attr);
+        [LibraryImport("libc", EntryPoint = "pthread_attr_destroy")]
+        private static unsafe partial int pthread_attr_destroy(void* attr);
 
-        [LibraryImport("pthread", EntryPoint = "pthread_get_stackaddr_np")]
+        [LibraryImport("libSystem.B.dylib", EntryPoint = "pthread_get_stackaddr_np")]
         private static unsafe partial void* pthread_get_stackaddr_np(nint thread);
 
-        [LibraryImport("pthread", EntryPoint = "pthread_get_stacksize_np")]
+        [LibraryImport("libSystem.B.dylib", EntryPoint = "pthread_get_stacksize_np")]
         private static partial nuint pthread_get_stacksize_np(nint thread);
 
         [DoesNotReturn]
