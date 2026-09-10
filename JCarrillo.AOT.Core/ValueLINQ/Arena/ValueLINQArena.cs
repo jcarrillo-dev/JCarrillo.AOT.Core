@@ -1,3 +1,4 @@
+using System;
 using System.Runtime.CompilerServices;
 
 namespace JCarrillo.AOT.Core.ValueLINQ.Arena
@@ -11,14 +12,17 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
     /// El almacenamiento real vive en las tablas de sesión por tipo del <see cref="ValueLINQStateManager{T}"/>,
     /// enrutadas por el id de arena del token.
     /// </remarks>
-    public readonly struct ValueLINQArena : IDisposable
+    public readonly struct ValueLINQArena : IDisposable, IEquatable<ValueLINQArena>
     {
         internal readonly long TokenArena;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ValueLINQArena(long tokenArena) => TokenArena = tokenArena;
 
-        internal readonly int Id
+        /// <summary>
+        /// Obtiene el identificador numérico de la arena codificado en su token.
+        /// </summary>
+        public readonly int Id
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get => TokenHelper.ObtenerIdTokenArena(TokenArena);
@@ -65,5 +69,51 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Arena
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly void Dispose()
             => ValueLINQArenaManager.Liberar(TokenArena);
+
+        /// <summary>
+        /// Determina si la arena actual es igual a otra <see cref="ValueLINQArena"/>.
+        /// </summary>
+        /// <param name="other">La otra arena con la que se comparará.</param>
+        /// <returns><see langword="true"/> si ambas arenas poseen el mismo token; en caso contrario, <see langword="false"/>.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public readonly bool Equals(ValueLINQArena other)
+            => TokenArena == other.TokenArena;
+
+        /// <summary>
+        /// Determina si el objeto especificado es una instancia de <see cref="ValueLINQArena"/> y es igual a la actual.
+        /// </summary>
+        /// <param name="obj">El objeto a comparar con la arena actual.</param>
+        /// <returns><see langword="true"/> si el objeto especificado es un <see cref="ValueLINQArena"/> con el mismo token; en caso contrario, <see langword="false"/>.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override readonly bool Equals(object? obj)
+            => obj is ValueLINQArena other && Equals(other);
+
+        /// <summary>
+        /// Devuelve el código hash para esta instancia a partir de su token de arena.
+        /// </summary>
+        /// <returns>Un código hash entero de 32 bits.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override readonly int GetHashCode()
+            => TokenArena.GetHashCode();
+
+        /// <summary>
+        /// Determina si dos instancias de <see cref="ValueLINQArena"/> son iguales.
+        /// </summary>
+        /// <param name="left">Primera arena a comparar.</param>
+        /// <param name="right">Segunda arena a comparar.</param>
+        /// <returns><see langword="true"/> si ambas instancias poseen el mismo token; en caso contrario, <see langword="false"/>.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool operator ==(ValueLINQArena left, ValueLINQArena right)
+            => left.Equals(right);
+
+        /// <summary>
+        /// Determina si dos instancias de <see cref="ValueLINQArena"/> son diferentes.
+        /// </summary>
+        /// <param name="left">Primera arena a comparar.</param>
+        /// <param name="right">Segunda arena a comparar.</param>
+        /// <returns><see langword="true"/> si ambas instancias poseen tokens distintos; en caso contrario, <see langword="false"/>.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool operator !=(ValueLINQArena left, ValueLINQArena right)
+            => !left.Equals(right);
     }
 }
