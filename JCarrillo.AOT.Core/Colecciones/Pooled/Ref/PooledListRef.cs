@@ -1,3 +1,4 @@
+using JCarrillo.AOT.Core.Extensiones.Spans;
 using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
@@ -43,12 +44,6 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
             _indiceInsercion = 0;
         }
 
-        /// <summary>
-        /// Constructor interno para crear un PooledList a partir de un array existente y un tamaño específico.
-        /// Solo usar en extensiones de ArrayPool para evitar copias innecesarias.
-        /// </summary>
-        /// <param name="items">Array devuelto por ArrayPool</param>
-        /// <param name="tamaño">Tamaño del array solicitado por el desarrollador</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal PooledListRef(TItem[] items, int tamaño)
         {
@@ -291,6 +286,68 @@ namespace JCarrillo.AOT.Core.Colecciones.Pooled.Ref
             _ = IntentarAmpliar(_indiceInsercion + items.Length);
             items.CopyTo(_items.AsSpan(_indiceInsercion));
             _indiceInsercion += items.Length;
+        }
+
+        #endregion
+
+        #region Remove
+
+        /// <summary>
+        /// Elimina el elemento situado en el índice indicado, desplazando a la izquierda los posteriores.
+        /// </summary>
+        /// <param name="indice">El índice del elemento a eliminar.</param>
+        /// <exception cref="ObjectDisposedException">Se lanza si la lista ya ha sido liberada.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Se lanza si el <paramref name="indice"/> está fuera de los límites de la lista.</exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void RemoveAt(int indice)
+        {
+            if (IsDisposed) ThrowObjectDisposed();
+            if ((uint)indice >= (uint)_indiceInsercion) ThrowArgumentOutOfRange(indice);
+
+            Span.EliminarEnIndice(indice);
+            _indiceInsercion--;
+        }
+
+        /// <summary>
+        /// Elimina la primera aparición del elemento indicado, desplazando a la izquierda los posteriores.
+        /// </summary>
+        /// <param name="item">El elemento a eliminar.</param>
+        /// <returns><see langword="true"/> si el elemento estaba en la lista y se eliminó; en caso contrario, <see langword="false"/>.</returns>
+        /// <exception cref="ObjectDisposedException">Se lanza si la lista ya ha sido liberada.</exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Remove(TItem item)
+        {
+            if (IsDisposed) ThrowObjectDisposed();
+
+            int indice = IndexOf(item);
+
+            if (indice < 0)
+                return false;
+
+            Span.EliminarEnIndice(indice);
+            _indiceInsercion--;
+
+            return true;
+        }
+
+        /// <summary>
+        /// Devuelve el índice de la primera aparición del elemento indicado, o menos uno si no está en la lista.
+        /// </summary>
+        /// <param name="item">El elemento a localizar.</param>
+        /// <returns>El índice del elemento, o menos uno si no se encuentra.</returns>
+        /// <exception cref="ObjectDisposedException">Se lanza si la lista ya ha sido liberada.</exception>
+        public readonly int IndexOf(TItem item)
+        {
+            if (IsDisposed) ThrowObjectDisposed();
+
+            EqualityComparer<TItem> comparador = EqualityComparer<TItem>.Default;
+            Span<TItem> span = Span;
+
+            for (int i = 0; i < span.Length; i++)
+                if (comparador.Equals(span[i], item))
+                    return i;
+
+            return -1;
         }
 
         #endregion

@@ -8,6 +8,87 @@ namespace JCarrillo.AOT.Core.Tests.Colecciones.Pooled
     public class PooledListTests
     {
         [Fact]
+        public void RemoveAtDesplazaLosPosterioresYReduceElTamaño()
+        {
+            // Preparar
+            using PooledList<int> lista = new(8);
+            lista.AddRange([10, 20, 30, 40]);
+
+            // Actuar
+            lista.RemoveAt(1);
+
+            // Verificar
+            _ = lista.Tamaño.Should().Be(3);
+            _ = lista.Span.ToArray().Should().Equal(10, 30, 40);
+        }
+
+        [Fact]
+        public void RemoveAtDelUltimoElementoNoDesplazaNada()
+        {
+            // Preparar
+            using PooledList<int> lista = new(8);
+            lista.AddRange([10, 20, 30]);
+
+            // Actuar
+            lista.RemoveAt(2);
+
+            // Verificar
+            _ = lista.Span.ToArray().Should().Equal(10, 20);
+        }
+
+        [Fact]
+        public void RemoveEliminaLaPrimeraApariciónYDevuelveSiExistia()
+        {
+            // Preparar
+            using PooledList<int> lista = new(8);
+            lista.AddRange([10, 20, 30, 20]);
+
+            // Actuar
+            bool eliminado = lista.Remove(20);
+            bool inexistente = lista.Remove(99);
+
+            // Verificar
+            _ = eliminado.Should().BeTrue();
+            _ = inexistente.Should().BeFalse();
+            _ = lista.Span.ToArray().Should().Equal(10, 30, 20);
+        }
+
+        [Fact]
+        public void RemoveAtDesplazaTiposPorReferencia()
+        {
+            // Preparar
+            using PooledList<string> lista = new(8);
+            lista.AddRange(["a", "b", "c"]);
+
+            // Actuar
+            lista.RemoveAt(0);
+
+            // Verificar
+            _ = lista.Span.ToArray().Should().Equal("b", "c");
+        }
+
+        [Fact]
+        public void RemoveAtFueraDeRangoLanza()
+        {
+            // Preparar: PooledList no se puede capturar en un lambda porque su guardián de boxing lo impide,
+            // así que la aserción no puede construirse con Should().Throw().
+            using PooledList<int> lista = new(4);
+            lista.Add(1);
+
+            bool lanzoNegativo = false;
+            bool lanzoPasado = false;
+
+            // Actuar
+            try { lista.RemoveAt(-1); } catch (ArgumentOutOfRangeException) { lanzoNegativo = true; }
+            try { lista.RemoveAt(1); } catch (ArgumentOutOfRangeException) { lanzoPasado = true; }
+
+            // Verificar
+            _ = lanzoNegativo.Should().BeTrue();
+            _ = lanzoPasado.Should().BeTrue();
+            _ = lista.Tamaño.Should().Be(1, "un índice inválido no debe alterar la lista");
+        }
+
+        [Fact]
         public void AddShouldAddItemsAndExpandCapacity()
         {
             // Preparar
