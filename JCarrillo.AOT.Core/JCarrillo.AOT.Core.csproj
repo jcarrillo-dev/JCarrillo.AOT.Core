@@ -8,8 +8,8 @@
     <PackageId>JCarrillo.AOT.Core</PackageId>
     <Authors>José Carrillo Serrano</Authors>
     <Company>jcarrillo-dev</Company>
-    <Description>High-performance, zero-allocation core library optimized for Native AOT and Trimming in .NET.</Description>
-    <PackageTags>aot;native-aot;zero-allocation;high-performance;pooling;list;array;lock;net8;net9;net10</PackageTags>
+    <Description>High-performance, zero-allocation core library featuring ValueLINQ fluent queries, memory arenas, and pooled collections optimized for Native AOT and Trimming in .NET.</Description>
+    <PackageTags>linq;valuelinq;struct-linq;arena;memory-arena;zero-allocation;high-performance;low-latency;pooling;pooled-collections;arraypool;list;array;span;concurrency;lock;spinlock;aot;native-aot;trimming;net8;net9;net10</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageProjectUrl>https://github.com/jcarrillo-dev/JCarrillo.AOT.Core</PackageProjectUrl>
