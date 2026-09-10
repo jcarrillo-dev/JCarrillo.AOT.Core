@@ -22,8 +22,8 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
         private TEnumerator1 _primerEnumerator;
         private TEnumerator2 _segundoEnumerator;
 
-        private bool _enPrimerEnumerator;
-        private bool _disposed;
+        private bool _isEnPrimerEnumerator;
+        private bool _isDisposed;
 
         /// <summary>
         /// Inicializa una nueva instancia del combinador a partir de los dos enumeradores que se recorrerán en secuencia.
@@ -35,8 +35,8 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
             _primerEnumerator = primerEnumerator;
             _segundoEnumerator = segundoEnumerator;
 
-            _enPrimerEnumerator = true;
-            _disposed = false;
+            _isEnPrimerEnumerator = true;
+            _isDisposed = false;
         }
         /// <summary>
         /// Obtiene una referencia de solo lectura al elemento en la posición actual del enumerador activo.
@@ -45,7 +45,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
         public ref readonly T Current
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => ref _enPrimerEnumerator ? ref _primerEnumerator.Current : ref _segundoEnumerator.Current;
+            get => ref _isEnPrimerEnumerator ? ref _primerEnumerator.Current : ref _segundoEnumerator.Current;
         }
 
         /// <summary>
@@ -55,11 +55,11 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool MoveNext()
         {
-            if (_enPrimerEnumerator)
+            if (_isEnPrimerEnumerator)
                 if (MoveNextEnumerator(ref _primerEnumerator))
                     return true;
                 else
-                    _enPrimerEnumerator = false;
+                    _isEnPrimerEnumerator = false;
 
             if (MoveNextEnumerator(ref _segundoEnumerator))
                 return true;
@@ -72,7 +72,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private readonly bool MoveNextEnumerator<TEnumerator>(scoped ref TEnumerator enumerator)
             where TEnumerator : IValueLINQEnumerator<T>, allows ref struct
-            => !_disposed && enumerator.MoveNext();
+            => !_isDisposed && enumerator.MoveNext();
 
         /// <summary>
         /// Libera ambos enumeradores subyacentes, propagando la disposición en cadena.
@@ -84,7 +84,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Dispose()
         {
-            if (_disposed)
+            if (_isDisposed)
                 return;
 
             DisposeSlow();
@@ -96,7 +96,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
         [MethodImpl(MethodImplOptions.NoInlining)]
         private void DisposeSlow()
         {
-            _disposed = true;
+            _isDisposed = true;
 
             try
             {

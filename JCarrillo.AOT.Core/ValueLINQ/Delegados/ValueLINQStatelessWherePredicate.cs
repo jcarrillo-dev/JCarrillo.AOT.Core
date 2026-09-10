@@ -20,9 +20,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delegados
         /// </summary>
         /// <param name="predicado">El predicado sin estado a envolver.</param>
         public ValueLINQStatelessWherePredicate(in TWhereDelegado predicado)
-        {
-            _predicado = predicado;
-        }
+            => _predicado = predicado;
 
         /// <summary>
         /// Evalúa el predicado envuelto sobre el elemento especificado.
@@ -32,8 +30,6 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delegados
         /// <returns><see langword="true"/> si el elemento cumple la condición; de lo contrario, <see langword="false"/>.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Ejecutar(TOrigen objetoLista, ValueLINQVoidState otro)
-        {
-            return _predicado.Ejecutar(objetoLista);
-        }
+            => _predicado.Ejecutar(objetoLista);
     }
 }

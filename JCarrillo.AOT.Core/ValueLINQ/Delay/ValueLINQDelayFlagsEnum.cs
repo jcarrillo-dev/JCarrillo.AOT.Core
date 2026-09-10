@@ -8,7 +8,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
     /// Se modela como conjunto y no como indicadores sueltos porque, con el relleno de la estructura, una bandera cuesta lo mismo que ocho, y así la pregunta de qué combinaciones son legales queda explícita cuando aparezca la segunda.
     /// </remarks>
     [Flags]
-    internal enum ValueLINQDelayFlags : byte
+    internal enum ValueLINQDelayFlagsEnum : byte
     {
         /// <summary>
         /// Sin renuncias: la canalización aplica todas las comprobaciones.

@@ -28,10 +28,10 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
         /// <summary>
         /// Renuncias explícitas activadas sobre la canalización.
         /// </summary>
-        internal readonly ValueLINQDelayFlags Flags;
+        internal readonly ValueLINQDelayFlagsEnum Flags;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private ValueLINQDelayOptions(long tokenArena, ValueLINQDelayFlags flags)
+        private ValueLINQDelayOptions(long tokenArena, ValueLINQDelayFlagsEnum flags)
         {
             TokenArena = tokenArena;
             Flags = flags;
@@ -156,7 +156,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
         internal readonly bool HasSinComprobarLimitesDeArena
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => (Flags & ValueLINQDelayFlags.SinComprobarLimitesDeArena) != 0;
+            get => (Flags & ValueLINQDelayFlagsEnum.SinComprobarLimitesDeArena) != 0;
         }
 
         /// <summary>
@@ -167,7 +167,7 @@ namespace JCarrillo.AOT.Core.ValueLINQ.Delay
         /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal readonly ValueLINQDelayOptions SinComprobarLimitesDeArena()
-            => new(TokenArena, Flags | ValueLINQDelayFlags.SinComprobarLimitesDeArena);
+            => new(TokenArena, Flags | ValueLINQDelayFlagsEnum.SinComprobarLimitesDeArena);
 
         /// <summary>
         /// Acumula la arena de otra canalización sobre la de los operandos ya recorridos, delegando la regla en <see cref="ValueLINQArenaManager.CombinarArena"/>.
