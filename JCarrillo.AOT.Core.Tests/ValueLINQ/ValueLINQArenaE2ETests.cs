@@ -1,8 +1,10 @@
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using FluentAssertions;
 using JCarrillo.AOT.Core.Colecciones.Pooled;
 using JCarrillo.AOT.Core.Diagnostico;
 using JCarrillo.AOT.Core.Extensiones.ValueLINQ;
+using JCarrillo.AOT.Core.Tests.Diagnostico;
 using JCarrillo.AOT.Core.ValueLINQ;
 using JCarrillo.AOT.Core.ValueLINQ.Arena;
 #if NET9_0_OR_GREATER
@@ -16,6 +18,12 @@ using Xunit;
 
 namespace JCarrillo.AOT.Core.Tests.ValueLINQ
 {
+    [CollectionDefinition("ArrayPoolDiagnostics", DisableParallelization = true)]
+    public class ArrayPoolDiagnosticsCollectionDefinition
+    {
+    }
+
+    [Collection("ArrayPoolDiagnostics")]
     public class ValueLINQArenaE2ETests
     {
         private struct MayorQue : IWhereDelegado<int, int>
@@ -31,6 +39,19 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
         private struct ATexto : ISelectDelegado<int, string>
         {
             public readonly string Ejecutar(int item) => item.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        private readonly struct ContadorChunksE2E(int[] contador) : IProcesarChunkDelegado<int>
+        {
+            private readonly int[] _contador = contador;
+
+            public readonly void Ejecutar(ValueLINQStruct<int> listaChunk)
+            {
+                int cuenta = 0;
+                foreach (int _ in listaChunk)
+                    cuenta++;
+                _contador[0] += cuenta;
+            }
         }
 
         private static readonly int[] DatosArenaDispuesta = [1, 2, 3];
@@ -270,6 +291,245 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
             _ = enB.IsValido.Should().BeFalse();
         }
 
+        #region Verificación Física de Ciclo de Vida y Búferes en ArrayPool
+
+        [Fact]
+        public void MaterializarToListEnArenaAlquilaYDevuelveFisicamenteLosBuffersAlArrayPool()
+        {
+            // Preparar
+            int[] datos = [1, 2, 3, 4, 5, 6, 7, 8];
+            int elementosContados;
+            long rentadosDelta;
+            long devueltosDelta;
+
+            using (ArrayPoolDiagnosticsListener listener = new())
+            {
+                InstantaneaArrayPool inicio = listener.ObtenerInstantanea();
+
+                // Actuar: crear y materializar consulta dentro de una arena explícita
+                using (ValueLINQArena arena = ValueLINQArena.Crear())
+                {
+                    using PooledList<int> lista = datos.ToValueQuery(arena).Where(3, new MayorQue()).ToList();
+                    elementosContados = lista.Tamaño;
+                    // La lista pooled ha devuelto su buffer propio al ser dispuesta
+                }
+                // La arena ha dispuesto sus tablas y devuelto los buffers de sesion
+
+                InstantaneaArrayPool fin = listener.ObtenerInstantanea();
+                rentadosDelta = fin.Rentados - inicio.Rentados;
+                devueltosDelta = fin.Devueltos - inicio.Devueltos;
+            }
+
+            // Aserción funcional y física
+            _ = elementosContados.Should().Be(5);
+            _ = rentadosDelta.Should().BeGreaterThan(0, "debio ocurrir al menos un alquiler fisico en el ArrayPool");
+            _ = devueltosDelta.Should().Be(rentadosDelta, "todos los buffers fisicos alquilados durante la materializacion deben haber sido devueltos al ArrayPool");
+        }
+
+        [Fact]
+        public void MaterializarToArrayEnArenaAlquilaYDevuelveFisicamenteLosBuffersAlArrayPool()
+        {
+            // Preparar
+            int[] datos = [10, 20, 30, 40];
+            int elementosContados;
+            long rentadosDelta;
+            long devueltosDelta;
+
+            using (ArrayPoolDiagnosticsListener listener = new())
+            {
+                InstantaneaArrayPool inicio = listener.ObtenerInstantanea();
+
+                // Actuar: proyeccion y materializacion a PooledArray en arena
+                using (ValueLINQArena arena = ValueLINQArena.Crear())
+                {
+                    using PooledArray<int> arreglo = datos.ToValueQuery(arena).Select<int, Doble, int>(new Doble()).ToArray();
+                    elementosContados = arreglo.Tamaño;
+                    // El arreglo pooled ha devuelto su buffer propio
+                }
+                // La arena ha limpiado sus tablas de sesion
+
+                InstantaneaArrayPool fin = listener.ObtenerInstantanea();
+                rentadosDelta = fin.Rentados - inicio.Rentados;
+                devueltosDelta = fin.Devueltos - inicio.Devueltos;
+            }
+
+            // Aserción funcional y física
+            _ = elementosContados.Should().Be(4);
+            _ = rentadosDelta.Should().BeGreaterThan(0, "debio ocurrir alquiler fisico de buffers");
+            _ = devueltosDelta.Should().Be(rentadosDelta, "todos los buffers alquilados para ToArray y la arena deben retornar integramente al ArrayPool");
+        }
+
+        [Fact]
+        public void ProcesarChunksEnArenaLiberaFisicamenteTodosLosBuffersDeFragmentosAlArrayPool()
+        {
+            // Preparar
+            int[] datos = [1, 2, 3, 4, 5, 6];
+            int[] acumulador = new int[1];
+            long rentadosDelta;
+            long devueltosDelta;
+
+            using (ArrayPoolDiagnosticsListener listener = new())
+            {
+                InstantaneaArrayPool inicio = listener.ObtenerInstantanea();
+
+                // Actuar: segmentacion en fragmentos y procesamiento mediante delegado struct
+                using (ValueLINQArena arena = ValueLINQArena.Crear())
+                using (ValueLINQStruct<int> query = datos.ToValueQuery(arena))
+                using (ValueLINQRefStruct<ValueLINQStruct<int>> chunks = query.Chunk(2))
+                    chunks.ProcesarChunks(new ContadorChunksE2E(acumulador));
+
+                InstantaneaArrayPool fin = listener.ObtenerInstantanea();
+                rentadosDelta = fin.Rentados - inicio.Rentados;
+                devueltosDelta = fin.Devueltos - inicio.Devueltos;
+            }
+
+            // Aserción funcional y fisica
+            _ = acumulador[0].Should().Be(6, "todos los elementos debieron ser procesados a traves de los fragmentos");
+            _ = rentadosDelta.Should().BeGreaterThan(0, "la generacion de fragmentos debio alquilar buffers en la arena");
+            _ = devueltosDelta.Should().Be(rentadosDelta, "todos los buffers alquilados para los fragmentos y la sesion deben retornar al ArrayPool");
+        }
+
+        [Fact]
+        public void MultiplesConsultasConcurrentesEnMismaArenaNoDejanBuffersHuerfanosEnArrayPool()
+        {
+            // Preparar
+            int[] datos = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+            const int hilosConcurrentes = 16;
+            int[] resultados = new int[hilosConcurrentes];
+            long rentadosDelta;
+            long devueltosDelta;
+
+            using (ArrayPoolDiagnosticsListener listener = new())
+            {
+                InstantaneaArrayPool inicio = listener.ObtenerInstantanea();
+
+                // Actuar: ejecucion paralela de multiples tuberias heterogeneas en la misma instancia de arena
+                using (ValueLINQArena arena = ValueLINQArena.Crear())
+                    Parallel.For(0, hilosConcurrentes, i =>
+                    {
+                        if ((i & 1) == 0)
+                        {
+                            using PooledList<int> lista = datos.ToValueQuery(arena).Where(5, new MayorQue()).ToList();
+                            resultados[i] = lista.Tamaño;
+                        }
+                        else
+                        {
+                            using PooledArray<int> arreglo = datos.ToValueQuery(arena).Select<int, Doble, int>(new Doble()).ToArray();
+                            resultados[i] = arreglo.Tamaño;
+                        }
+                    });
+                // Al salir del using de arena, todas las particiones concurrentes deben haberse liberado
+
+                InstantaneaArrayPool fin = listener.ObtenerInstantanea();
+                rentadosDelta = fin.Rentados - inicio.Rentados;
+                devueltosDelta = fin.Devueltos - inicio.Devueltos;
+            }
+
+            // Aserción funcional y fisica
+            for (int i = 0; i < hilosConcurrentes; i++)
+                if ((i & 1) == 0)
+                    _ = resultados[i].Should().Be(5);
+                else
+                    _ = resultados[i].Should().Be(10);
+
+            _ = rentadosDelta.Should().BeGreaterThan(0, "las consultas concurrentes debieron alquilar multiples buffers");
+            _ = devueltosDelta.Should().Be(rentadosDelta, "no deben existir buffers huerfanos en ArrayPool tras la concurrencia en la arena");
+        }
+
+        [Fact]
+        public void DisponerArenaAnticipadamenteConConsultasSinConsumirDevuelveFisicamenteLosBuffersAlArrayPool()
+        {
+            // Preparar
+            int[] datos = [10, 20, 30, 40, 50];
+            ValueLINQArena arena = ValueLINQArena.Crear();
+            long rentadosDelta;
+            long devueltosDelta;
+            long duranteRentadosDelta;
+            bool isConsultaValida;
+            bool isConsultaTextoValida;
+            long dobleDevolucionDelta;
+
+            ValueLINQStruct<int> consultaAbandonada;
+            ValueLINQStruct<string> consultaTextoAbandonada;
+
+            using (ArrayPoolDiagnosticsListener listener = new())
+            {
+                InstantaneaArrayPool inicio = listener.ObtenerInstantanea();
+
+                // Actuar: creacion de consultas con reservas fisicas de distinto tipo en la arena
+                consultaAbandonada = datos.ToValueQuery(arena).Where(15, new MayorQue());
+                consultaTextoAbandonada = datos.ToValueQuery(arena).Select<int, ATexto, string>(new ATexto());
+
+                InstantaneaArrayPool durante = listener.ObtenerInstantanea();
+                duranteRentadosDelta = durante.Rentados - inicio.Rentados;
+
+                // Disposicion anticipada de la arena mientras las consultas continuan sin consumir
+                arena.Dispose();
+
+                InstantaneaArrayPool fin = listener.ObtenerInstantanea();
+                rentadosDelta = fin.Rentados - inicio.Rentados;
+                devueltosDelta = fin.Devueltos - inicio.Devueltos;
+            }
+
+            isConsultaValida = consultaAbandonada.IsValido;
+            isConsultaTextoValida = consultaTextoAbandonada.IsValido;
+
+            // Aserción de no doble devolucion: disponer la consulta huerfana no debe alterar el pool
+            using (ArrayPoolDiagnosticsListener listenerPost = new())
+            {
+                InstantaneaArrayPool preDispose = listenerPost.ObtenerInstantanea();
+                consultaAbandonada.Dispose();
+                consultaTextoAbandonada.Dispose();
+                InstantaneaArrayPool postDispose = listenerPost.ObtenerInstantanea();
+                dobleDevolucionDelta = postDispose.Devueltos - preDispose.Devueltos;
+            }
+
+            // Aserción física y de aislamiento
+            _ = duranteRentadosDelta.Should().BeGreaterThan(0, "las consultas activas deben tener buffers alquilados en la arena");
+            _ = rentadosDelta.Should().BeGreaterThan(0);
+            _ = devueltosDelta.Should().Be(rentadosDelta, "disponer la arena debe devolver integramente los buffers de todas las sesiones al ArrayPool");
+            _ = isConsultaValida.Should().BeFalse("la consulta debe invalidarse al disponer la arena");
+            _ = isConsultaTextoValida.Should().BeFalse("la consulta de texto debe invalidarse al disponer la arena");
+            _ = dobleDevolucionDelta.Should().Be(0, "disponer una consulta cuya arena fue liberada no debe realizar dobles devoluciones");
+        }
+
+        [Fact]
+        public void RecolectarArenasBarridasPorInactividadDevuelveFisicamenteLosBuffersAlArrayPool()
+        {
+            // Preparar: arena configurada con umbral de inactividad inmediato
+            int[] datos = [1, 2, 3, 4, 5];
+            ValueLINQArena arena = ValueLINQArena.Crear(inactividad: TimeSpan.Zero);
+            long rentadosDelta;
+            long devueltosDelta;
+            int recolectadas;
+            bool isArenaViva;
+
+            using (ArrayPoolDiagnosticsListener listener = new())
+            {
+                InstantaneaArrayPool inicio = listener.ObtenerInstantanea();
+
+                // Actuar: ejecutar consulta que alquila en la arena y finaliza
+                using (ValueLINQStruct<int> consulta = datos.ToValueQuery(arena))
+                    _ = consulta.IsValido;
+
+                // Ejecutar el barrido explicito del reaper
+                recolectadas = ValueLINQArenaManager.RecolectarArenas();
+                isArenaViva = arena.IsViva;
+
+                InstantaneaArrayPool fin = listener.ObtenerInstantanea();
+                rentadosDelta = fin.Rentados - inicio.Rentados;
+                devueltosDelta = fin.Devueltos - inicio.Devueltos;
+            }
+
+            // Aserción de estado y física
+            _ = recolectadas.Should().BeGreaterThan(0, "el reaper debe haber recolectado la arena inactiva");
+            _ = isArenaViva.Should().BeFalse("la arena debe quedar marcada como inactiva");
+            _ = rentadosDelta.Should().BeGreaterThan(0, "debio existir alquiler fisico en la arena");
+            _ = devueltosDelta.Should().Be(rentadosDelta, "tras el barrido del reaper, todos los buffers deben estar fisicamente devueltos al ArrayPool");
+        }
+
+        #endregion
+
 #if NET9_0_OR_GREATER
         #region Reaper de arenas
 
@@ -445,6 +705,40 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
             // Aserción: si el buffer no viviera en la arena, la enumeración seguiría entregando fragmentos.
             _ = lanzo.Should().BeTrue("el buffer del Chunk debe vivir en la arena y liberarse en bloque con ella");
             _ = fragmentos.Should().Be(0);
+        }
+
+        [Fact]
+        public void DisponerArenaConChunkDelaySinConsumirDevuelveFisicamenteElBufferAlArrayPool()
+        {
+            // Preparar
+            int[] datos = [1, 2, 3, 4, 5, 6];
+            ValueLINQArena arena = ValueLINQArena.Crear();
+            long rentadosDelta;
+            long devueltosDelta;
+            long duranteRentadosDelta;
+
+            using (ArrayPoolDiagnosticsListener listener = new())
+            {
+                InstantaneaArrayPool inicio = listener.ObtenerInstantanea();
+
+                // Actuar: ChunkDelay alquila su buffer de fragmento en la arena al instanciarse
+                var tuberia = datos.ToValueDelayQuery(arena).Chunk(2);
+
+                InstantaneaArrayPool durante = listener.ObtenerInstantanea();
+                duranteRentadosDelta = durante.Rentados - inicio.Rentados;
+
+                // Disponer la arena antes de consumir la tuberia perezosa
+                arena.Dispose();
+
+                InstantaneaArrayPool fin = listener.ObtenerInstantanea();
+                rentadosDelta = fin.Rentados - inicio.Rentados;
+                devueltosDelta = fin.Devueltos - inicio.Devueltos;
+            }
+
+            // Aserción física
+            _ = duranteRentadosDelta.Should().BeGreaterThan(0, "ChunkDelay debio alquilar un buffer en la arena");
+            _ = rentadosDelta.Should().BeGreaterThan(0);
+            _ = devueltosDelta.Should().Be(rentadosDelta, "el buffer fisico alquilado por ChunkDelay debe haber sido devuelto al ArrayPool al disponer la arena");
         }
 
         [Fact]
