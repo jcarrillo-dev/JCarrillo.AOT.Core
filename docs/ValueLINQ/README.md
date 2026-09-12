@@ -2,7 +2,7 @@
 
 # ValueLINQ: Pipeline de Consultas Estructuradas con Cero Asignaciones y Compatibilidad Native AOT
 
-ValueLINQ (versión publicada más reciente: 1.1.2; este documento describe además la versión en desarrollo con arenas de memoria, aún sin publicar) es un motor de procesamiento de consultas estructuradas de alto rendimiento para .NET, diseñado específicamente para entornos restrictivos como **Native AOT** y sistemas con latencia crítica que requieren **cero asignaciones en el Heap de GC** (0 bytes de allocation).
+ValueLINQ (versión publicada más reciente: 1.1.4; con arquitectura de arenas de memoria integrada en v1.1.3) es un motor de procesamiento de consultas estructuradas de alto rendimiento para .NET, diseñado específicamente para entornos restrictivos como **Native AOT** y sistemas con latencia crítica que requieren **cero asignaciones en el Heap de GC** (0 bytes de allocation).
 
 Este framework sustituye el comportamiento estándar de LINQ (basado en delegados asignados en el heap, boxing de enumeradores e invocaciones indirectas) por un modelo síncrono basado en structs (`ValueLINQStruct<T>` y `ValueLINQRefStruct<T>`) que operan sobre tablas de sesión particionadas por (tipo `T`, arena) gestionadas por `ValueLINQStateManager<T>`.
 
@@ -20,9 +20,9 @@ El diseño de ValueLINQ se rige por tres restricciones arquitectónicas estricta
 
 ## 2. Características Principales del Motor de Consultas
 
-La versión inicial 1.1.0 de la biblioteca `JCarrillo.AOT.Core` marca el nacimiento y lanzamiento del motor **ValueLINQ**, implementando un entorno de procesamiento síncrono estructurado diseñado desde cero para .NET. Para no mezclar capacidades liberadas con trabajo en curso, sus características se separan en dos bloques: lo publicado en los releases v1.1.0–v1.1.2 y lo que existe únicamente en la rama de desarrollo.
+La evolución del motor **ValueLINQ** en la biblioteca `JCarrillo.AOT.Core` abarca desde su infraestructura inicial (v1.1.0–v1.1.2) hasta la integración completa de arenas de memoria y particionado de alto rendimiento consolidada en **v1.1.3** y enriquecida en **v1.1.4** (disponibles en `main` y en NuGet):
 
-### Publicado en v1.1.0–v1.1.2
+### Infraestructura Fundacional (v1.1.0–v1.1.2)
 
 *   **Gestión de Estados Centralizada (StateManager)**: Administración física de buffers de memoria reutilizables mediante una tabla estática única de 4096 slots por tipo `T`. Para evitar la contención de hilos, implementa lock striping 1 a 1 (un objeto `lock` por slot) y un asignador de ranuras libres en $O(1)$ basado en un stack estático de índices libres, eliminando escaneos lineales y esperas probabilísticas.
 *   **Tokens de Seguridad de 64 bits**: Helper atómico `TokenHelper` que codifica en un entero `long` de 64 bits la versión incremental de la sesión y el índice físico de slot (12 bits). Implementa accesos volátiles y atómicos seguros de hardware (con soporte híbrido mediante `Interlocked` en arquitecturas de 32 bits), previniendo lecturas fragmentadas (torn reads) y resolviendo accesos simultáneos sin bloqueos en la ruta caliente.
@@ -33,9 +33,9 @@ La versión inicial 1.1.0 de la biblioteca `JCarrillo.AOT.Core` marca el nacimie
 *   **Operador de Particionamiento (Chunking)**: Implementación de `Chunk` y el método canónico `ProcesarChunks` sin asignaciones en el montón, complementado por el alias retrocompatible `ProcessChunks` (marcado como `[Obsolete("Use ProcesarChunks en su lugar", false)]` y con eliminación definitiva programada para v2.0.0). Divide colecciones lógicas almacenando cada fragmento como un struct `ValueLINQStruct<T>` directamente en un contenedor de pila `ValueLINQRefStruct<ValueLINQStruct<T>>` (ambas sobrecargas de `Chunk` devuelven este contenedor; `ProcesarChunks` acepta además contenedores `ValueLINQStruct<ValueLINQStruct<T>>` construidos manualmente), garantizando total seguridad de tipos en compilación.
 *   **Robustez y Seguridad ante Excepciones (Rollback Atómico)**: Envoltura sistemática de todos los pipelines de datos intermedios en bloques `try-finally`. Si ocurre una excepción en medio de la población, segmentación o procesamiento de datos, los operadores realizan un rollback ordenado: liberan cada búfer parcial instanciado y devuelven el contenedor al pool de forma inmediata, evitando cualquier riesgo de fuga de búferes en el `ArrayPool`.
 
-### En desarrollo (rama `feature/valuelinq-arena`, sin publicar)
+### Integración de Arenas y Particionado Concurrente (v1.1.3+)
 
-Las siguientes capacidades arquitectónicas existen únicamente en la rama de trabajo actual y **no están incluidas en ningún release publicado**:
+La versión 1.1.3 integró la arquitectura completa de arenas de memoria y endurecimiento adversarial:
 
 *   **Tablas de Sesión Particionadas por (tipo `T`, arena)**: Sustitución de la tabla plana única por tablas de sesión particionadas por (tipo `T`, arena) (64 particiones × 64 slots = 4096) con materialización perezosa de particiones y un stack de índices libres por tabla (`_indicesLibresStack`, protegido por `_spinLockStack`).
 *   **Token Extendido con Generación de Arena (28/12/12/12)**: Ampliación del token de 64 bits para codificar la versión incremental (28 bits), la generación de arena (12), el id de arena (12) y el índice físico de slot (12), habilitando el enrutado por arena sin búsquedas ni diccionarios.
@@ -84,19 +84,13 @@ De acuerdo con el estándar de ingeniería honesta, se declaran los siguientes l
 
 Esta sección separa de forma explícita **lo que la biblioteca hace hoy** (medido y publicado) de **las direcciones de diseño que se exploran**, para no mezclar capacidades reales con intenciones futuras.
 
-### Publicado (v1.1.0–v1.1.2)
+### Publicado (v1.1.0–v1.1.4)
 
-*   **Infraestructura del Núcleo y Operadores Iniciales**: El lanzamiento inicial v1.1.0 se enfocó estrictamente en establecer la infraestructura de núcleo de alto rendimiento (tabla plana única de 4096 slots por tipo `T`, con bloqueos por slot y tokens de sesión que codifican únicamente versión incremental y slot, sin arenas), la sincronización y bloqueos de StateManager, la seguridad de tokens y los operadores fundacionales de filtrado (`Where`) y proyección (`Select`), en lugar de buscar la paridad completa de operadores de LINQ estándar.
-*   **Rutas Disponibles**: Se implementan tanto la ruta Eager (basada en buffers alquilados de `ArrayPool` y structs predicado) como la ruta Lazy/Diferida (Delay) que opera en pila sin asignaciones intermitentes. Adicionalmente, se ofrecen las sobrecargas ergonómicas que aceptan delegados de tipo `Func`.
-*   **Perfil de asignación**: La ruta con structs delegados y la ruta Lazy con structs operan con **0 B (medido)** en el Heap de GC. La ruta ergonómica basada en expresiones lambda puede alocar memoria en función de la captura de clausuras (152 B **(medido)** con capturas de variables locales vs 0 B **(medido)** con lambdas estáticas).
-
-### En desarrollo (sin publicar)
-
-Las siguientes capacidades existen únicamente en la rama de trabajo `feature/valuelinq-arena` y **no están incluidas en ningún release publicado**:
-
-*   **Arenas de Memoria**: Ámbitos de memoria explícitos (`ValueLINQArena` / `ValueLINQArenaManager`) con la arena 0 como arena ambiente y persistente, para liberar sesiones en bloque.
-*   **Token con Generación de Arena (28/12/12/12)**: Ampliación del token de 64 bits para codificar versión incremental (28 bits), generación de arena (12), id de arena (12) y slot (12).
-*   **Tablas Particionadas y `SpinLockSlot`**: Tablas de sesión particionadas por (tipo `T`, arena) (64 particiones × 64 slots) con materialización perezosa de particiones y un `SpinLock` por ranura (struct `SpinLockSlot` alineado a 64 bytes).
+*   **Infraestructura del Núcleo y Operadores Iniciales (v1.1.0–v1.1.2)**: El lanzamiento inicial v1.1.0 estableció la infraestructura de núcleo de alto rendimiento, sincronización y bloqueos de StateManager, seguridad de tokens y operadores fundacionales de filtrado (`Where`) y proyección (`Select`).
+*   **Arquitectura de Arenas de Memoria y Endurecimiento (v1.1.3)**: Integración completa de ámbitos de memoria explícitos (`ValueLINQArena` / `ValueLINQArenaManager`), tablas de sesión particionadas por (tipo `T`, arena) (64 particiones × 64 slots = 4096 slots), tokens generacionales 28/12/12/12, primitivas `SpinLockSlot` alineadas a 64 bytes contra false sharing, sobrecargas simétricas para colecciones y reciclaje de tablas con 0 B de asignación en heap en estado estacionario (medido).
+*   **Enriquecimiento de Paquete (v1.1.4)**: Metadatos, etiquetas y descripciones del paquete NuGet actualizados para reflejar formalmente las capacidades de ValueLINQ y arenas de memoria.
+*   **Rutas Disponibles**: Se implementan tanto la ruta Eager (basada en buffers alquilados de `ArrayPool`, tablas particionadas y structs predicado) como la ruta Lazy/Diferida (Delay) que opera en pila sin asignaciones intermitentes (.NET 9+). Adicionalmente, se ofrecen sobrecargas ergonómicas que aceptan delegados de tipo `Func`.
+*   **Perfil de Asignación**: La ruta con structs delegados, la ruta Lazy con structs y la gestión de arenas en régimen estacionario operan con **0 B (medido)** en el Heap de GC. La ruta ergonómica basada en expresiones lambda puede alocar memoria en función de la captura de clausuras (152 B **(medido)** con capturas de variables locales vs 0 B **(medido)** con lambdas estáticas).
 
 ### Taxonomía de Asignación
 
@@ -104,6 +98,7 @@ Las siguientes capacidades existen únicamente en la rama de trabajo `feature/va
 | :--- | :---: | :--- |
 | **Eager + delegado struct** | **Sí** (0 B) | Publicada (v1.1.0) |
 | **Lazy/Diferida + delegado struct** | **Sí** (0 B, sin buffers intermedios) | Publicada / Soportada (v1.1.0) |
+| **Arenas de memoria (`ValueLINQArena`)** | **Sí** (0 B en régimen estacionario) | Publicada / Soportada (v1.1.3) |
 | **Delegados `Func`/`Action`** | **No** (depende del tipo de lambda / clausura) | Publicada / Soportada (v1.1.0) |
 
 ### Hoja de Ruta de Desarrollo
@@ -117,7 +112,7 @@ Como planes de desarrollo futuros se plantean las siguientes propuestas de optim
 
 > [!WARNING]
 > **Intención de Desarrollo, no Compromiso de Entrega**:
-> Las direcciones descritas en esta sección son **propuestas de diseño sujetas a medición empírica y viabilidad técnica**. No constituyen un compromiso de release, ni una garantía de implementación, ni un calendario. Únicamente la sección «Publicado (v1.1.0–v1.1.2)» describe capacidades realmente publicadas y medidas; las capacidades listadas en «En desarrollo (sin publicar)» y cualquier funcionalidad futura se consideran trabajo en curso o propuestas, sin release asociado.
+> Las direcciones descritas en la «Hoja de Ruta de Desarrollo» (como la ampliación de operadores `GroupBy`/`OrderBy`/`Distinct` o generadores de código de interceptores) son **propuestas de diseño sujetas a medición empírica y viabilidad técnica**. No constituyen un compromiso de release, ni una garantía de implementación, ni un calendario. Únicamente las capacidades descritas en la sección «Publicado (v1.1.0–v1.1.4)» representan características liberadas, respaldadas por pruebas y verificadas cuantitativamente.
 
 ---
 

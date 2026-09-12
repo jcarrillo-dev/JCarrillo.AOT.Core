@@ -3,13 +3,13 @@
 # Operadores y Extensiones de Consulta de ValueLINQ
 
 
-Esta sección de la documentación sirve como índice y guía de referencia técnica para todos los operadores de consulta fluent, segmentadores y materializadores disponibles en **ValueLINQ (versión 1.1.0)**. 
+Esta sección de la documentación sirve como índice y guía de referencia técnica para todos los operadores de consulta fluent, segmentadores y materializadores disponibles en **ValueLINQ**.
 
 A diferencia de LINQ estándar, que depende del heap para albergar delegados, clausuras y enumeradores, los operadores de ValueLINQ están diseñados como structs y métodos genéricos con inlining agresivo. Esto permite la ejecución con **cero asignaciones en el Heap de GC (0 B Allocated)** y un rendimiento predecible en entornos **Native AOT**.
 
 ---
 
-## 1. Catálogo de Operadores (v1.1.0)
+## 1. Catálogo de Operadores
 
 A continuación se detallan los operadores implementados, divididos por su disponibilidad en los motores Eager y Delay:
 
