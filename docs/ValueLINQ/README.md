@@ -84,19 +84,13 @@ De acuerdo con el estándar de ingeniería honesta, se declaran los siguientes l
 
 Esta sección separa de forma explícita **lo que la biblioteca hace hoy** (medido y publicado) de **las direcciones de diseño que se exploran**, para no mezclar capacidades reales con intenciones futuras.
 
-### Publicado (v1.1.0–v1.1.2)
+### Publicado (v1.1.0–v1.1.4)
 
-*   **Infraestructura del Núcleo y Operadores Iniciales**: El lanzamiento inicial v1.1.0 se enfocó estrictamente en establecer la infraestructura de núcleo de alto rendimiento (tabla plana única de 4096 slots por tipo `T`, con bloqueos por slot y tokens de sesión que codifican únicamente versión incremental y slot, sin arenas), la sincronización y bloqueos de StateManager, la seguridad de tokens y los operadores fundacionales de filtrado (`Where`) y proyección (`Select`), en lugar de buscar la paridad completa de operadores de LINQ estándar.
-*   **Rutas Disponibles**: Se implementan tanto la ruta Eager (basada en buffers alquilados de `ArrayPool` y structs predicado) como la ruta Lazy/Diferida (Delay) que opera en pila sin asignaciones intermitentes. Adicionalmente, se ofrecen las sobrecargas ergonómicas que aceptan delegados de tipo `Func`.
-*   **Perfil de asignación**: La ruta con structs delegados y la ruta Lazy con structs operan con **0 B (medido)** en el Heap de GC. La ruta ergonómica basada en expresiones lambda puede alocar memoria en función de la captura de clausuras (152 B **(medido)** con capturas de variables locales vs 0 B **(medido)** con lambdas estáticas).
-
-### En desarrollo (sin publicar)
-
-Las siguientes capacidades existen únicamente en la rama de trabajo `feature/valuelinq-arena` y **no están incluidas en ningún release publicado**:
-
-*   **Arenas de Memoria**: Ámbitos de memoria explícitos (`ValueLINQArena` / `ValueLINQArenaManager`) con la arena 0 como arena ambiente y persistente, para liberar sesiones en bloque.
-*   **Token con Generación de Arena (28/12/12/12)**: Ampliación del token de 64 bits para codificar versión incremental (28 bits), generación de arena (12), id de arena (12) y slot (12).
-*   **Tablas Particionadas y `SpinLockSlot`**: Tablas de sesión particionadas por (tipo `T`, arena) (64 particiones × 64 slots) con materialización perezosa de particiones y un `SpinLock` por ranura (struct `SpinLockSlot` alineado a 64 bytes).
+*   **Infraestructura del Núcleo y Operadores Iniciales (v1.1.0–v1.1.2)**: El lanzamiento inicial v1.1.0 estableció la infraestructura de núcleo de alto rendimiento, sincronización y bloqueos de StateManager, seguridad de tokens y operadores fundacionales de filtrado (`Where`) y proyección (`Select`).
+*   **Arquitectura de Arenas de Memoria y Endurecimiento (v1.1.3)**: Integración completa de ámbitos de memoria explícitos (`ValueLINQArena` / `ValueLINQArenaManager`), tablas de sesión particionadas por (tipo `T`, arena) (64 particiones × 64 slots = 4096 slots), tokens generacionales 28/12/12/12, primitivas `SpinLockSlot` alineadas a 64 bytes contra false sharing, sobrecargas simétricas para colecciones y reciclaje de tablas con 0 B de asignación en heap en estado estacionario (medido).
+*   **Enriquecimiento de Paquete (v1.1.4)**: Metadatos, etiquetas y descripciones del paquete NuGet actualizados para reflejar formalmente las capacidades de ValueLINQ y arenas de memoria.
+*   **Rutas Disponibles**: Se implementan tanto la ruta Eager (basada en buffers alquilados de `ArrayPool`, tablas particionadas y structs predicado) como la ruta Lazy/Diferida (Delay) que opera en pila sin asignaciones intermitentes (.NET 9+). Adicionalmente, se ofrecen sobrecargas ergonómicas que aceptan delegados de tipo `Func`.
+*   **Perfil de Asignación**: La ruta con structs delegados, la ruta Lazy con structs y la gestión de arenas en régimen estacionario operan con **0 B (medido)** en el Heap de GC. La ruta ergonómica basada en expresiones lambda puede alocar memoria en función de la captura de clausuras (152 B **(medido)** con capturas de variables locales vs 0 B **(medido)** con lambdas estáticas).
 
 ### Taxonomía de Asignación
 
@@ -104,6 +98,7 @@ Las siguientes capacidades existen únicamente en la rama de trabajo `feature/va
 | :--- | :---: | :--- |
 | **Eager + delegado struct** | **Sí** (0 B) | Publicada (v1.1.0) |
 | **Lazy/Diferida + delegado struct** | **Sí** (0 B, sin buffers intermedios) | Publicada / Soportada (v1.1.0) |
+| **Arenas de memoria (`ValueLINQArena`)** | **Sí** (0 B en régimen estacionario) | Publicada / Soportada (v1.1.3) |
 | **Delegados `Func`/`Action`** | **No** (depende del tipo de lambda / clausura) | Publicada / Soportada (v1.1.0) |
 
 ### Hoja de Ruta de Desarrollo
@@ -117,7 +112,7 @@ Como planes de desarrollo futuros se plantean las siguientes propuestas de optim
 
 > [!WARNING]
 > **Intención de Desarrollo, no Compromiso de Entrega**:
-> Las direcciones descritas en esta sección son **propuestas de diseño sujetas a medición empírica y viabilidad técnica**. No constituyen un compromiso de release, ni una garantía de implementación, ni un calendario. Únicamente la sección «Publicado (v1.1.0–v1.1.2)» describe capacidades realmente publicadas y medidas; las capacidades listadas en «En desarrollo (sin publicar)» y cualquier funcionalidad futura se consideran trabajo en curso o propuestas, sin release asociado.
+> Las direcciones descritas en la «Hoja de Ruta de Desarrollo» (como la ampliación de operadores `GroupBy`/`OrderBy`/`Distinct` o generadores de código de interceptores) son **propuestas de diseño sujetas a medición empírica y viabilidad técnica**. No constituyen un compromiso de release, ni una garantía de implementación, ni un calendario. Únicamente las capacidades descritas en la sección «Publicado (v1.1.0–v1.1.4)» representan características liberadas, respaldadas por pruebas y verificadas cuantitativamente.
 
 ---
 
