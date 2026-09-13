@@ -38,4 +38,4 @@ jobs:
       run: dotnet build JCarrillo.AOT.Core.slnx -c Release
 
     - name: Ejecutar suite de pruebas (Tests y E2E)
-      run: dotnet test ./JCarrillo.AOT.Core.Tests/JCarrillo.AOT.Core.Tests.csproj -c Release --no-build --logger "trx;LogFileName=test-results.trx"
+      run: dotnet test ./JCarrillo.AOT.Core.Tests/JCarrillo.AOT.Core.Tests.csproj -c Release --no-build --logger "trx;LogFileName=test-results-{framework}.trx"
