@@ -340,7 +340,7 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
                 });
 
             Task tareaTodas = Task.WhenAll(tareas);
-            Task tareaCompletada = await Task.WhenAny(tareaTodas, Task.Delay(TimeSpan.FromSeconds(10)));
+            Task tareaCompletada = await Task.WhenAny(tareaTodas, Task.Delay(TimeSpan.FromSeconds(30)));
             bool hasCompletado = tareaCompletada == tareaTodas;
 
             foreach (ValueLINQArena arena in arenasCreadas)

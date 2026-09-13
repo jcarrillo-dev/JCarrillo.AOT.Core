@@ -1,0 +1,41 @@
+name: CI (Build & Tests)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+    - name: Clonar el repositorio
+      uses: actions/checkout@v4
+
+    - name: Configurar .NET SDKs (8.0, 9.0 y 10.0)
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: |
+          8.0.x
+          9.0.x
+          10.0.x
+
+
+    - name: Compilar solución con analizadores
+      run: dotnet build JCarrillo.AOT.Core.slnx -c Release
+
+    - name: Ejecutar suite de pruebas (Tests y E2E)
+      run: dotnet test ./JCarrillo.AOT.Core.Tests/JCarrillo.AOT.Core.Tests.csproj -c Release --no-build --logger "trx;LogFileName=test-results-{framework}.trx"
