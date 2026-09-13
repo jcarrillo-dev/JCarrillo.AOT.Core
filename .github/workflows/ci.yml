@@ -32,7 +32,7 @@ jobs:
           8.0.x
           9.0.x
           10.0.x
-        cache: true
+
 
     - name: Compilar solución con analizadores
       run: dotnet build JCarrillo.AOT.Core.slnx -c Release
