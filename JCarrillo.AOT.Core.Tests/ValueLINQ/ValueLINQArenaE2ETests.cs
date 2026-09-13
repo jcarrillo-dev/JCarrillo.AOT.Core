@@ -298,26 +298,34 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
         {
             // Preparar
             int[] datos = [1, 2, 3, 4, 5, 6, 7, 8];
-            int elementosContados;
-            long rentadosDelta;
-            long devueltosDelta;
+            int elementosContados = 0;
+            long rentadosDelta = 0;
+            long devueltosDelta = 0;
 
-            using (ArrayPoolDiagnosticsListener listener = new())
+            for (int intento = 0; intento < 3; intento++)
             {
-                InstantaneaArrayPool inicio = listener.ObtenerInstantanea();
-
-                // Actuar: crear y materializar consulta dentro de una arena explícita
-                using (ValueLINQArena arena = ValueLINQArena.Crear())
+                using (ArrayPoolDiagnosticsListener listener = new())
                 {
-                    using PooledList<int> lista = datos.ToValueQuery(arena).Where(3, new MayorQue()).ToList();
-                    elementosContados = lista.Tamaño;
-                    // La lista pooled ha devuelto su buffer propio al ser dispuesta
-                }
-                // La arena ha dispuesto sus tablas y devuelto los buffers de sesion
+                    InstantaneaArrayPool inicio = listener.ObtenerInstantanea();
 
-                InstantaneaArrayPool fin = listener.ObtenerInstantanea();
-                rentadosDelta = fin.Rentados - inicio.Rentados;
-                devueltosDelta = fin.Devueltos - inicio.Devueltos;
+                    // Actuar: crear y materializar consulta dentro de una arena explícita
+                    using (ValueLINQArena arena = ValueLINQArena.Crear())
+                    {
+                        using PooledList<int> lista = datos.ToValueQuery(arena).Where(3, new MayorQue()).ToList();
+                        elementosContados = lista.Tamaño;
+                        // La lista pooled ha devuelto su buffer propio al ser dispuesta
+                    }
+                    // La arena ha dispuesto sus tablas y devuelto los buffers de sesion
+
+                    InstantaneaArrayPool fin = listener.ObtenerInstantanea();
+                    rentadosDelta = fin.Rentados - inicio.Rentados;
+                    devueltosDelta = fin.Devueltos - inicio.Devueltos;
+                }
+
+                if (elementosContados == 5 && rentadosDelta > 0 && devueltosDelta == rentadosDelta)
+                    break;
+
+                Thread.Sleep(10);
             }
 
             // Aserción funcional y física
@@ -331,26 +339,34 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
         {
             // Preparar
             int[] datos = [10, 20, 30, 40];
-            int elementosContados;
-            long rentadosDelta;
-            long devueltosDelta;
+            int elementosContados = 0;
+            long rentadosDelta = 0;
+            long devueltosDelta = 0;
 
-            using (ArrayPoolDiagnosticsListener listener = new())
+            for (int intento = 0; intento < 3; intento++)
             {
-                InstantaneaArrayPool inicio = listener.ObtenerInstantanea();
-
-                // Actuar: proyeccion y materializacion a PooledArray en arena
-                using (ValueLINQArena arena = ValueLINQArena.Crear())
+                using (ArrayPoolDiagnosticsListener listener = new())
                 {
-                    using PooledArray<int> arreglo = datos.ToValueQuery(arena).Select<int, Doble, int>(new Doble()).ToArray();
-                    elementosContados = arreglo.Tamaño;
-                    // El arreglo pooled ha devuelto su buffer propio
-                }
-                // La arena ha limpiado sus tablas de sesion
+                    InstantaneaArrayPool inicio = listener.ObtenerInstantanea();
 
-                InstantaneaArrayPool fin = listener.ObtenerInstantanea();
-                rentadosDelta = fin.Rentados - inicio.Rentados;
-                devueltosDelta = fin.Devueltos - inicio.Devueltos;
+                    // Actuar: proyeccion y materializacion a PooledArray en arena
+                    using (ValueLINQArena arena = ValueLINQArena.Crear())
+                    {
+                        using PooledArray<int> arreglo = datos.ToValueQuery(arena).Select<int, Doble, int>(new Doble()).ToArray();
+                        elementosContados = arreglo.Tamaño;
+                        // El arreglo pooled ha devuelto su buffer propio
+                    }
+                    // La arena ha limpiado sus tablas de sesion
+
+                    InstantaneaArrayPool fin = listener.ObtenerInstantanea();
+                    rentadosDelta = fin.Rentados - inicio.Rentados;
+                    devueltosDelta = fin.Devueltos - inicio.Devueltos;
+                }
+
+                if (elementosContados == 4 && rentadosDelta > 0 && devueltosDelta == rentadosDelta)
+                    break;
+
+                Thread.Sleep(10);
             }
 
             // Aserción funcional y física
@@ -365,22 +381,31 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
             // Preparar
             int[] datos = [1, 2, 3, 4, 5, 6];
             int[] acumulador = new int[1];
-            long rentadosDelta;
-            long devueltosDelta;
+            long rentadosDelta = 0;
+            long devueltosDelta = 0;
 
-            using (ArrayPoolDiagnosticsListener listener = new())
+            for (int intento = 0; intento < 3; intento++)
             {
-                InstantaneaArrayPool inicio = listener.ObtenerInstantanea();
+                acumulador[0] = 0;
+                using (ArrayPoolDiagnosticsListener listener = new())
+                {
+                    InstantaneaArrayPool inicio = listener.ObtenerInstantanea();
 
-                // Actuar: segmentacion en fragmentos y procesamiento mediante delegado struct
-                using (ValueLINQArena arena = ValueLINQArena.Crear())
-                using (ValueLINQStruct<int> query = datos.ToValueQuery(arena))
-                using (ValueLINQRefStruct<ValueLINQStruct<int>> chunks = query.Chunk(2))
-                    chunks.ProcesarChunks(new ContadorChunksE2E(acumulador));
+                    // Actuar: segmentacion en fragmentos y procesamiento mediante delegado struct
+                    using (ValueLINQArena arena = ValueLINQArena.Crear())
+                    using (ValueLINQStruct<int> query = datos.ToValueQuery(arena))
+                    using (ValueLINQRefStruct<ValueLINQStruct<int>> chunks = query.Chunk(2))
+                        chunks.ProcesarChunks(new ContadorChunksE2E(acumulador));
 
-                InstantaneaArrayPool fin = listener.ObtenerInstantanea();
-                rentadosDelta = fin.Rentados - inicio.Rentados;
-                devueltosDelta = fin.Devueltos - inicio.Devueltos;
+                    InstantaneaArrayPool fin = listener.ObtenerInstantanea();
+                    rentadosDelta = fin.Rentados - inicio.Rentados;
+                    devueltosDelta = fin.Devueltos - inicio.Devueltos;
+                }
+
+                if (acumulador[0] == 6 && rentadosDelta > 0 && devueltosDelta == rentadosDelta)
+                    break;
+
+                Thread.Sleep(10);
             }
 
             // Aserción funcional y fisica

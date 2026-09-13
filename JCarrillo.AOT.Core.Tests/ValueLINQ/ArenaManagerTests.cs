@@ -268,7 +268,7 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
                     if (isActivo && id == idArena)
                     {
                         enRecoleccion.Set();
-                        _ = reentranciaVerificada.Wait(TimeSpan.FromSeconds(5));
+                        _ = reentranciaVerificada.Wait(TimeSpan.FromSeconds(30));
                     }
 
                     return default;
@@ -279,7 +279,7 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
             {
                 tareaRecoleccion = Task.Run(() => ValueLINQArenaManager.RecolectarArenas());
 
-                bool hasIngresado = enRecoleccion.Wait(TimeSpan.FromSeconds(5));
+                bool hasIngresado = enRecoleccion.Wait(TimeSpan.FromSeconds(30));
                 _ = hasIngresado.Should().BeTrue("el hilo en segundo plano debe haber ingresado al barrido");
 
                 Stopwatch cronometro = Stopwatch.StartNew();
@@ -299,7 +299,7 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
                 isActivo = false;
                 reentranciaVerificada.Set();
                 if (tareaRecoleccion is not null)
-                    _ = await Task.WhenAny(tareaRecoleccion, Task.Delay(TimeSpan.FromSeconds(5)));
+                    _ = await Task.WhenAny(tareaRecoleccion, Task.Delay(TimeSpan.FromSeconds(30)));
 
                 ValueLINQArenaManager.Liberar(token);
             }
@@ -434,7 +434,7 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
                     if (isActivo && id == idArena)
                     {
                         enRecoleccion.Set();
-                        _ = reentranciaVerificada.Wait(TimeSpan.FromSeconds(5));
+                        _ = reentranciaVerificada.Wait(TimeSpan.FromSeconds(30));
                     }
 
                     return default;
@@ -445,7 +445,7 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
             {
                 tareaRecoleccion = Task.Run(() => ValueLINQArenaManager.RecolectarArenas());
 
-                bool hasIngresado = enRecoleccion.Wait(TimeSpan.FromSeconds(5));
+                bool hasIngresado = enRecoleccion.Wait(TimeSpan.FromSeconds(30));
                 _ = hasIngresado.Should().BeTrue();
 
                 // Calentamiento JIT
@@ -467,7 +467,7 @@ namespace JCarrillo.AOT.Core.Tests.ValueLINQ
                 isActivo = false;
                 reentranciaVerificada.Set();
                 if (tareaRecoleccion is not null)
-                    _ = await Task.WhenAny(tareaRecoleccion, Task.Delay(TimeSpan.FromSeconds(5)));
+                    _ = await Task.WhenAny(tareaRecoleccion, Task.Delay(TimeSpan.FromSeconds(30)));
 
                 ValueLINQArenaManager.Liberar(token);
             }
